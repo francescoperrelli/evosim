@@ -2,484 +2,592 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EvoSim — Vita Artificiale</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🧬</text></svg>">
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>EvoSim — Un ecosistema vivente</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🌿</text></svg>">
 <style>
   :root{
-    --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --line:#2a3140;
-    --ink:#e6edf3; --muted:#9aa7b4; --accent:#4fd1c5; --accent2:#f6ad55;
-    --food:#4ade80; --danger:#f87171;
+    --bg:#0b0f0b; --bg2:#070a07; --panel:#121a13; --panel2:#18221a; --line:#2a3a2b;
+    --ink:#ece7d7; --muted:#95a389; --moss:#8fc44a; --moss-d:#4a7a1e;
+    --amber:#e0a458; --blood:#dd6f57; --sky:#74bccb;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
   body{
-    background:var(--bg); color:var(--ink);
-    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    display:flex; height:100vh; overflow:hidden;
+    background:var(--bg); color:var(--ink); font:14px/1.55 var(--sans);
+    display:flex; height:100vh; overflow:hidden; -webkit-font-smoothing:antialiased;
   }
-  #stage{flex:1; position:relative; min-width:0; background:#0a0e14;}
+  /* ---------- palcoscenico ---------- */
+  #stage{flex:1; position:relative; min-width:0; background:radial-gradient(120% 120% at 50% 30%,#0f150f 0%,#080b08 100%);}
   #world{position:absolute; inset:0; width:100%; height:100%; display:block; cursor:crosshair; touch-action:none;}
-  #hint{
-    position:absolute; left:12px; bottom:10px; color:var(--muted); font-size:12px;
-    background:rgba(13,17,23,.6); padding:4px 8px; border-radius:6px; pointer-events:none;
-  }
-  aside{
-    width:330px; flex:none; background:var(--panel); border-left:1px solid var(--line);
-    display:flex; flex-direction:column; overflow-y:auto;
-  }
-  aside::-webkit-scrollbar{width:8px} aside::-webkit-scrollbar-thumb{background:#2a3140;border-radius:8px}
-  .sec{padding:14px 16px; border-bottom:1px solid var(--line);}
-  h1{margin:0 0 2px; font-size:16px; letter-spacing:.3px}
-  .sub{color:var(--muted); font-size:12px; margin:0}
-  .row{display:flex; gap:8px; margin:10px 0 0}
-  button{
-    flex:1; background:var(--panel2); color:var(--ink); border:1px solid var(--line);
-    padding:8px 10px; border-radius:8px; cursor:pointer; font-size:13px; transition:.15s;
-  }
-  button:hover{border-color:var(--accent); color:#fff}
-  button.primary{background:var(--accent); color:#06231f; border-color:var(--accent); font-weight:600}
-  button.primary:hover{filter:brightness(1.08)}
-  label.ctl{display:block; margin-top:12px; font-size:12px; color:var(--muted)}
-  label.ctl b{color:var(--ink); font-weight:600; float:right}
-  input[type=range]{width:100%; accent-color:var(--accent); margin-top:4px}
-  .stats{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:4px}
-  .stat{background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:8px 10px}
-  .stat .k{font-size:11px; color:var(--muted)}
-  .stat .v{font-size:18px; font-weight:600; margin-top:2px}
-  .stat .v small{font-size:11px; color:var(--muted); font-weight:400}
-  canvas.chart{width:100%; height:90px; display:block; background:var(--panel2);
-    border:1px solid var(--line); border-radius:8px; margin-top:6px}
-  .legend{display:flex; gap:12px; flex-wrap:wrap; margin-top:6px; font-size:11px; color:var(--muted)}
-  .legend i{display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align:-1px}
-  h2{font-size:12px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin:0 0 4px}
-  .tip{font-size:11px; color:var(--muted); margin-top:8px; line-height:1.45}
+  /* vignettatura da documentario */
+  #stage::after{content:""; position:absolute; inset:0; pointer-events:none;
+    box-shadow:inset 0 0 160px 40px rgba(0,0,0,.55); }
+  #topbar{position:absolute; top:12px; left:12px; right:12px; display:flex; gap:8px; align-items:center; pointer-events:none; z-index:5}
+  #topbar .brand{font-family:var(--serif); font-size:17px; letter-spacing:.4px; color:var(--ink);
+    text-shadow:0 1px 6px rgba(0,0,0,.6); pointer-events:none}
+  #topbar .brand em{color:var(--moss); font-style:normal}
+  #btnMenu{pointer-events:auto; margin-left:auto; background:rgba(10,15,10,.6); color:var(--ink);
+    border:1px solid var(--line); border-radius:20px; padding:7px 14px; cursor:pointer; font-size:13px; backdrop-filter:blur(4px)}
+  #btnMenu:hover{border-color:var(--moss); color:#fff}
+  #hint{position:absolute; left:14px; bottom:12px; color:var(--muted); font-size:12px;
+    background:rgba(8,12,8,.55); padding:5px 10px; border-radius:6px; pointer-events:none;
+    font-style:italic; backdrop-filter:blur(3px)}
 
-  /* --- telefono / schermi stretti: impila in verticale --- */
-  @media (max-width:760px){
+  /* ---------- pannello laterale ---------- */
+  aside{width:320px; flex:none; background:linear-gradient(180deg,#121a13,#0e150f);
+    border-left:1px solid var(--line); display:flex; flex-direction:column; overflow-y:auto;}
+  aside::-webkit-scrollbar{width:8px} aside::-webkit-scrollbar-thumb{background:#2a3a2b;border-radius:8px}
+  .sec{padding:14px 16px; border-bottom:1px solid var(--line);}
+  h2{font-size:11px; text-transform:uppercase; letter-spacing:1.2px; color:var(--muted); margin:0 0 8px; font-weight:600}
+  .stats{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+  .stat{background:var(--panel2); border:1px solid var(--line); border-radius:9px; padding:8px 10px; position:relative; overflow:hidden}
+  .stat::before{content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--muted)}
+  .stat.herb::before{background:var(--moss)} .stat.carn::before{background:var(--blood)}
+  .stat.plant::before{background:var(--moss-d)} .stat.time::before{background:var(--sky)}
+  .stat .k{font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px}
+  .stat .v{font-size:19px; font-weight:700; margin-top:2px; font-variant-numeric:tabular-nums}
+  .stat .v small{font-size:11px; color:var(--muted); font-weight:400}
+  canvas.chart{width:100%; height:84px; display:block; background:#0c120c;
+    border:1px solid var(--line); border-radius:9px; margin-top:6px}
+  .legend{display:flex; gap:14px; flex-wrap:wrap; margin-top:7px; font-size:11px; color:var(--muted)}
+  .legend i{display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:-1px}
+  .caption{font-size:11.5px; color:var(--muted); margin:10px 0 0; line-height:1.5; font-style:italic}
+
+  /* ---------- controlli ---------- */
+  label.ctl{display:block; margin-top:12px; font-size:12px; color:var(--muted)}
+  label.ctl b{color:var(--ink); font-weight:600; float:right; font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%; accent-color:var(--moss); margin-top:5px}
+  .btn{display:inline-flex; align-items:center; justify-content:center; gap:7px;
+    background:var(--panel2); color:var(--ink); border:1px solid var(--line);
+    padding:10px 14px; border-radius:10px; cursor:pointer; font-size:14px; font-family:var(--sans);
+    transition:.15s; width:100%}
+  .btn:hover{border-color:var(--moss); color:#fff; transform:translateY(-1px)}
+  .btn.primary{background:linear-gradient(180deg,#8fc44a,#6ba52f); color:#10250a; border-color:#6ba52f; font-weight:700}
+  .btn.primary:hover{filter:brightness(1.07)}
+  .btn.ghost{background:transparent}
+  .row{display:flex; gap:8px; margin-top:10px}
+  .toggle{display:flex; align-items:center; justify-content:space-between; margin-top:14px; font-size:13px}
+  .switch{position:relative; width:44px; height:24px; flex:none}
+  .switch input{opacity:0; width:0; height:0}
+  .slider{position:absolute; inset:0; background:#33402f; border-radius:24px; transition:.2s; cursor:pointer}
+  .slider::before{content:""; position:absolute; width:18px; height:18px; left:3px; top:3px; background:#e8e4d8; border-radius:50%; transition:.2s}
+  .switch input:checked + .slider{background:var(--moss-d)}
+  .switch input:checked + .slider::before{transform:translateX(20px); background:var(--moss)}
+
+  /* ---------- overlay (menu / tutorial / opzioni) ---------- */
+  .overlay{position:fixed; inset:0; z-index:20; display:none; align-items:center; justify-content:center;
+    background:radial-gradient(120% 100% at 50% 20%,rgba(10,16,10,.55),rgba(5,8,5,.85));
+    backdrop-filter:blur(6px); padding:24px}
+  .overlay.show{display:flex; animation:fade .4s ease}
+  @keyframes fade{from{opacity:0} to{opacity:1}}
+  .card{width:min(560px,100%); max-height:90vh; overflow-y:auto; background:linear-gradient(180deg,rgba(20,28,20,.96),rgba(14,20,14,.98));
+    border:1px solid var(--line); border-radius:18px; padding:34px 34px 30px;
+    box-shadow:0 30px 80px rgba(0,0,0,.6); text-align:center}
+  .card::-webkit-scrollbar{width:8px} .card::-webkit-scrollbar-thumb{background:#2a3a2b;border-radius:8px}
+  .eyebrow{font-size:11px; letter-spacing:3px; text-transform:uppercase; color:var(--moss); margin:0 0 10px}
+  .title{font-family:var(--serif); font-size:44px; line-height:1.05; margin:0 0 6px; font-weight:500; letter-spacing:.5px}
+  .title em{color:var(--moss); font-style:normal}
+  .tagline{font-family:var(--serif); font-style:italic; font-size:16px; color:var(--muted); margin:0 auto 26px; max-width:400px; line-height:1.5}
+  .menu-btns{display:flex; flex-direction:column; gap:11px; max-width:320px; margin:0 auto}
+  .card h3{font-family:var(--serif); font-size:24px; font-weight:500; margin:0 0 4px}
+  .card p.lead{color:var(--muted); margin:0 0 22px; font-size:13.5px}
+  .steps{text-align:left; display:flex; flex-direction:column; gap:14px; margin:0 0 24px}
+  .step{display:flex; gap:14px; align-items:flex-start}
+  .step .n{flex:none; width:30px; height:30px; border-radius:50%; background:var(--panel2); border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center; font-family:var(--serif); color:var(--moss); font-size:15px}
+  .step .t{font-size:13.5px; line-height:1.5}
+  .step .t b{color:var(--ink)}
+  .opt-group{text-align:left; margin-bottom:6px}
+  .toast{position:fixed; bottom:26px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:rgba(18,26,18,.96); border:1px solid var(--moss-d); color:var(--ink);
+    padding:11px 20px; border-radius:24px; font-size:13.5px; z-index:40; opacity:0; transition:.3s; pointer-events:none;
+    box-shadow:0 10px 30px rgba(0,0,0,.5)}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+  .foot{margin-top:22px; font-size:11px; color:var(--muted)}
+  .foot a{color:var(--moss); text-decoration:none}
+
+  /* ---------- telefono ---------- */
+  @media (max-width:780px){
     body{flex-direction:column}
-    #stage{flex:none; height:56vh}
+    #stage{flex:none; height:54vh}
     aside{width:100%; border-left:none; border-top:1px solid var(--line)}
-    button{padding:11px 10px; font-size:14px}   /* target di tocco più grandi */
-    input[type=range]{height:28px}
-    #hint{font-size:11px; right:12px; text-align:center}
+    .title{font-size:36px}
+    .card{padding:26px 22px}
+    .btn{padding:12px 14px}
   }
 </style>
 </head>
 <body>
+  <!-- palcoscenico -->
   <div id="stage">
     <canvas id="world"></canvas>
-    <div id="hint">Clicca nell'ambiente per aggiungere cibo · più a lungo tieni premuto, più ne cade</div>
+    <div id="topbar">
+      <span class="brand">Evo<em>Sim</em></span>
+      <button id="btnMenu">☰ Menu</button>
+    </div>
+    <div id="hint">Tocca l'ambiente per far crescere le piante</div>
   </div>
 
+  <!-- pannello -->
   <aside>
     <div class="sec">
-      <h1>🧬 EvoSim</h1>
-      <p class="sub">Vita artificiale — le creature evolvono da sole per selezione naturale</p>
-      <div class="row">
-        <button id="btnPlay" class="primary">⏸ Pausa</button>
-        <button id="btnReset">🆕 Nuovo mondo</button>
-      </div>
-      <div class="row">
-        <button id="btnExport">⬇ Esporta</button>
-        <button id="btnImport">⬆ Importa</button>
-      </div>
-      <input type="file" id="fileImport" accept="application/json,.json" style="display:none">
-      <p class="tip" id="saveStatus" style="margin-top:8px">💾 Salvataggio automatico attivo — riprende da solo quando riapri la pagina</p>
-    </div>
-
-    <div class="sec">
-      <h2>Stato</h2>
+      <h2>L'ecosistema in numeri</h2>
       <div class="stats">
-        <div class="stat"><div class="k">Popolazione</div><div class="v" id="sPop">0</div></div>
-        <div class="stat"><div class="k">Generazione max</div><div class="v" id="sGen">0</div></div>
-        <div class="stat"><div class="k">Cibo</div><div class="v" id="sFood">0</div></div>
-        <div class="stat"><div class="k">Tempo</div><div class="v" id="sTick">0<small> t</small></div></div>
-        <div class="stat"><div class="k">Nascite</div><div class="v" id="sBirth">0</div></div>
-        <div class="stat"><div class="k">Morti</div><div class="v" id="sDeath">0</div></div>
+        <div class="stat herb"><div class="k">Erbivori</div><div class="v" id="sHerb">0</div></div>
+        <div class="stat carn"><div class="k">Carnivori</div><div class="v" id="sCarn">0</div></div>
+        <div class="stat plant"><div class="k">Piante</div><div class="v" id="sFood">0</div></div>
+        <div class="stat time"><div class="k">Tempo</div><div class="v" id="sTick">0<small> t</small></div></div>
+        <div class="stat"><div class="k">Generazione</div><div class="v" id="sGen">0</div></div>
+        <div class="stat"><div class="k">Predazioni</div><div class="v" id="sPred">0</div></div>
       </div>
     </div>
-
     <div class="sec">
-      <h2>Popolazione nel tempo</h2>
+      <h2>Popolazioni nel tempo</h2>
       <canvas id="chPop" class="chart"></canvas>
-      <h2 style="margin-top:14px">Tratti medi (evoluzione)</h2>
+      <div class="legend">
+        <span><i style="background:#8fc44a"></i>Erbivori</span>
+        <span><i style="background:#dd6f57"></i>Carnivori</span>
+        <span><i style="background:#4a7a1e"></i>Piante</span>
+      </div>
+      <h2 style="margin-top:16px">Velocità media (corsa agli armamenti)</h2>
       <canvas id="chTrait" class="chart"></canvas>
       <div class="legend">
-        <span><i style="background:#4fd1c5"></i>Velocità</span>
-        <span><i style="background:#f6ad55"></i>Vista</span>
-        <span><i style="background:#c084fc"></i>Dimensione</span>
+        <span><i style="background:#8fc44a"></i>Erbivori</span>
+        <span><i style="background:#dd6f57"></i>Carnivori</span>
       </div>
+      <p class="caption">Se i carnivori diventano più veloci, gli erbivori evolvono per fuggire: guarda le due linee inseguirsi.</p>
     </div>
-
     <div class="sec">
-      <h2>Regole dell'ambiente</h2>
-      <label class="ctl">Velocità simulazione <b id="vSpeed">1×</b>
+      <div class="row"><button class="btn primary" id="btnPlay">⏸ Pausa</button></div>
+      <div class="row">
+        <button class="btn ghost" id="btnSave">💾 Salva</button>
+        <button class="btn ghost" id="btnOpt">⚙ Opzioni</button>
+      </div>
+      <label class="ctl">Velocità del tempo <b id="vSpeed">1×</b>
         <input type="range" id="rSpeed" min="0" max="8" step="1" value="1"></label>
-      <label class="ctl">Crescita del cibo <b id="vFood">medio</b>
-        <input type="range" id="rFood" min="0" max="12" step="1" value="4"></label>
-      <label class="ctl">Tasso di mutazione <b id="vMut">8%</b>
-        <input type="range" id="rMut" min="0" max="30" step="1" value="8"></label>
-      <p class="tip">Ogni creatura ha un <b>genoma</b>: velocità, raggio visivo, dimensione e colore. Chi trova cibo accumula energia e si riproduce (il figlio eredita il genoma con piccole mutazioni). Chi resta senza energia muore. Nessun comportamento è programmato: le strategie <b>emergono</b> dalla selezione. Guarda i colori: quando una tinta domina, è una "specie" che ha vinto.</p>
     </div>
   </aside>
+
+  <!-- ===== HOME / MENU ===== -->
+  <div class="overlay" id="menu">
+    <div class="card">
+      <p class="eyebrow">Un ecosistema vivente</p>
+      <h1 class="title">Evo<em>Sim</em></h1>
+      <p class="tagline">In una radura digitale, la vita trova sempre una strada. Osserva creature nascere, cacciare, fuggire ed evolvere — nessuno le guida, se non la selezione naturale.</p>
+      <div class="menu-btns">
+        <button class="btn primary" id="mNew">🌱 Nuovo gioco</button>
+        <button class="btn" id="mResume">▶ Riprendi</button>
+        <button class="btn" id="mTut">📖 Tutorial</button>
+        <button class="btn" id="mLoad">📂 Carica</button>
+        <button class="btn" id="mSave">💾 Salva</button>
+        <button class="btn" id="mOpt">⚙ Opzioni</button>
+      </div>
+      <p class="foot">Pubblicato su GitHub Pages · si salva da solo nel browser</p>
+    </div>
+  </div>
+
+  <!-- ===== TUTORIAL ===== -->
+  <div class="overlay" id="tutorial">
+    <div class="card">
+      <p class="eyebrow">Come funziona</p>
+      <h3>La vita, spiegata in un minuto</h3>
+      <p class="lead">Non programmi nessun comportamento: emerge tutto dalla selezione.</p>
+      <div class="steps">
+        <div class="step"><div class="n">1</div><div class="t"><b>Le piante</b> (puntini verdi) crescono nell'ambiente e sono l'energia di base. Toccando lo schermo puoi farne crescere altre dove vuoi.</div></div>
+        <div class="step"><div class="n">2</div><div class="t"><b>Gli erbivori</b> (verdi) cercano le piante per nutrirsi e fuggono dai predatori. Quando accumulano energia si riproducono.</div></div>
+        <div class="step"><div class="n">3</div><div class="t"><b>I carnivori</b> (rossi) danno la caccia agli erbivori. Consumano più energia, quindi devono cacciare bene per sopravvivere.</div></div>
+        <div class="step"><div class="n">4</div><div class="t"><b>Il genoma</b> — velocità, vista, dimensione, colore — passa ai figli con piccole <b>mutazioni</b>. Chi è adatto lascia più discendenti.</div></div>
+        <div class="step"><div class="n">5</div><div class="t"><b>Guarda i grafici</b>: le popolazioni oscillano come prede e predatori reali, e la velocità media rivela la "corsa agli armamenti" dell'evoluzione.</div></div>
+      </div>
+      <button class="btn primary" id="tClose">Ho capito, iniziamo</button>
+    </div>
+  </div>
+
+  <!-- ===== OPZIONI ===== -->
+  <div class="overlay" id="options">
+    <div class="card">
+      <p class="eyebrow">Regola l'ambiente</p>
+      <h3>Opzioni</h3>
+      <p class="lead">Cambia le regole e osserva come reagisce l'ecosistema.</p>
+      <div class="opt-group">
+        <label class="ctl">Crescita delle piante <b id="vFood">media</b>
+          <input type="range" id="rFood" min="0" max="12" step="1" value="4"></label>
+        <label class="ctl">Tasso di mutazione <b id="vMut">8%</b>
+          <input type="range" id="rMut" min="0" max="30" step="1" value="8"></label>
+        <div class="toggle"><span>Predatori nell'ecosistema</span>
+          <label class="switch"><input type="checkbox" id="tPred" checked><span class="slider"></span></label>
+        </div>
+      </div>
+      <div class="row" style="margin-top:20px">
+        <button class="btn ghost" id="oExport">⬇ Esporta mondo</button>
+        <button class="btn ghost" id="oImport">⬆ Importa mondo</button>
+      </div>
+      <input type="file" id="fileImport" accept="application/json,.json" style="display:none">
+      <div class="row"><button class="btn primary" id="oClose">Chiudi</button></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
 
 <script>
 (function(){
   "use strict";
-  // ---------- utilità ----------
-  const rnd = (a,b)=>a+Math.random()*(b-a);
+  /* ---------- utilità ---------- */
+  const rnd=(a,b)=>a+Math.random()*(b-a);
   const clamp=(v,a,b)=>v<a?a:v>b?b:v;
   const TAU=Math.PI*2;
-  // rumore gaussiano semplice (Box-Muller)
-  function gauss(){ let u=0,v=0; while(!u)u=Math.random(); while(!v)v=Math.random();
-    return Math.sqrt(-2*Math.log(u))*Math.cos(TAU*v); }
+  function gauss(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();
+    return Math.sqrt(-2*Math.log(u))*Math.cos(TAU*v);}
+  const el=id=>document.getElementById(id);
 
-  // ---------- canvas ----------
-  const world=document.getElementById('world'), wctx=world.getContext('2d');
+  /* ---------- canvas ---------- */
+  const world=el('world'), wctx=world.getContext('2d');
   let W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2);
-  function resize(){
-    const r=world.getBoundingClientRect();
-    W=r.width; H=r.height;
-    world.width=W*DPR; world.height=H*DPR;
-    wctx.setTransform(DPR,0,0,DPR,0,0);
-  }
+  function resize(){const r=world.getBoundingClientRect();W=r.width;H=r.height;
+    world.width=W*DPR;world.height=H*DPR;wctx.setTransform(DPR,0,0,DPR,0,0);}
   window.addEventListener('resize',resize);
 
-  // ---------- parametri ----------
+  /* ---------- parametri ---------- */
   const P={
-    startPop:60, maxPop:400,
-    maxFood:340, foodEnergy:26,
-    foodRate:4,           // quante particelle di cibo per tick (scalato)
-    mut:0.08,             // ampiezza mutazione
-    reproEnergy:120,      // soglia riproduzione
-    startEnergy:70,
-    maxAge:2600
+    herbStart:70, carnStart:9, maxPop:420,
+    maxFood:340, foodEnergy:24, foodRate:4, mut:0.08,
+    // erbivori
+    herbReproE:120, herbStartE:70, herbMaxAge:2600,
+    // carnivori
+    carnReproE:230, carnStartE:150, carnMaxAge:3200, preyEnergy:95,
+    predatorsOn:true
   };
 
-  // ---------- genoma & creatura ----------
-  // geni: speed (0.4..3.2), sense (18..150), size (2.5..8), hue (0..360)
-  function randomGenome(){
-    return { speed:rnd(0.8,2.2), sense:rnd(35,95), size:rnd(3.5,6.5), hue:rnd(0,360) };
+  /* ---------- genoma & creatura ---------- */
+  function randomGenome(type){
+    // tinta: erbivori sui verdi (80-150), carnivori sui rossi/arancio (0-35)
+    const hue = type==='carn' ? rnd(0,35) : rnd(85,150);
+    return { speed:rnd(0.9,2.1), sense:rnd(40,95), size:rnd(3.5,6), hue };
   }
-  function mutate(g){
+  function mutate(g,type){
     const m=P.mut;
+    const hueCenter = type==='carn'?18:115, hueSpan=type==='carn'?24:40;
     return {
-      speed: clamp(g.speed + gauss()*0.6*m*3, 0.4, 3.2),
-      sense: clamp(g.sense + gauss()*40*m*1.6, 15, 160),
+      speed: clamp(g.speed + gauss()*0.6*m*3, 0.4, 3.4),
+      sense: clamp(g.sense + gauss()*40*m*1.6, 15, 165),
       size:  clamp(g.size  + gauss()*3*m*1.6, 2.5, 9),
-      hue:  (g.hue + gauss()*30*m*3 + 360) % 360
+      hue:   clamp(g.hue + gauss()*20*m*3, hueCenter-hueSpan, hueCenter+hueSpan)
     };
   }
   let ID=1;
-  function makeCreature(x,y,genome,gen){
-    return {
-      id:ID++, x,y, vx:rnd(-1,1), vy:rnd(-1,1),
-      g:genome, energy:P.startEnergy, age:0, gen:gen||0, dead:false
-    };
+  function makeCreature(x,y,type,genome,gen){
+    const startE = type==='carn'?P.carnStartE:P.herbStartE;
+    return { id:ID++, x,y, vx:rnd(-1,1), vy:rnd(-1,1), type, g:genome,
+      energy:startE, age:0, gen:gen||0, dead:false };
   }
-
-  // costo metabolico: creature grandi e veloci consumano di più
   function metabolism(c){
     const g=c.g;
-    return 0.05 + (g.speed*g.speed)*0.05 + (g.size*0.012) + (g.sense*0.0016);
+    const base = c.type==='carn' ? 0.09 : 0.05;
+    return base + (g.speed*g.speed)*0.05 + (g.size*0.012) + (g.sense*0.0016);
   }
 
-  // ---------- stato ----------
-  let creatures=[], food=[], tick=0, births=0, deaths=0, maxGen=0, running=true;
-  const popHist=[], traitHist=[]; // per i grafici
+  /* ---------- stato ---------- */
+  let creatures=[], food=[], tick=0, predations=0, maxGen=0, running=true;
+  const popHist=[], traitHist=[];
 
   function spawnFood(n){
-    for(let i=0;i<n && food.length<P.maxFood;i++){
-      food.push({x:rnd(6,W-6), y:rnd(6,H-6)});
-    }
+    for(let i=0;i<n && food.length<P.maxFood;i++)
+      food.push({x:rnd(6,W-6),y:rnd(6,H-6)});
   }
   function seed(){
-    creatures=[]; food=[]; tick=0; births=0; deaths=0; maxGen=0;
+    creatures=[]; food=[]; tick=0; predations=0; maxGen=0;
     popHist.length=0; traitHist.length=0; ID=1;
-    for(let i=0;i<P.startPop;i++)
-      creatures.push(makeCreature(rnd(0,W),rnd(0,H),randomGenome(),0));
+    for(let i=0;i<P.herbStart;i++)
+      creatures.push(makeCreature(rnd(0,W),rnd(0,H),'herb',randomGenome('herb'),0));
+    if(P.predatorsOn) for(let i=0;i<P.carnStart;i++)
+      creatures.push(makeCreature(rnd(0,W),rnd(0,H),'carn',randomGenome('carn'),0));
     spawnFood(P.maxFood*0.6|0);
   }
 
-  // ---------- salvataggio / caricamento ----------
-  const SAVE_KEY='evosim_save_v1';
-  // impacchetta lo stato in un oggetto leggero e serializzabile
-  function snapshot(){
-    return {
-      v:1, tick, births, deaths, maxGen, ID,
-      W, H,                        // dimensioni con cui era stato salvato (per riscalare)
-      params:{ foodRate:P.foodRate, mut:P.mut },
-      creatures: creatures.map(c=>[
-        +c.x.toFixed(1), +c.y.toFixed(1), +c.vx.toFixed(2), +c.vy.toFixed(2),
-        +c.g.speed.toFixed(3), +c.g.sense.toFixed(1), +c.g.size.toFixed(2), +c.g.hue.toFixed(1),
-        +c.energy.toFixed(1), c.age, c.gen, c.id
-      ]),
-      food: food.map(f=>[+f.x.toFixed(1), +f.y.toFixed(1)])
-    };
-  }
-  // ricostruisce lo stato da uno snapshot (riscala le posizioni se lo schermo è diverso)
-  function restore(s){
-    if(!s || s.v!==1) return false;
-    const sx = s.W? W/s.W : 1, sy = s.H? H/s.H : 1;
-    creatures = s.creatures.map(a=>({
-      id:a[11], x:a[0]*sx, y:a[1]*sy, vx:a[2], vy:a[3],
-      g:{ speed:a[4], sense:a[5], size:a[6], hue:a[7] },
-      energy:a[8], age:a[9], gen:a[10], dead:false
-    }));
-    food = s.food.map(a=>({ x:a[0]*sx, y:a[1]*sy }));
-    tick=s.tick||0; births=s.births||0; deaths=s.deaths||0; maxGen=s.maxGen||0;
-    ID=s.ID||creatures.length+1;
-    if(s.params){ P.foodRate=s.params.foodRate; P.mut=s.params.mut; syncSliders(); }
-    popHist.length=0; traitHist.length=0;
-    return true;
-  }
-  function saveLocal(){
-    try{ localStorage.setItem(SAVE_KEY, JSON.stringify(snapshot())); return true; }
-    catch(e){ return false; }   // sandbox senza storage: fallisce silenziosamente
-  }
-  function loadLocal(){
-    try{ const raw=localStorage.getItem(SAVE_KEY); return raw? restore(JSON.parse(raw)) : false; }
-    catch(e){ return false; }
-  }
-  function clearLocal(){ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} }
-  // allinea gli slider ai parametri correnti (usato dopo un load/import)
-  function syncSliders(){
-    const rF=document.getElementById('rFood'), rM=document.getElementById('rMut');
-    if(rF){ rF.value=P.foodRate; rF.dispatchEvent(new Event('input')); }
-    if(rM){ rM.value=Math.round(P.mut*100); rM.dispatchEvent(new Event('input')); }
-  }
-
-  // ---------- passo di simulazione ----------
+  /* ---------- passo di simulazione ---------- */
   function step(){
     tick++;
-    // genera cibo
     spawnFood(P.foodRate);
-
     const newborns=[];
-    for(let ci=0; ci<creatures.length; ci++){
+    const n=creatures.length;
+
+    for(let ci=0; ci<n; ci++){
       const c=creatures[ci];
       if(c.dead) continue;
       c.age++;
+      const senseSq=c.g.sense*c.g.sense;
 
-      // percezione: cerca il cibo più vicino entro il raggio visivo
-      let best=-1, bestD=c.g.sense*c.g.sense;
-      for(let fi=0; fi<food.length; fi++){
-        const dx=food[fi].x-c.x, dy=food[fi].y-c.y, d=dx*dx+dy*dy;
-        if(d<bestD){ bestD=d; best=fi; }
-      }
-      // sterzo verso il cibo, altrimenti vagabonda
-      if(best>=0){
-        const f=food[best];
-        const a=Math.atan2(f.y-c.y, f.x-c.x);
-        c.vx += Math.cos(a)*0.5; c.vy += Math.sin(a)*0.5;
-      } else {
-        c.vx += rnd(-0.25,0.25); c.vy += rnd(-0.25,0.25);
-      }
-      // normalizza alla velocità genetica
-      const sp=Math.hypot(c.vx,c.vy)||1;
-      c.vx=c.vx/sp*c.g.speed; c.vy=c.vy/sp*c.g.speed;
-      c.x+=c.vx; c.y+=c.vy;
-      // bordi: rimbalzo morbido
-      if(c.x<4){c.x=4;c.vx=Math.abs(c.vx)} if(c.x>W-4){c.x=W-4;c.vx=-Math.abs(c.vx)}
-      if(c.y<4){c.y=4;c.vy=Math.abs(c.vy)} if(c.y>H-4){c.y=H-4;c.vy=-Math.abs(c.vy)}
-
-      // consumo energia
-      c.energy -= metabolism(c);
-
-      // mangia (raggio = dimensione + 4)
-      if(best>=0){
-        const f=food[best];
-        const er=(c.g.size+4);
-        if((f.x-c.x)**2+(f.y-c.y)**2 < er*er){
-          c.energy += P.foodEnergy;
-          food[best]=food[food.length-1]; food.pop();
+      if(c.type==='herb'){
+        // cerca pianta più vicina + predatore più vicino
+        let bf=-1,bfD=senseSq;
+        for(let fi=0;fi<food.length;fi++){
+          const dx=food[fi].x-c.x,dy=food[fi].y-c.y,d=dx*dx+dy*dy;
+          if(d<bfD){bfD=d;bf=fi;}
         }
-      }
+        let px=0,py=0,threat=false,bpD=senseSq;
+        for(let k=0;k<n;k++){
+          const o=creatures[k];
+          if(o.dead||o.type!=='carn')continue;
+          const dx=o.x-c.x,dy=o.y-c.y,d=dx*dx+dy*dy;
+          if(d<bpD){bpD=d;px=dx;py=dy;threat=true;}
+        }
+        if(threat){ // fuga: pesa più della fame
+          const a=Math.atan2(py,px);
+          c.vx-=Math.cos(a)*0.9; c.vy-=Math.sin(a)*0.9;
+        } else if(bf>=0){
+          const f=food[bf], a=Math.atan2(f.y-c.y,f.x-c.x);
+          c.vx+=Math.cos(a)*0.5; c.vy+=Math.sin(a)*0.5;
+        } else { c.vx+=rnd(-0.25,0.25); c.vy+=rnd(-0.25,0.25); }
+        // movimento
+        moveCreature(c);
+        c.energy-=metabolism(c);
+        // mangia pianta
+        if(bf>=0){
+          const f=food[bf], er=c.g.size+4;
+          if((f.x-c.x)**2+(f.y-c.y)**2<er*er){
+            c.energy+=P.foodEnergy; food[bf]=food[food.length-1]; food.pop();
+          }
+        }
+        if(c.energy>=P.herbReproE && creatures.length+newborns.length<P.maxPop){
+          c.energy*=0.5;
+          const ch=makeCreature(c.x+rnd(-6,6),c.y+rnd(-6,6),'herb',mutate(c.g,'herb'),c.gen+1);
+          ch.energy=c.energy; newborns.push(ch);
+          if(ch.gen>maxGen)maxGen=ch.gen;
+        }
+        if(c.energy<=0||c.age>P.herbMaxAge){c.dead=true;}
 
-      // riproduzione
-      if(c.energy>=P.reproEnergy && creatures.length+newborns.length<P.maxPop){
-        c.energy*=0.5;
-        const child=makeCreature(
-          c.x+rnd(-6,6), c.y+rnd(-6,6), mutate(c.g), c.gen+1);
-        child.energy=c.energy;
-        newborns.push(child); births++;
-        if(child.gen>maxGen) maxGen=child.gen;
+      } else { // carnivoro
+        let bp=-1,bpD=senseSq;
+        for(let k=0;k<n;k++){
+          const o=creatures[k];
+          if(o.dead||o.type!=='herb')continue;
+          const dx=o.x-c.x,dy=o.y-c.y,d=dx*dx+dy*dy;
+          if(d<bpD){bpD=d;bp=k;}
+        }
+        if(bp>=0){
+          const pr=creatures[bp], a=Math.atan2(pr.y-c.y,pr.x-c.x);
+          c.vx+=Math.cos(a)*0.6; c.vy+=Math.sin(a)*0.6;
+        } else { c.vx+=rnd(-0.25,0.25); c.vy+=rnd(-0.25,0.25); }
+        moveCreature(c);
+        c.energy-=metabolism(c);
+        // caccia
+        if(bp>=0){
+          const pr=creatures[bp], er=c.g.size+pr.g.size+2;
+          if(!pr.dead && (pr.x-c.x)**2+(pr.y-c.y)**2<er*er){
+            pr.dead=true; predations++; c.energy+=P.preyEnergy;
+          }
+        }
+        if(c.energy>=P.carnReproE && creatures.length+newborns.length<P.maxPop){
+          c.energy*=0.5;
+          const ch=makeCreature(c.x+rnd(-6,6),c.y+rnd(-6,6),'carn',mutate(c.g,'carn'),c.gen+1);
+          ch.energy=c.energy; newborns.push(ch);
+          if(ch.gen>maxGen)maxGen=ch.gen;
+        }
+        if(c.energy<=0||c.age>P.carnMaxAge){c.dead=true;}
       }
-
-      // morte
-      if(c.energy<=0 || c.age>P.maxAge){ c.dead=true; deaths++; }
     }
 
-    // rimuovi morti, aggiungi nati
     if(newborns.length) creatures=creatures.concat(newborns);
     creatures=creatures.filter(c=>!c.dead);
 
-    // ripopolamento di sicurezza (mai estinzione totale silenziosa)
-    if(creatures.length===0){
-      for(let i=0;i<10;i++)
-        creatures.push(makeCreature(rnd(0,W),rnd(0,H),randomGenome(),0));
-    }
+    // rete di sicurezza: nessuna estinzione permanente silenziosa
+    let herbN=0,carnN=0;
+    for(const c of creatures){ c.type==='carn'?carnN++:herbN++; }
+    if(herbN===0) for(let i=0;i<12;i++)
+      creatures.push(makeCreature(rnd(0,W),rnd(0,H),'herb',randomGenome('herb'),0));
+    if(P.predatorsOn && carnN===0 && herbN>25) for(let i=0;i<3;i++)
+      creatures.push(makeCreature(rnd(0,W),rnd(0,H),'carn',randomGenome('carn'),0));
 
-    // storico ogni 6 tick
     if(tick%6===0){
-      let s=0,se=0,sz=0;
-      for(const c of creatures){ s+=c.g.speed; se+=c.g.sense; sz+=c.g.size; }
-      const n=creatures.length||1;
-      popHist.push(creatures.length);
-      traitHist.push({sp:s/n, se:se/n, sz:sz/n});
-      if(popHist.length>240){popHist.shift(); traitHist.shift();}
+      let hs=0,cs=0,hn=0,cn=0;
+      for(const c of creatures){ if(c.type==='carn'){cs+=c.g.speed;cn++;} else {hs+=c.g.speed;hn++;} }
+      popHist.push({h:hn,c:cn,f:food.length});
+      traitHist.push({hs:hn?hs/hn:0, cs:cn?cs/cn:0});
+      if(popHist.length>240){popHist.shift();traitHist.shift();}
     }
   }
+  function moveCreature(c){
+    const sp=Math.hypot(c.vx,c.vy)||1;
+    c.vx=c.vx/sp*c.g.speed; c.vy=c.vy/sp*c.g.speed;
+    c.x+=c.vx; c.y+=c.vy;
+    if(c.x<4){c.x=4;c.vx=Math.abs(c.vx)} if(c.x>W-4){c.x=W-4;c.vx=-Math.abs(c.vx)}
+    if(c.y<4){c.y=4;c.vy=Math.abs(c.vy)} if(c.y>H-4){c.y=H-4;c.vy=-Math.abs(c.vy)}
+  }
 
-  // ---------- disegno ----------
+  /* ---------- disegno ---------- */
   function draw(){
     wctx.clearRect(0,0,W,H);
-    // cibo
-    wctx.fillStyle='#2f7d4f';
-    for(const f of food){ wctx.beginPath(); wctx.arc(f.x,f.y,2.2,0,TAU); wctx.fill(); }
+    // piante
+    wctx.fillStyle='#3a6b2e';
+    for(const f of food){ wctx.beginPath(); wctx.arc(f.x,f.y,2.1,0,TAU); wctx.fill(); }
     // creature
     for(const c of creatures){
-      const light=clamp(38+c.energy*0.28,40,72);
-      wctx.fillStyle=`hsl(${c.g.hue|0} 70% ${light}%)`;
+      const light=clamp(38+c.energy*0.18, 40, c.type==='carn'?66:70);
+      const sat=c.type==='carn'?68:62;
+      wctx.fillStyle=`hsl(${c.g.hue|0} ${sat}% ${light}%)`;
       wctx.beginPath(); wctx.arc(c.x,c.y,c.g.size,0,TAU); wctx.fill();
+      if(c.type==='carn'){ // alone per distinguere i predatori
+        wctx.strokeStyle=`hsla(${c.g.hue|0} 80% 72% / .55)`; wctx.lineWidth=1.2;
+        wctx.beginPath(); wctx.arc(c.x,c.y,c.g.size+2.2,0,TAU); wctx.stroke();
+      }
       // direzione
-      wctx.strokeStyle=`hsl(${c.g.hue|0} 70% ${light+12}%)`;
-      wctx.lineWidth=1.4; wctx.beginPath(); wctx.moveTo(c.x,c.y);
+      wctx.strokeStyle=`hsl(${c.g.hue|0} ${sat}% ${light+14}%)`; wctx.lineWidth=1.4;
+      wctx.beginPath(); wctx.moveTo(c.x,c.y);
       wctx.lineTo(c.x+c.vx/c.g.speed*(c.g.size+3), c.y+c.vy/c.g.speed*(c.g.size+3)); wctx.stroke();
     }
   }
 
-  // ---------- grafici ----------
-  const chPop=document.getElementById('chPop'), pctx=chPop.getContext('2d');
-  const chTr=document.getElementById('chTrait'), tctx=chTr.getContext('2d');
-  function fitChart(cv,ctx){
-    const r=cv.getBoundingClientRect();
-    if(cv.width!==r.width*DPR||cv.height!==r.height*DPR){
-      cv.width=r.width*DPR; cv.height=r.height*DPR; ctx.setTransform(DPR,0,0,DPR,0,0);
-    }
-    return {w:r.width,h:r.height};
-  }
+  /* ---------- grafici ---------- */
+  const chPop=el('chPop'),pctx=chPop.getContext('2d');
+  const chTr=el('chTrait'),tctx=chTr.getContext('2d');
+  function fitChart(cv,ctx){const r=cv.getBoundingClientRect();
+    if(cv.width!==r.width*DPR||cv.height!==r.height*DPR){cv.width=r.width*DPR;cv.height=r.height*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);}
+    return {w:r.width,h:r.height};}
   function line(ctx,data,map,col,w,h,pad){
-    if(data.length<2)return;
-    ctx.strokeStyle=col; ctx.lineWidth=1.6; ctx.beginPath();
-    for(let i=0;i<data.length;i++){
-      const x=pad+(w-2*pad)*i/(data.length-1);
-      const y=map(data[i]);
-      i?ctx.lineTo(x,y):ctx.moveTo(x,y);
-    }
+    if(data.length<2)return; ctx.strokeStyle=col; ctx.lineWidth=1.7; ctx.beginPath();
+    for(let i=0;i<data.length;i++){const x=pad+(w-2*pad)*i/(data.length-1),y=map(data[i]);i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
     ctx.stroke();
   }
   function drawCharts(){
-    // popolazione
     let {w,h}=fitChart(chPop,pctx);
-    pctx.clearRect(0,0,w,h);
-    const pad=6, maxP=Math.max(P.maxPop*0.6, ...popHist,10);
-    pctx.fillStyle='#0f1420'; pctx.fillRect(0,0,w,h);
-    line(pctx,popHist,v=>h-pad-(h-2*pad)*(v/maxP),'#4ade80',w,h,pad);
+    pctx.clearRect(0,0,w,h); pctx.fillStyle='#0c120c'; pctx.fillRect(0,0,w,h);
+    const pad=6;
+    let maxP=10; for(const p of popHist){ if(p.h>maxP)maxP=p.h; if(p.c>maxP)maxP=p.c; if(p.f>maxP)maxP=p.f; }
+    line(pctx,popHist,p=>h-pad-(h-2*pad)*(p.f/maxP),'#2f5322',w,h,pad); // piante
+    line(pctx,popHist,p=>h-pad-(h-2*pad)*(p.h/maxP),'#8fc44a',w,h,pad); // erbivori
+    line(pctx,popHist,p=>h-pad-(h-2*pad)*(p.c/maxP),'#dd6f57',w,h,pad); // carnivori
 
-    // tratti (normalizzati sul loro range genetico)
     ({w,h}=fitChart(chTr,tctx));
-    tctx.clearRect(0,0,w,h); tctx.fillStyle='#0f1420'; tctx.fillRect(0,0,w,h);
-    line(tctx,traitHist,v=>h-pad-(h-2*pad)*((v.sp-0.4)/(3.2-0.4)),'#4fd1c5',w,h,pad);
-    line(tctx,traitHist,v=>h-pad-(h-2*pad)*((v.se-15)/(160-15)),'#f6ad55',w,h,pad);
-    line(tctx,traitHist,v=>h-pad-(h-2*pad)*((v.sz-2.5)/(9-2.5)),'#c084fc',w,h,pad);
+    tctx.clearRect(0,0,w,h); tctx.fillStyle='#0c120c'; tctx.fillRect(0,0,w,h);
+    const mn=0.4,mx=3.4;
+    line(tctx,traitHist,v=>h-pad-(h-2*pad)*((v.hs-mn)/(mx-mn)),'#8fc44a',w,h,pad);
+    line(tctx,traitHist,v=>h-pad-(h-2*pad)*((v.cs-mn)/(mx-mn)),'#dd6f57',w,h,pad);
   }
 
-  // ---------- HUD ----------
-  const el=id=>document.getElementById(id);
+  /* ---------- HUD ---------- */
   function updateHUD(){
-    el('sPop').textContent=creatures.length;
-    el('sGen').textContent=maxGen;
+    let herbN=0,carnN=0;
+    for(const c of creatures){ c.type==='carn'?carnN++:herbN++; }
+    el('sHerb').textContent=herbN;
+    el('sCarn').textContent=carnN;
     el('sFood').textContent=food.length;
     el('sTick').innerHTML=tick+'<small> t</small>';
-    el('sBirth').textContent=births;
-    el('sDeath').textContent=deaths;
+    el('sGen').textContent=maxGen;
+    el('sPred').textContent=predations;
   }
 
-  // ---------- loop ----------
+  /* ---------- loop ---------- */
   let stepsPerFrame=1, saveCounter=0;
   function frame(){
     if(running){ for(let i=0;i<stepsPerFrame;i++) step(); }
     draw(); drawCharts(); updateHUD();
-    // salvataggio automatico ogni ~180 frame (~3 secondi)
     if(running && ++saveCounter>=180){ saveCounter=0; saveLocal(); }
     requestAnimationFrame(frame);
   }
-  // salva anche quando chiudi/lasci la pagina, per non perdere gli ultimi secondi
-  window.addEventListener('pagehide', saveLocal);
-  document.addEventListener('visibilitychange', ()=>{ if(document.hidden) saveLocal(); });
+  window.addEventListener('pagehide',saveLocal);
+  document.addEventListener('visibilitychange',()=>{ if(document.hidden) saveLocal(); });
 
-  // ---------- controlli ----------
-  el('btnPlay').onclick=function(){
-    running=!running; this.textContent=running?'⏸ Pausa':'▶ Riprendi';
-    this.classList.toggle('primary',running);
-  };
-  el('btnReset').onclick=()=>{
-    if(confirm('Vuoi davvero iniziare un mondo nuovo? Il mondo attuale salvato verrà perso.')){
-      clearLocal(); seed(); saveLocal();
-    }
-  };
-  // Esporta: scarica lo stato come file .json (per spostarlo su un altro dispositivo)
-  el('btnExport').onclick=()=>{
-    const blob=new Blob([JSON.stringify(snapshot())],{type:'application/json'});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');
-    a.href=url; a.download='evosim-mondo.json'; a.click();
-    setTimeout(()=>URL.revokeObjectURL(url),1000);
-  };
-  // Importa: carica uno stato da un file .json
-  el('btnImport').onclick=()=> el('fileImport').click();
-  el('fileImport').onchange=function(){
-    const f=this.files[0]; if(!f) return;
-    const rd=new FileReader();
-    rd.onload=()=>{ try{
-        if(restore(JSON.parse(rd.result))){ saveLocal(); flashStatus('✅ Mondo importato'); }
-        else flashStatus('⚠ File non valido');
-      }catch(e){ flashStatus('⚠ File non leggibile'); } };
-    rd.readAsText(f); this.value='';
-  };
-  function flashStatus(msg){
-    const s=el('saveStatus'); if(!s) return;
-    const old=s.textContent; s.textContent=msg;
-    setTimeout(()=>{ s.textContent=old; },2500);
+  /* ---------- salvataggio / caricamento ---------- */
+  const SAVE_KEY='evosim_save_v2';
+  function snapshot(){
+    return { v:2, tick, predations, maxGen, ID, W, H,
+      params:{ foodRate:P.foodRate, mut:P.mut, predatorsOn:P.predatorsOn },
+      creatures: creatures.map(c=>[
+        +c.x.toFixed(1),+c.y.toFixed(1),+c.vx.toFixed(2),+c.vy.toFixed(2),
+        +c.g.speed.toFixed(3),+c.g.sense.toFixed(1),+c.g.size.toFixed(2),+c.g.hue.toFixed(1),
+        +c.energy.toFixed(1),c.age,c.gen,c.id, c.type==='carn'?1:0 ]),
+      food: food.map(f=>[+f.x.toFixed(1),+f.y.toFixed(1)]) };
   }
-  el('rSpeed').oninput=function(){
-    stepsPerFrame=+this.value; el('vSpeed').textContent=(stepsPerFrame||'0')+'×';
-    if(stepsPerFrame===0){ /* pausa di fatto */ }
-  };
-  el('rFood').oninput=function(){
-    P.foodRate=+this.value;
-    el('vFood').textContent=this.value==0?'nessuno':this.value<3?'scarso':this.value<7?'medio':'abbondante';
-  };
-  el('rMut').oninput=function(){
-    P.mut=+this.value/100; el('vMut').textContent=this.value+'%';
-  };
+  function restore(s){
+    if(!s||s.v!==2) return false;
+    const sx=s.W?W/s.W:1, sy=s.H?H/s.H:1;
+    creatures=s.creatures.map(a=>({ id:a[11], x:a[0]*sx, y:a[1]*sy, vx:a[2], vy:a[3],
+      type:a[12]?'carn':'herb', g:{speed:a[4],sense:a[5],size:a[6],hue:a[7]},
+      energy:a[8], age:a[9], gen:a[10], dead:false }));
+    food=s.food.map(a=>({x:a[0]*sx,y:a[1]*sy}));
+    tick=s.tick||0; predations=s.predations||0; maxGen=s.maxGen||0; ID=s.ID||creatures.length+1;
+    if(s.params){ P.foodRate=s.params.foodRate; P.mut=s.params.mut;
+      if(typeof s.params.predatorsOn==='boolean')P.predatorsOn=s.params.predatorsOn; syncControls(); }
+    popHist.length=0; traitHist.length=0; return true;
+  }
+  function saveLocal(){ try{ localStorage.setItem(SAVE_KEY,JSON.stringify(snapshot())); return true; }catch(e){ return false; } }
+  function hasSave(){ try{ return !!localStorage.getItem(SAVE_KEY); }catch(e){ return false; } }
+  function loadLocal(){ try{ const r=localStorage.getItem(SAVE_KEY); return r?restore(JSON.parse(r)):false; }catch(e){ return false; } }
+  function clearLocal(){ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} }
+  function syncControls(){
+    const rF=el('rFood'),rM=el('rMut'),tP=el('tPred');
+    if(rF){rF.value=P.foodRate;rF.dispatchEvent(new Event('input'));}
+    if(rM){rM.value=Math.round(P.mut*100);rM.dispatchEvent(new Event('input'));}
+    if(tP){tP.checked=P.predatorsOn;}
+  }
 
-  // aggiunta cibo col mouse
-  let pressing=false, mx=0,my=0;
-  world.addEventListener('pointerdown',e=>{pressing=true; place(e);});
-  world.addEventListener('pointermove',e=>{ if(pressing)place(e); });
+  /* ---------- overlay & schermate ---------- */
+  function show(id){ el(id).classList.add('show'); }
+  function hide(id){ el(id).classList.remove('show'); }
+  function hideAll(){ ['menu','tutorial','options'].forEach(hide); }
+  let toastT=null;
+  function toast(msg){ const t=el('toast'); t.textContent=msg; t.classList.add('show');
+    clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2200); }
+
+  /* ---------- controlli pannello ---------- */
+  el('btnPlay').onclick=function(){ running=!running;
+    this.textContent=running?'⏸ Pausa':'▶ Riprendi'; this.classList.toggle('primary',running); };
+  el('rSpeed').oninput=function(){ stepsPerFrame=+this.value; el('vSpeed').textContent=(stepsPerFrame||'0')+'×'; };
+  el('rFood').oninput=function(){ P.foodRate=+this.value;
+    el('vFood').textContent=this.value==0?'nessuna':this.value<3?'scarsa':this.value<7?'media':'abbondante'; };
+  el('rMut').oninput=function(){ P.mut=+this.value/100; el('vMut').textContent=this.value+'%'; };
+  el('tPred').onchange=function(){ P.predatorsOn=this.checked;
+    if(!this.checked){ creatures=creatures.filter(c=>c.type!=='carn'); }
+    else if(!creatures.some(c=>c.type==='carn')){
+      for(let i=0;i<P.carnStart;i++) creatures.push(makeCreature(rnd(0,W),rnd(0,H),'carn',randomGenome('carn'),0));
+    } };
+  el('btnSave').onclick=()=>{ saveLocal()?toast('🌿 Mondo salvato'):toast('⚠ Salvataggio non disponibile'); };
+  el('btnOpt').onclick=()=> show('options');
+  el('btnMenu').onclick=()=>{ show('menu'); refreshMenu(); };
+
+  /* ---------- menu ---------- */
+  function refreshMenu(){ el('mResume').style.display = creatures.length?'':'none';
+    el('mLoad').style.display = hasSave()?'':'none'; }
+  el('mNew').onclick=()=>{ clearLocal(); seed(); saveLocal(); hideAll(); running=true; syncPlayBtn(); };
+  el('mResume').onclick=()=>{ hideAll(); running=true; syncPlayBtn(); };
+  el('mTut').onclick=()=> show('tutorial');
+  el('mLoad').onclick=()=>{ if(loadLocal()){ toast('📂 Mondo caricato'); hideAll(); running=true; syncPlayBtn(); } else toast('Nessun salvataggio trovato'); };
+  el('mSave').onclick=()=>{ saveLocal()?toast('🌿 Mondo salvato'):toast('⚠ Non disponibile'); };
+  el('mOpt').onclick=()=> show('options');
+  el('tClose').onclick=()=>{ hide('tutorial'); if(!creatures.length){seed();saveLocal();} hideAll(); running=true; syncPlayBtn(); };
+  function syncPlayBtn(){ const b=el('btnPlay'); b.textContent=running?'⏸ Pausa':'▶ Riprendi'; b.classList.toggle('primary',running); }
+
+  /* ---------- opzioni: export / import ---------- */
+  el('oClose').onclick=()=> hide('options');
+  el('oExport').onclick=()=>{ const blob=new Blob([JSON.stringify(snapshot())],{type:'application/json'});
+    const url=URL.createObjectURL(blob); const a=document.createElement('a');
+    a.href=url; a.download='evosim-mondo.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+    toast('⬇ Mondo esportato'); };
+  el('oImport').onclick=()=> el('fileImport').click();
+  el('fileImport').onchange=function(){ const f=this.files[0]; if(!f)return;
+    const rd=new FileReader(); rd.onload=()=>{ try{ if(restore(JSON.parse(rd.result))){ saveLocal(); toast('⬆ Mondo importato'); hide('options'); }
+      else toast('⚠ File non valido'); }catch(e){ toast('⚠ File non leggibile'); } };
+    rd.readAsText(f); this.value=''; };
+
+  /* ---------- cibo col tocco ---------- */
+  let pressing=false;
+  world.addEventListener('pointerdown',e=>{pressing=true;place(e);});
+  world.addEventListener('pointermove',e=>{if(pressing)place(e);});
   window.addEventListener('pointerup',()=>pressing=false);
-  function place(e){
-    const r=world.getBoundingClientRect();
-    mx=e.clientX-r.left; my=e.clientY-r.top;
-    for(let i=0;i<6;i++)
-      if(food.length<P.maxFood+200) food.push({x:mx+rnd(-18,18),y:my+rnd(-18,18)});
-  }
+  function place(e){ const r=world.getBoundingClientRect();
+    const mx=e.clientX-r.left,my=e.clientY-r.top;
+    for(let i=0;i<6;i++) if(food.length<P.maxFood+200) food.push({x:mx+rnd(-18,18),y:my+rnd(-18,18)}); }
 
-  // ---------- avvio ----------
+  /* ---------- avvio ---------- */
   resize();
-  // prova a riprendere il mondo salvato; se non c'è (o lo storage è bloccato) parti da zero
-  if(loadLocal()){
-    el('saveStatus').textContent='💾 Mondo ripreso dal salvataggio automatico';
-  } else {
-    seed();
-    // verifica se il salvataggio è disponibile in questo ambiente
-    if(!saveLocal())
-      el('saveStatus').textContent='ℹ️ Salvataggio non disponibile qui (usa il sito pubblicato)';
-  }
+  if(loadLocal()){ /* mondo salvato visibile dietro al menu */ }
+  else { seed(); saveLocal(); }
+  running=true;               // gira dietro al menu, come un acquario
+  refreshMenu();
+  show('menu');
   requestAnimationFrame(frame);
 })();
 </script>
