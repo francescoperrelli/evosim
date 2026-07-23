@@ -10,8 +10,15 @@
 <body>
   <div id="stage">
     <canvas id="world"></canvas>
-    <div id="topbar"><span class="brand">Evo<em>Sim</em></span><button id="btnMenu" data-i18n="menu">☰ Menu</button></div>
-    <div id="hint" data-i18n="hint">Tocca l'ambiente per far crescere le piante</div>
+    <div id="topbar">
+      <span class="brand">Evo<em>Sim</em></span>
+      <span id="season"></span>
+      <span class="rgroup" style="margin-left:auto; display:flex; gap:8px; pointer-events:auto">
+        <button id="btnMode" data-i18n="modeFood">🌱 Semina</button>
+        <button id="btnMenu" style="margin-left:0" data-i18n="menu">☰ Menu</button>
+      </span>
+    </div>
+    <div id="hint" data-i18n="hint">Tocca per seminare · usa 🔍 per ispezionare una creatura</div>
   </div>
 
   <aside>
@@ -19,11 +26,12 @@
       <h2 data-i18n="numbers">L'ecosistema in numeri</h2>
       <div class="stats">
         <div class="stat herb"><div class="k" data-i18n="herbivores">Erbivori</div><div class="v" id="sHerb">0</div></div>
+        <div class="stat omni"><div class="k" data-i18n="omnivores">Onnivori</div><div class="v" id="sOmni">0</div></div>
         <div class="stat carn"><div class="k" data-i18n="carnivores">Carnivori</div><div class="v" id="sCarn">0</div></div>
         <div class="stat plant"><div class="k" data-i18n="plants">Piante</div><div class="v" id="sFood">0</div></div>
         <div class="stat time"><div class="k" data-i18n="time">Tempo</div><div class="v" id="sTick">0<small> t</small></div></div>
         <div class="stat"><div class="k" data-i18n="generation">Generazione</div><div class="v" id="sGen">0</div></div>
-        <div class="stat"><div class="k" data-i18n="kills">Predazioni</div><div class="v" id="sPred">0</div></div>
+        <div class="stat span"><div class="k" data-i18n="kills">Predazioni</div><div class="v" id="sPred">0</div></div>
       </div>
     </div>
     <div class="sec">
@@ -31,6 +39,7 @@
       <canvas id="chPop" class="chart"></canvas>
       <div class="legend">
         <span><i style="background:#8fc44a"></i><span data-i18n="herbivores">Erbivori</span></span>
+        <span><i style="background:#a97fe0"></i><span data-i18n="omnivores">Onnivori</span></span>
         <span><i style="background:#dd6f57"></i><span data-i18n="carnivores">Carnivori</span></span>
         <span><i style="background:#4a7a1e"></i><span data-i18n="plants">Piante</span></span>
       </div>
@@ -100,10 +109,12 @@
           <input type="range" id="rFood" min="0" max="12" step="1" value="4"></label>
         <label class="ctl"><span data-i18n="mutationRate">Tasso di mutazione</span> <b id="vMut">8%</b>
           <input type="range" id="rMut" min="0" max="30" step="1" value="8"></label>
-        <div class="toggle"><span data-i18n="optPredators">Predatori</span><label class="switch"><input type="checkbox" id="tPred" checked><span class="slider"></span></label></div>
+        <div class="toggle"><span data-i18n="optPredators">Predatori (carnivori)</span><label class="switch"><input type="checkbox" id="tPred" checked><span class="slider"></span></label></div>
+        <div class="toggle"><span data-i18n="optOmni">Onnivori</span><label class="switch"><input type="checkbox" id="tOmni" checked><span class="slider"></span></label></div>
         <div class="toggle"><span data-i18n="optFlocks">Branchi (erbivori)</span><label class="switch"><input type="checkbox" id="tFlock" checked><span class="slider"></span></label></div>
         <div class="toggle"><span data-i18n="optTerr">Territori (carnivori)</span><label class="switch"><input type="checkbox" id="tTerr" checked><span class="slider"></span></label></div>
         <div class="toggle"><span data-i18n="optMimic">Mimetismo</span><label class="switch"><input type="checkbox" id="tMimic" checked><span class="slider"></span></label></div>
+        <div class="toggle"><span data-i18n="optSeasons">Stagioni</span><label class="switch"><input type="checkbox" id="tSeason" checked><span class="slider"></span></label></div>
       </div>
       <div class="row" style="margin-top:20px">
         <button class="btn ghost" id="oExport" data-i18n="exportWorld">⬇ Esporta</button>
@@ -112,6 +123,34 @@
       <input type="file" id="fileImport" accept="application/json,.json" style="display:none">
       <div class="lang" style="margin-top:18px"><button data-lang="it">Italiano</button><button data-lang="en">English</button></div>
       <div class="row"><button class="btn primary" id="oClose" data-i18n="close">Chiudi</button></div>
+    </div>
+  </div>
+
+  <!-- INSPECTOR -->
+  <div class="overlay" id="inspector">
+    <div class="card">
+      <div class="insp-head">
+        <span class="insp-dot" id="inspDot"></span>
+        <h3 id="inspType" style="margin:0">—</h3>
+      </div>
+      <p class="insp-meta" id="inspMeta">—</p>
+      <p class="insp-sub" data-i18n="inspGenome">Genoma</p>
+      <div class="gbars">
+        <div class="gbar"><span data-i18n="tSpeed">Velocità</span><div class="track"><div class="fill" id="bgSpeed"></div></div></div>
+        <div class="gbar"><span data-i18n="tVision">Vista</span><div class="track"><div class="fill" id="bgVision"></div></div></div>
+        <div class="gbar"><span data-i18n="tSize">Dimensione</span><div class="track"><div class="fill" id="bgSize"></div></div></div>
+        <div class="gbar"><span data-i18n="tSocial">Socialità</span><div class="track"><div class="fill" id="bgSocial"></div></div></div>
+        <div class="gbar"><span data-i18n="tCamo">Camuffamento</span><div class="track"><div class="fill" id="bgCamo"></div></div></div>
+        <div class="gbar"><span data-i18n="tTerr">Territorialità</span><div class="track"><div class="fill" id="bgTerr"></div></div></div>
+        <div class="gbar"><span data-i18n="tAcuity">Acutezza</span><div class="track"><div class="fill" id="bgAcuity"></div></div></div>
+      </div>
+      <p class="insp-sub" data-i18n="inspBrain">Cervello (rete neurale)</p>
+      <canvas id="inspNet"></canvas>
+      <div class="netlegend">
+        <span><i style="background:#8fc44a"></i>+</span>
+        <span><i style="background:#dd6f57"></i>−</span>
+      </div>
+      <div class="row"><button class="btn primary" id="inspClose" data-i18n="close">Chiudi</button></div>
     </div>
   </div>
 

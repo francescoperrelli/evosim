@@ -2,14 +2,14 @@
 import { S, LANG_KEY } from './state.js';
 import { resize, draw, drawCharts, updateHUD } from './render.js';
 import { step, seed, loadLocal, saveLocal } from './world.js';
-import { applyLang, refreshMenu, show } from './ui.js';
+import { applyLang, refreshMenu, refreshInspector, show } from './ui.js';
 import { I18N, setLang } from './i18n.js';
 
-/* ---------- ciclo ---------- */
+/* ---------- loop ---------- */
 let saveCounter = 0;
 function frame(){
   if(S.running){ for(let i = 0; i < S.stepsPerFrame; i++) step(); }
-  draw(); drawCharts(); updateHUD();
+  draw(); drawCharts(); updateHUD(); refreshInspector();
   if(S.running && ++saveCounter >= 180){ saveCounter = 0; saveLocal(); }
   requestAnimationFrame(frame);
 }

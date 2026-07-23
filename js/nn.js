@@ -1,17 +1,21 @@
-// Rete neurale minima (feed-forward): NIN -> NH -> NOUT, attivazione tanh.
-// I pesi sono il "cervello" della creatura e vengono ereditati con mutazioni.
+// Minimal recurrent neural network: NIN -> NH -> NOUT (tanh).
+// Two of the outputs are written back as "memory" inputs next tick,
+// giving each creature a tiny short-term memory.
 import { clamp, gauss } from './utils.js';
 import { P } from './state.js';
 
-export const NIN = 10, NH = 8, NOUT = 2;
-const OFF_B1 = NIN * NH;                 // bias strato nascosto
-const OFF_W2 = OFF_B1 + NH;              // pesi nascosto->uscita
-const OFF_B2 = OFF_W2 + NH * NOUT;       // bias uscita
+// Inputs (17): food fwd/lat/pres, prey fwd/lat/pres, threat fwd/lat/pres,
+//              neighbour fwd/lat/density, energy, season, mem0, mem1, bias
+export const NIN = 17, NH = 10, NOUT = 4;   // outputs: moveX, moveY, mem0, mem1
+export const NMEM = 2;
+const OFF_B1 = NIN * NH;
+const OFF_W2 = OFF_B1 + NH;
+const OFF_B2 = OFF_W2 + NH * NOUT;
 export const BRAINLEN = OFF_B2 + NOUT;
 
 export function randomBrain(){
   const a = new Array(BRAINLEN);
-  for(let i = 0; i < BRAINLEN; i++) a[i] = gauss() * 0.7;
+  for(let i = 0; i < BRAINLEN; i++) a[i] = gauss() * 0.45;
   return a;
 }
 export function mutateBrain(b){
@@ -33,3 +37,6 @@ export function brainForward(b, inp, out){
     out[k] = Math.tanh(s);
   }
 }
+
+// Expose layer sizes for the inspector visualization
+export const LAYERS = { NIN, NH, NOUT };
