@@ -59,7 +59,10 @@
         <button class="btn ghost" id="btnSave" data-i18n="save">💾 Salva</button>
         <button class="btn ghost" id="btnOpt" data-i18n="options">⚙ Opzioni</button>
       </div>
-      <div class="row"><button class="btn ghost" id="btnEvo" data-i18n="evoBtn">📊 Evoluzione</button></div>
+      <div class="row">
+        <button class="btn ghost" id="btnEvo" data-i18n="evoBtn">📊 Evoluzione</button>
+        <button class="btn ghost" id="btnEvents" data-i18n="eventsBtn">⚡ Eventi</button>
+      </div>
       <label class="ctl"><span data-i18n="timeSpeed">Velocità del tempo</span> <b id="vSpeed">1×</b>
         <input type="range" id="rSpeed" min="0" max="8" step="1" value="1"></label>
     </div>
@@ -79,6 +82,7 @@
         <button class="btn" id="mSave" data-i18n="save">💾 Salva</button>
         <button class="btn" id="mOpt" data-i18n="options">⚙ Opzioni</button>
         <button class="btn" id="mEvo" data-i18n="evoBtn">📊 Evoluzione</button>
+        <button class="btn" id="mEvents" data-i18n="eventsBtn">⚡ Eventi</button>
       </div>
       <p class="foot" data-i18n="footer">Pubblicato su GitHub Pages · si salva da solo nel browser</p>
       <div class="lang"><button data-lang="it">Italiano</button><button data-lang="en">English</button></div>
@@ -119,6 +123,7 @@
         <div class="toggle"><span data-i18n="optTerr">Territori (carnivori)</span><label class="switch"><input type="checkbox" id="tTerr" checked><span class="slider"></span></label></div>
         <div class="toggle"><span data-i18n="optMimic">Mimetismo</span><label class="switch"><input type="checkbox" id="tMimic" checked><span class="slider"></span></label></div>
         <div class="toggle"><span data-i18n="optSeasons">Stagioni</span><label class="switch"><input type="checkbox" id="tSeason" checked><span class="slider"></span></label></div>
+        <div class="toggle"><span data-i18n="optDayNight">Ciclo giorno/notte</span><label class="switch"><input type="checkbox" id="tDay" checked><span class="slider"></span></label></div>
       </div>
       <div class="row" style="margin-top:20px">
         <button class="btn ghost" id="oExport" data-i18n="exportWorld">⬇ Esporta</button>
@@ -177,6 +182,23 @@
       <p class="insp-sub" data-i18n="evoLineages">Stirpi fondatrici dominanti</p>
       <canvas id="evLin"></canvas>
       <div class="row"><button class="btn primary" id="evClose" data-i18n="close">Chiudi</button></div>
+    </div>
+  </div>
+
+  <!-- EVENTS (play-god) -->
+  <div class="overlay" id="events">
+    <div class="card">
+      <p class="eyebrow" data-i18n="eventsEyebrow">Interviene la mano del destino</p>
+      <h3 data-i18n="eventsTitle">Eventi</h3>
+      <p class="lead" data-i18n="eventsLead">Scatena forze sull'ecosistema e osserva chi sopravvive.</p>
+      <div class="menu-btns">
+        <button class="btn" id="btnMeteor" data-i18n="evMeteor">☄️ Meteora</button>
+        <button class="btn" id="btnDrought" data-i18n="evDrought">🏜️ Siccità</button>
+        <button class="btn" id="btnEpidemic" data-i18n="evEpidemic">🦠 Epidemia</button>
+        <button class="btn" id="btnRock" data-i18n="evRock">🪨 Posiziona rocce</button>
+        <button class="btn ghost" id="btnClearTerrain" data-i18n="evClear">🧹 Pulisci terreno</button>
+      </div>
+      <div class="row"><button class="btn primary" id="evtClose" data-i18n="close">Chiudi</button></div>
     </div>
   </div>
 

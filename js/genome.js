@@ -54,7 +54,7 @@ export function makeCreature(x, y, type, genome, gen){
     id: S.ID++, x, y, vx: rnd(-1, 1), vy: rnd(-1, 1), type, g: genome,
     energy: startE, age: 0, gen: gen || 0, dead: false, homeX: x, homeY: y,
     mem: new Array(NMEM).fill(0), matedTick: -1,
-    lineage: 0, kids: 0, act: null
+    lineage: 0, kids: 0, act: null, sick: 0
   };
 }
 

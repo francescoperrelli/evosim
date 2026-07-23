@@ -1,6 +1,6 @@
 // World drawing, seasonal tint, charts, HUD and the inspector network viz
 import { clamp, TAU, el } from './utils.js';
-import { P, S, seasonInfo, clampCam } from './state.js';
+import { P, S, seasonInfo, dayInfo, clampCam } from './state.js';
 import { NIN, NH, NOUT } from './nn.js';
 import { t } from './i18n.js';
 
@@ -22,6 +22,8 @@ export function draw(){
   wctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   wctx.clearRect(0, 0, W, H);
   if(P.seasonsOn){ wctx.fillStyle = SEASON_TINT[seasonInfo(S.tick).idx]; wctx.fillRect(0, 0, W, H); }
+  if(P.dayNightOn){ const dk = (1 - dayInfo(S.tick).light) * 0.42; wctx.fillStyle = `rgba(12,22,50,${dk})`; wctx.fillRect(0, 0, W, H); }
+  if(S.drought > 0){ wctx.fillStyle = 'rgba(150,95,35,.13)'; wctx.fillRect(0, 0, W, H); }
   // world transform (camera)
   wctx.setTransform(DPR * z, 0, 0, DPR * z, -S.cam.x * z * DPR, -S.cam.y * z * DPR);
   // visible bounds (for culling)
@@ -38,6 +40,12 @@ export function draw(){
       wctx.strokeStyle = `hsla(${c.g.hue | 0} 60% 55% / ${0.05 + c.g.territoriality * 0.06})`;
       wctx.beginPath(); wctx.arc(c.homeX, c.homeY, c.g.territoryR, 0, TAU); wctx.stroke();
     }
+  }
+  // rocks (terrain)
+  for(const rk of S.rocks){
+    if(!vis(rk.x, rk.y, rk.r)) continue;
+    wctx.fillStyle = '#3a3f42'; wctx.beginPath(); wctx.arc(rk.x, rk.y, rk.r, 0, TAU); wctx.fill();
+    wctx.strokeStyle = '#4c5257'; wctx.lineWidth = 1.5 / z; wctx.stroke();
   }
   // plants
   wctx.fillStyle = '#3a6b2e';
@@ -69,7 +77,18 @@ export function draw(){
     wctx.strokeStyle = `hsla(${g.hue | 0} 60% 78% / .5)`; wctx.lineWidth = 1.3;
     wctx.beginPath(); wctx.moveTo(c.x, c.y);
     wctx.lineTo(c.x + c.vx / g.speed * (g.size + 3), c.y + c.vy / g.speed * (g.size + 3)); wctx.stroke();
+    if(c.sick > 0){ wctx.strokeStyle = 'rgba(232,240,120,.85)'; wctx.lineWidth = 1.4 / z;
+      wctx.beginPath(); wctx.arc(c.x, c.y, g.size + 3.5, 0, TAU); wctx.stroke(); }
   }
+  // meteor shockwaves
+  for(const e of S.effects){
+    const k = e.t / e.max, rr = e.r * (1.15 - k * 0.15);
+    wctx.strokeStyle = `rgba(255,${(150 * k) | 0},60,${k})`; wctx.lineWidth = 3 / z;
+    wctx.beginPath(); wctx.arc(e.x, e.y, rr, 0, TAU); wctx.stroke();
+    wctx.fillStyle = `rgba(255,190,90,${0.16 * k})`; wctx.beginPath(); wctx.arc(e.x, e.y, rr, 0, TAU); wctx.fill();
+    e.t--;
+  }
+  if(S.effects.length) S.effects = S.effects.filter(e => e.t > 0);
   // selection highlight
   if(S.selected && !S.selected.dead){
     const c = S.selected;
@@ -118,7 +137,13 @@ export function updateHUD(){
   el('sFood').textContent = S.food.length;
   el('sTick').innerHTML = S.tick + '<small> t</small>'; el('sGen').textContent = S.maxGen; el('sPred').textContent = S.predations;
   const se = el('season');
-  if(se){ const si = seasonInfo(S.tick); se.textContent = P.seasonsOn ? SEASON_ICON[si.idx] + ' ' + t(si.key) : ''; }
+  if(se){
+    const si = seasonInfo(S.tick);
+    let s = P.seasonsOn ? SEASON_ICON[si.idx] + ' ' + t(si.key) : '';
+    if(P.dayNightOn) s += (s ? '  ' : '') + (dayInfo(S.tick).night ? '🌙' : '☀️');
+    if(S.drought > 0) s += ' 🏜️';
+    se.textContent = s;
+  }
 }
 
 /* ---------- evolution panel charts ---------- */

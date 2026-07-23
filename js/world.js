@@ -1,7 +1,7 @@
 // Simulation engine: seasons, spatial-grid perception (egocentric vision,
 // prey/threat channels, memory), brain + instinct steering, interactions, save/load.
 import { rnd, clamp } from './utils.js';
-import { P, S, TYPES, PREDATORS, BRAIN_W, INNATE_W, NEIGH_R2, SEP_R2, CELL, SAVE_KEY, seasonInfo } from './state.js';
+import { P, S, TYPES, PREDATORS, BRAIN_W, INNATE_W, NEIGH_R2, SEP_R2, CELL, SAVE_KEY, seasonInfo, dayInfo } from './state.js';
 import { randomGenome, mutateGenome, crossover, makeCreature, metabolism } from './genome.js';
 import { brainForward, getHidden, NIN, NOUT } from './nn.js';
 
@@ -19,6 +19,7 @@ export function seed(){
   S.creatures = []; S.food = []; S.tick = 0; S.predations = 0; S.maxGen = 0;
   S.popHist.length = 0; S.traitHist.length = 0; S.evoHist.length = 0; S.ID = 1; S.selected = null;
   S.records = { oldestAge: 0, maxKids: 0, maxGen: 0 };
+  S.rocks = []; S.drought = 0; S.effects = [];
   for(let i = 0; i < P.herbStart; i++) S.creatures.push(founder('herb'));
   if(P.omnivoresOn) for(let i = 0; i < P.omniStart; i++) S.creatures.push(founder('omni'));
   if(P.predatorsOn) for(let i = 0; i < P.carnStart; i++) S.creatures.push(founder('carn'));
@@ -41,7 +42,12 @@ export function step(){
   S.tick++;
   const si = seasonInfo(S.tick);
   const seasonSig = Math.sin(si.phase * TAU2);
-  spawnFood(P.foodRate * si.foodMult);
+  const dn = dayInfo(S.tick);
+  let fm = si.foodMult;
+  if(P.dayNightOn) fm *= (0.45 + 0.55 * dn.light);   // plants grow with daylight
+  if(S.drought > 0){ S.drought--; fm *= 0.12; }        // famine
+  spawnFood(P.foodRate * fm);
+  const rocks = S.rocks;
 
   const WW = S.worldW, HH = S.worldH, food = S.food;
   let creatures = S.creatures;
@@ -80,6 +86,7 @@ export function step(){
           const o = cb[bi];
           if(o === c || o.dead) continue;
           const dx = o.x - c.x, dy = o.y - c.y, d = dx * dx + dy * dy;
+          if(c.sick > 0 && o.sick === 0 && d < 700 && Math.random() < 0.04) o.sick = 500;   // contagion
           if(o.type === c.type){
             if(d < NEIGH_R2){ cnt++; sumx += o.x; sumy += o.y; sumvx += o.vx; sumvy += o.vy;
               if(d < SEP_R2){ sepx += (c.x - o.x); sepy += (c.y - o.y); } }
@@ -151,8 +158,14 @@ export function step(){
     c.x += c.vx; c.y += c.vy;
     if(c.x < 4){ c.x = 4; c.vx = Math.abs(c.vx); } if(c.x > WW - 4){ c.x = WW - 4; c.vx = -Math.abs(c.vx); }
     if(c.y < 4){ c.y = 4; c.vy = Math.abs(c.vy); } if(c.y > HH - 4){ c.y = HH - 4; c.vy = -Math.abs(c.vy); }
+    // push out of rocks (terrain)
+    for(let ri = 0; ri < rocks.length; ri++){
+      const rk = rocks[ri], rdx = c.x - rk.x, rdy = c.y - rk.y, rr = rk.r + g.size;
+      if(rdx * rdx + rdy * rdy < rr * rr){ const rd = Math.hypot(rdx, rdy) || 1; c.x = rk.x + rdx / rd * rr; c.y = rk.y + rdy / rd * rr; c.vx *= 0.4; c.vy *= 0.4; }
+    }
 
     c.energy -= metabolism(c) * (P.seasonsOn && si.idx === 3 ? 1.15 : 1);
+    if(c.sick > 0){ c.sick--; c.energy -= 0.14; }        // disease drains energy
 
     // interactions
     if(cfg.eatsPlants && bfRef){
@@ -240,7 +253,8 @@ export function snapshot(){
           +c.g.territoryR.toFixed(1), +c.g.acuity.toFixed(2), +c.g.sexual.toFixed(2)],
       b: c.g.brain.map(x => +x.toFixed(3))
     })),
-    food: S.food.map(f => [+f.x.toFixed(1), +f.y.toFixed(1)])
+    food: S.food.map(f => [+f.x.toFixed(1), +f.y.toFixed(1)]),
+    rocks: S.rocks.map(r => [+r.x.toFixed(1), +r.y.toFixed(1), +r.r.toFixed(1)])
   };
 }
 
@@ -250,12 +264,14 @@ export function restore(s){
   S.creatures = s.creatures.map(o => ({
     id: o.id, x: o.x, y: o.y, vx: 0, vy: 0, type: (o.t === 'carn' || o.t === 'omni' || o.t === 'herb') ? o.t : 'herb',
     energy: o.e, age: o.a, gen: o.gn, dead: false, homeX: (o.hx || o.x), homeY: (o.hy || o.y),
-    mem: [0, 0], matedTick: -1, lineage: o.id, kids: 0, act: null,
+    mem: [0, 0], matedTick: -1, lineage: o.id, kids: 0, act: null, sick: 0,
     g: { speed: o.g[0], sense: o.g[1], size: o.g[2], hue: o.g[3], sociality: o.g[4], camo: o.g[5],
          territoriality: o.g[6], territoryR: o.g[7], acuity: o.g[8],
          sexual: o.g[9] !== undefined ? o.g[9] : 0.5, brain: o.b.slice() }
   }));
   S.food = s.food.map(a => ({ x: a[0], y: a[1] }));
+  S.rocks = (s.rocks || []).map(a => ({ x: a[0], y: a[1], r: a[2] }));
+  S.drought = 0; S.effects = [];
   S.tick = s.tick || 0; S.predations = s.predations || 0; S.maxGen = s.maxGen || 0; S.ID = s.ID || S.creatures.length + 1;
   S.selected = null;
   if(s.params) Object.assign(P, s.params);
@@ -267,3 +283,21 @@ export function saveLocal(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(
 export function hasSave(){ try{ return !!localStorage.getItem(SAVE_KEY); }catch(e){ return false; } }
 export function loadLocal(){ try{ const r = localStorage.getItem(SAVE_KEY); return r ? restore(JSON.parse(r)) : false; }catch(e){ return false; } }
 export function clearLocal(){ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} }
+
+/* ---------- play-god events ---------- */
+export function meteor(x, y){
+  const R = 130;
+  S.effects.push({ x, y, r: R, t: 34, max: 34 });
+  for(const c of S.creatures){ if((c.x - x) ** 2 + (c.y - y) ** 2 < R * R) c.dead = true; }
+  S.creatures = S.creatures.filter(c => !c.dead);
+  S.food = S.food.filter(f => (f.x - x) ** 2 + (f.y - y) ** 2 > R * R);
+  if(S.selected && S.selected.dead) S.selected = null;
+}
+export function startDrought(){ S.drought = 2200; }
+export function startEpidemic(){
+  let n = 0;
+  for(const c of S.creatures){ if(Math.random() < 0.06){ c.sick = 600; n++; } }
+  if(n === 0 && S.creatures.length) S.creatures[(Math.random() * S.creatures.length) | 0].sick = 600;
+}
+export function addRock(x, y){ S.rocks.push({ x, y, r: rnd(16, 30) }); if(S.rocks.length > 140) S.rocks.shift(); }
+export function clearTerrain(){ S.rocks = []; }

@@ -7,8 +7,8 @@ export const P = {
   herbReproE:120, herbStartE:70, herbMaxAge:2600,
   omniReproE:150, omniStartE:90, omniMaxAge:2800,
   carnReproE:255, carnStartE:150, carnMaxAge:3200,
-  seasonLength:3600,
-  predatorsOn:true, omnivoresOn:true, flocksOn:true, terrOn:true, mimicOn:true, seasonsOn:true
+  seasonLength:3600, dayLength:1400,
+  predatorsOn:true, omnivoresOn:true, flocksOn:true, terrOn:true, mimicOn:true, seasonsOn:true, dayNightOn:true
 };
 
 // Per-species configuration. `hunts` = types this species preys on.
@@ -45,6 +45,13 @@ export function seasonInfo(tick){
   return { idx, key: SEASON_KEYS[idx], foodMult: Math.max(0.15, foodMult), phase: f };
 }
 
+// Day/night: light in [0..1] (1 = full day), plus a night flag
+export function dayInfo(tick){
+  const f = (tick % P.dayLength) / P.dayLength;           // 0..1 through the day
+  const light = 0.5 + 0.5 * Math.sin(f * Math.PI * 2 - Math.PI / 2);   // 0 at midnight, 1 at noon
+  return { f, light, night: light < 0.35 };
+}
+
 // Mutable world state (single shared object)
 export const S = {
   creatures: [], food: [],
@@ -56,7 +63,8 @@ export const S = {
   ID: 1,
   popHist: [], traitHist: [], evoHist: [],
   records: { oldestAge: 0, maxKids: 0, maxGen: 0 },
-  selected: null, inspectMode: false
+  selected: null, tool: 'plant',        // 'plant' | 'inspect' | 'meteor' | 'rock'
+  drought: 0, effects: [], rocks: []
 };
 
 // Camera helpers

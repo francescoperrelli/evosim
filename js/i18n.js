@@ -37,7 +37,13 @@ export const I18N = {
     lblEnergy:"Energia", lblAge:"Età", lblGen:"Generazione",
     evoBtn:"📊 Evoluzione", evoEyebrow:"L'evoluzione in diretta", evoTitle:"Evoluzione",
     evoGenChart:"Generazione media nel tempo", evoSexChart:"Sessuati (%) nel tempo", evoLineages:"Stirpi fondatrici dominanti",
-    recGen:"Generazione max", recAge:"Età record", recKids:"Più prolifico", recLin:"Stirpi vive" },
+    recGen:"Generazione max", recAge:"Età record", recKids:"Più prolifico", recLin:"Stirpi vive",
+    eventsBtn:"⚡ Eventi", eventsEyebrow:"Interviene la mano del destino", eventsTitle:"Eventi",
+    eventsLead:"Scatena forze sull'ecosistema e osserva chi sopravvive.",
+    evMeteor:"☄️ Meteora", evDrought:"🏜️ Siccità", evEpidemic:"🦠 Epidemia", evRock:"🪨 Posiziona rocce", evClear:"🧹 Pulisci terreno",
+    optDayNight:"Ciclo giorno/notte",
+    evMeteorHint:"Tocca dove far cadere la meteora", evRockHint:"Tocca o trascina per posare rocce",
+    evDroughtOn:"🏜️ Siccità in arrivo", evEpidemicOn:"🦠 Epidemia scatenata", evCleared:"🧹 Terreno ripulito" },
   en:{ menu:"☰ Menu", hint:"Drag to explore · wheel/pinch to zoom · tap to plant",
     numbers:"The ecosystem in numbers", herbivores:"Herbivores", carnivores:"Carnivores", omnivores:"Omnivores", plants:"Plants",
     time:"Time", generation:"Generation", kills:"Kills",
@@ -75,7 +81,13 @@ export const I18N = {
     lblEnergy:"Energy", lblAge:"Age", lblGen:"Generation",
     evoBtn:"📊 Evolution", evoEyebrow:"Evolution, live", evoTitle:"Evolution",
     evoGenChart:"Average generation over time", evoSexChart:"Sexual (%) over time", evoLineages:"Dominant founding lineages",
-    recGen:"Max generation", recAge:"Oldest age", recKids:"Most prolific", recLin:"Living lineages" }
+    recGen:"Max generation", recAge:"Oldest age", recKids:"Most prolific", recLin:"Living lineages",
+    eventsBtn:"⚡ Events", eventsEyebrow:"The hand of fate intervenes", eventsTitle:"Events",
+    eventsLead:"Unleash forces on the ecosystem and see who survives.",
+    evMeteor:"☄️ Meteor", evDrought:"🏜️ Drought", evEpidemic:"🦠 Epidemic", evRock:"🪨 Place rocks", evClear:"🧹 Clear terrain",
+    optDayNight:"Day/night cycle",
+    evMeteorHint:"Tap where the meteor should strike", evRockHint:"Tap or drag to place rocks",
+    evDroughtOn:"🏜️ Drought incoming", evEpidemicOn:"🦠 Epidemic unleashed", evCleared:"🧹 Terrain cleared" }
 };
 
 let lang = 'it';

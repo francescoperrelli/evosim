@@ -1,7 +1,7 @@
 // UI: overlays, controls, menu, language, inspect mode, creature inspector
 import { el, rnd, clamp } from './utils.js';
 import { P, S, LANG_KEY, screenToWorld, zoomAt, clampCam } from './state.js';
-import { seed, saveLocal, hasSave, loadLocal, clearLocal, snapshot, restore } from './world.js';
+import { seed, saveLocal, hasSave, loadLocal, clearLocal, snapshot, restore, meteor, startDrought, startEpidemic, addRock, clearTerrain } from './world.js';
 import { makeCreature, randomGenome } from './genome.js';
 import { drawNetwork, drawEvolution } from './render.js';
 import { I18N, t, setLang, getLang } from './i18n.js';
@@ -9,7 +9,7 @@ import { I18N, t, setLang, getLang } from './i18n.js';
 /* ---------- overlays ---------- */
 function show(id){ el(id).classList.add('show'); }
 function hide(id){ el(id).classList.remove('show'); }
-function hideAll(){ ['menu','tutorial','options','inspector','evolution'].forEach(hide); }
+function hideAll(){ ['menu','tutorial','options','inspector','evolution','events'].forEach(hide); }
 export { show };
 
 let toastT = null;
@@ -32,7 +32,7 @@ export function refreshMenu(){
 function syncControls(){
   const set = (id, val) => { const e = el(id); if(e){ e.value = val; e.dispatchEvent(new Event('input')); } };
   set('rFood', P.foodRate); set('rMut', Math.round(P.mut * 100));
-  [['tPred','predatorsOn'],['tOmni','omnivoresOn'],['tFlock','flocksOn'],['tTerr','terrOn'],['tMimic','mimicOn'],['tSeason','seasonsOn']]
+  [['tPred','predatorsOn'],['tOmni','omnivoresOn'],['tFlock','flocksOn'],['tTerr','terrOn'],['tMimic','mimicOn'],['tSeason','seasonsOn'],['tDay','dayNightOn']]
     .forEach(([id, k]) => { const e = el(id); if(e) e.checked = P[k]; });
 }
 
@@ -47,7 +47,7 @@ export function applyLang(){
   el('rFood').dispatchEvent(new Event('input'));
   el('rMut').dispatchEvent(new Event('input'));
   el('rSpeed').dispatchEvent(new Event('input'));
-  el('btnMode').innerHTML = S.inspectMode ? t('modeInspect') : t('modeFood');
+  el('btnMode').innerHTML = S.tool === 'inspect' ? t('modeInspect') : t('modeFood');
   syncPlayBtn();
   document.querySelectorAll('.lang button').forEach(b => b.classList.toggle('on', b.getAttribute('data-lang') === lang));
   try{ localStorage.setItem(LANG_KEY, lang); }catch(e){}
@@ -69,17 +69,27 @@ const ensureSpecies = (type, count, min) => {
 };
 bindToggle('tPred', 'predatorsOn', on => { if(!on) S.creatures = S.creatures.filter(c => c.type !== 'carn'); else ensureSpecies('carn', P.carnStart, 25); });
 bindToggle('tOmni', 'omnivoresOn', on => { if(!on) S.creatures = S.creatures.filter(c => c.type !== 'omni'); else ensureSpecies('omni', P.omniStart, 20); });
-bindToggle('tFlock', 'flocksOn'); bindToggle('tTerr', 'terrOn'); bindToggle('tMimic', 'mimicOn'); bindToggle('tSeason', 'seasonsOn');
+bindToggle('tFlock', 'flocksOn'); bindToggle('tTerr', 'terrOn'); bindToggle('tMimic', 'mimicOn'); bindToggle('tSeason', 'seasonsOn'); bindToggle('tDay', 'dayNightOn');
 
 el('btnSave').onclick = () => toast(saveLocal() ? t('saved') : t('noStore'));
 el('btnOpt').onclick = () => show('options');
 el('btnEvo').onclick = () => show('evolution');
+el('btnEvents').onclick = () => show('events');
 el('btnMenu').onclick = () => { refreshMenu(); show('menu'); };
-el('btnMode').onclick = function(){
-  S.inspectMode = !S.inspectMode;
-  this.innerHTML = S.inspectMode ? t('modeInspect') : t('modeFood');
-  this.classList.toggle('on', S.inspectMode);
-};
+
+/* ---------- events (play-god) ---------- */
+el('evtClose').onclick = () => hide('events');
+el('btnMeteor').onclick = () => { S.tool = 'meteor'; updateModeBtn(); hide('events'); toast(t('evMeteorHint')); };
+el('btnRock').onclick = () => { S.tool = 'rock'; updateModeBtn(); hide('events'); toast(t('evRockHint')); };
+el('btnDrought').onclick = () => { startDrought(); hide('events'); toast(t('evDroughtOn')); };
+el('btnEpidemic').onclick = () => { startEpidemic(); hide('events'); toast(t('evEpidemicOn')); };
+el('btnClearTerrain').onclick = () => { clearTerrain(); toast(t('evCleared')); };
+function updateModeBtn(){
+  const on = S.tool === 'inspect';
+  el('btnMode').innerHTML = on ? t('modeInspect') : t('modeFood');
+  el('btnMode').classList.toggle('on', on);
+}
+el('btnMode').onclick = function(){ S.tool = S.tool === 'inspect' ? 'plant' : 'inspect'; updateModeBtn(); };
 
 /* ---------- menu ---------- */
 function resetCam(){ S.cam.x = 0; S.cam.y = 0; S.cam.zoom = 1; clampCam(); }
@@ -90,6 +100,7 @@ el('mLoad').onclick = () => { if(loadLocal()){ syncControls(); clampCam(); toast
 el('mSave').onclick = () => toast(saveLocal() ? t('saved') : t('noStore'));
 el('mOpt').onclick = () => show('options');
 el('mEvo').onclick = () => show('evolution');
+el('mEvents').onclick = () => show('events');
 el('evClose').onclick = () => hide('evolution');
 el('tClose').onclick = () => { hide('tutorial'); if(!S.creatures.length){ seed(); saveLocal(); } hideAll(); S.running = true; syncPlayBtn(); };
 
@@ -159,7 +170,7 @@ export function refreshEvolution(){
 /* ---------- camera: pan / zoom / tap ---------- */
 const world = el('world');
 const pointers = new Map();
-let dragging = false, downX = 0, downY = 0, downT = 0, moved = 0, pinchDist = 0;
+let dragging = false, downX = 0, downY = 0, downT = 0, moved = 0, pinchDist = 0, lastRockX = 0, lastRockY = 0;
 const now = () => (window.performance ? performance.now() : 0);
 function twoPts(){ const it = pointers.values(); return [it.next().value, it.next().value]; }
 function twoDist(){ const [a, b] = twoPts(); return Math.hypot(a.x - b.x, a.y - b.y); }
@@ -184,7 +195,12 @@ world.addEventListener('pointermove', e => {
   pointers.set(e.pointerId, { x: nx, y: ny });
   moved += Math.abs(dx) + Math.abs(dy);
   if(moved > 6) dragging = true;
-  if(dragging){ S.cam.x -= dx / S.cam.zoom; S.cam.y -= dy / S.cam.zoom; clampCam(); }
+  if(dragging){
+    if(S.tool === 'rock'){
+      const r = world.getBoundingClientRect(), w = screenToWorld(nx - r.left, ny - r.top);
+      if((w.x - lastRockX) ** 2 + (w.y - lastRockY) ** 2 > 500){ addRock(w.x, w.y); lastRockX = w.x; lastRockY = w.y; }
+    } else { S.cam.x -= dx / S.cam.zoom; S.cam.y -= dy / S.cam.zoom; clampCam(); }
+  }
 });
 function endPointer(e){
   if(!pointers.has(e.pointerId)) return;
@@ -192,7 +208,11 @@ function endPointer(e){
   if(pointers.size < 2) pinchDist = 0;
   if(pointers.size === 0 && !dragging && (now() - downT) < 400){
     const r = world.getBoundingClientRect(), w = screenToWorld(downX - r.left, downY - r.top);
-    if(S.inspectMode) selectAt(w.x, w.y); else placeFood(w.x, w.y);
+    const tool = S.tool;
+    if(tool === 'inspect') selectAt(w.x, w.y);
+    else if(tool === 'meteor'){ meteor(w.x, w.y); S.tool = 'plant'; updateModeBtn(); }
+    else if(tool === 'rock') addRock(w.x, w.y);
+    else placeFood(w.x, w.y);
   }
 }
 world.addEventListener('pointerup', endPointer);
