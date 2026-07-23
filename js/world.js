@@ -8,10 +8,30 @@ import { brainForward, getHidden, NIN, NOUT } from './nn.js';
 const _in = new Array(NIN), _out = new Array(NOUT);
 const TAU2 = Math.PI * 2;
 
+// terrain: biome fertility field and water slowdown
+export function fertilityAt(x, y){
+  let f = 1;
+  for(const bm of S.biomes){ const d2 = (x - bm.x) ** 2 + (y - bm.y) ** 2; if(d2 < bm.r * bm.r) f += bm.fert * (1 - Math.sqrt(d2) / bm.r); }
+  return clamp(f, 0.1, 2);
+}
+function waterFactor(x, y){
+  for(const w of S.water){ if((x - w.x) ** 2 + (y - w.y) ** 2 < w.r * w.r) return 0.5; }
+  return 1;
+}
+function generateBiomes(){
+  S.biomes = [];
+  const n = 3 + (Math.random() * 3 | 0);
+  for(let i = 0; i < n; i++)
+    S.biomes.push({ x: rnd(0, S.worldW), y: rnd(0, S.worldH), r: rnd(220, 420), fert: Math.random() < 0.6 ? rnd(0.4, 0.9) : rnd(-0.7, -0.3) });
+}
+
 export function spawnFood(n){
   const k = Math.floor(n) + (Math.random() < (n % 1) ? 1 : 0);
-  for(let i = 0; i < k && S.food.length < P.maxFood; i++)
-    S.food.push({ x: rnd(6, S.worldW - 6), y: rnd(6, S.worldH - 6) });
+  for(let i = 0; i < k && S.food.length < P.maxFood; i++){
+    let bx = 0, by = 0, bf = -1;
+    for(let t = 0; t < 3; t++){ const x = rnd(6, S.worldW - 6), y = rnd(6, S.worldH - 6), f = fertilityAt(x, y); if(f > bf){ bf = f; bx = x; by = y; } }
+    S.food.push({ x: bx, y: by });
+  }
 }
 
 function founder(type){ const c = makeCreature(rnd(0, S.worldW), rnd(0, S.worldH), type, randomGenome(type), 0); c.lineage = c.id; return c; }
@@ -19,7 +39,7 @@ export function seed(){
   S.creatures = []; S.food = []; S.tick = 0; S.predations = 0; S.maxGen = 0;
   S.popHist.length = 0; S.traitHist.length = 0; S.evoHist.length = 0; S.ID = 1; S.selected = null;
   S.records = { oldestAge: 0, maxKids: 0, maxGen: 0 };
-  S.rocks = []; S.drought = 0; S.effects = [];
+  S.rocks = []; S.water = []; S.drought = 0; S.effects = []; generateBiomes();
   for(let i = 0; i < P.herbStart; i++) S.creatures.push(founder('herb'));
   if(P.omnivoresOn) for(let i = 0; i < P.omniStart; i++) S.creatures.push(founder('omni'));
   if(P.predatorsOn) for(let i = 0; i < P.carnStart; i++) S.creatures.push(founder('carn'));
@@ -155,7 +175,8 @@ export function step(){
     if(dx * dx + dy * dy < 1e-4){ dx = rnd(-1, 1); dy = rnd(-1, 1); }
     const dl = Math.hypot(dx, dy) || 1;
     c.vx = dx / dl * g.speed; c.vy = dy / dl * g.speed;
-    c.x += c.vx; c.y += c.vy;
+    const wf = S.water.length ? waterFactor(c.x, c.y) : 1;   // water slows movement
+    c.x += c.vx * wf; c.y += c.vy * wf;
     if(c.x < 4){ c.x = 4; c.vx = Math.abs(c.vx); } if(c.x > WW - 4){ c.x = WW - 4; c.vx = -Math.abs(c.vx); }
     if(c.y < 4){ c.y = 4; c.vy = Math.abs(c.vy); } if(c.y > HH - 4){ c.y = HH - 4; c.vy = -Math.abs(c.vy); }
     // push out of rocks (terrain)
@@ -254,7 +275,9 @@ export function snapshot(){
       b: c.g.brain.map(x => +x.toFixed(3))
     })),
     food: S.food.map(f => [+f.x.toFixed(1), +f.y.toFixed(1)]),
-    rocks: S.rocks.map(r => [+r.x.toFixed(1), +r.y.toFixed(1), +r.r.toFixed(1)])
+    rocks: S.rocks.map(r => [+r.x.toFixed(1), +r.y.toFixed(1), +r.r.toFixed(1)]),
+    water: S.water.map(w => [+w.x.toFixed(1), +w.y.toFixed(1), +w.r.toFixed(1)]),
+    biomes: S.biomes.map(bm => [+bm.x.toFixed(0), +bm.y.toFixed(0), +bm.r.toFixed(0), +bm.fert.toFixed(2)])
   };
 }
 
@@ -271,6 +294,8 @@ export function restore(s){
   }));
   S.food = s.food.map(a => ({ x: a[0], y: a[1] }));
   S.rocks = (s.rocks || []).map(a => ({ x: a[0], y: a[1], r: a[2] }));
+  S.water = (s.water || []).map(a => ({ x: a[0], y: a[1], r: a[2] }));
+  S.biomes = (s.biomes || []).map(a => ({ x: a[0], y: a[1], r: a[2], fert: a[3] }));
   S.drought = 0; S.effects = [];
   S.tick = s.tick || 0; S.predations = s.predations || 0; S.maxGen = s.maxGen || 0; S.ID = s.ID || S.creatures.length + 1;
   S.selected = null;
@@ -300,4 +325,5 @@ export function startEpidemic(){
   if(n === 0 && S.creatures.length) S.creatures[(Math.random() * S.creatures.length) | 0].sick = 600;
 }
 export function addRock(x, y){ S.rocks.push({ x, y, r: rnd(16, 30) }); if(S.rocks.length > 140) S.rocks.shift(); }
-export function clearTerrain(){ S.rocks = []; }
+export function addWater(x, y){ S.water.push({ x, y, r: rnd(28, 46) }); if(S.water.length > 140) S.water.shift(); }
+export function clearTerrain(){ S.rocks = []; S.water = []; }

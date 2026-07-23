@@ -63,8 +63,8 @@ export const S = {
   ID: 1,
   popHist: [], traitHist: [], evoHist: [],
   records: { oldestAge: 0, maxKids: 0, maxGen: 0 },
-  selected: null, tool: 'plant',        // 'plant' | 'inspect' | 'meteor' | 'rock'
-  drought: 0, effects: [], rocks: []
+  selected: null, tool: 'plant',        // 'plant' | 'inspect' | 'meteor' | 'rock' | 'water'
+  drought: 0, effects: [], rocks: [], water: [], biomes: []
 };
 
 // Camera helpers

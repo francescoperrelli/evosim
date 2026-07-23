@@ -40,9 +40,9 @@ export const I18N = {
     recGen:"Generazione max", recAge:"Età record", recKids:"Più prolifico", recLin:"Stirpi vive",
     eventsBtn:"⚡ Eventi", eventsEyebrow:"Interviene la mano del destino", eventsTitle:"Eventi",
     eventsLead:"Scatena forze sull'ecosistema e osserva chi sopravvive.",
-    evMeteor:"☄️ Meteora", evDrought:"🏜️ Siccità", evEpidemic:"🦠 Epidemia", evRock:"🪨 Posiziona rocce", evClear:"🧹 Pulisci terreno",
+    evMeteor:"☄️ Meteora", evDrought:"🏜️ Siccità", evEpidemic:"🦠 Epidemia", evRock:"🪨 Posiziona rocce", evWater:"💧 Posiziona acqua", evClear:"🧹 Pulisci terreno",
     optDayNight:"Ciclo giorno/notte",
-    evMeteorHint:"Tocca dove far cadere la meteora", evRockHint:"Tocca o trascina per posare rocce",
+    evMeteorHint:"Tocca dove far cadere la meteora", evRockHint:"Tocca o trascina per posare rocce", evWaterHint:"Tocca o trascina per creare acqua",
     evDroughtOn:"🏜️ Siccità in arrivo", evEpidemicOn:"🦠 Epidemia scatenata", evCleared:"🧹 Terreno ripulito" },
   en:{ menu:"☰ Menu", hint:"Drag to explore · wheel/pinch to zoom · tap to plant",
     numbers:"The ecosystem in numbers", herbivores:"Herbivores", carnivores:"Carnivores", omnivores:"Omnivores", plants:"Plants",
@@ -84,9 +84,9 @@ export const I18N = {
     recGen:"Max generation", recAge:"Oldest age", recKids:"Most prolific", recLin:"Living lineages",
     eventsBtn:"⚡ Events", eventsEyebrow:"The hand of fate intervenes", eventsTitle:"Events",
     eventsLead:"Unleash forces on the ecosystem and see who survives.",
-    evMeteor:"☄️ Meteor", evDrought:"🏜️ Drought", evEpidemic:"🦠 Epidemic", evRock:"🪨 Place rocks", evClear:"🧹 Clear terrain",
+    evMeteor:"☄️ Meteor", evDrought:"🏜️ Drought", evEpidemic:"🦠 Epidemic", evRock:"🪨 Place rocks", evWater:"💧 Place water", evClear:"🧹 Clear terrain",
     optDayNight:"Day/night cycle",
-    evMeteorHint:"Tap where the meteor should strike", evRockHint:"Tap or drag to place rocks",
+    evMeteorHint:"Tap where the meteor should strike", evRockHint:"Tap or drag to place rocks", evWaterHint:"Tap or drag to place water",
     evDroughtOn:"🏜️ Drought incoming", evEpidemicOn:"🦠 Epidemic unleashed", evCleared:"🧹 Terrain cleared" }
 };
 

@@ -32,6 +32,15 @@ export function draw(){
   // world border
   wctx.strokeStyle = 'rgba(120,150,110,.18)'; wctx.lineWidth = 2 / z;
   wctx.strokeRect(0, 0, S.worldW, S.worldH);
+  // biomes (fertility tint)
+  for(const bm of S.biomes){
+    if(!vis(bm.x, bm.y, bm.r)) continue;
+    const grd = wctx.createRadialGradient(bm.x, bm.y, 0, bm.x, bm.y, bm.r);
+    const col = bm.fert >= 0 ? '120,190,90' : '150,120,70';
+    const a = Math.min(0.2, Math.abs(bm.fert) * 0.22);
+    grd.addColorStop(0, `rgba(${col},${a})`); grd.addColorStop(1, `rgba(${col},0)`);
+    wctx.fillStyle = grd; wctx.beginPath(); wctx.arc(bm.x, bm.y, bm.r, 0, TAU); wctx.fill();
+  }
   // territories
   if(P.terrOn){
     wctx.lineWidth = 1 / z;
@@ -40,6 +49,12 @@ export function draw(){
       wctx.strokeStyle = `hsla(${c.g.hue | 0} 60% 55% / ${0.05 + c.g.territoriality * 0.06})`;
       wctx.beginPath(); wctx.arc(c.homeX, c.homeY, c.g.territoryR, 0, TAU); wctx.stroke();
     }
+  }
+  // water (slows creatures)
+  for(const w of S.water){
+    if(!vis(w.x, w.y, w.r)) continue;
+    wctx.fillStyle = 'rgba(56,116,178,.42)'; wctx.beginPath(); wctx.arc(w.x, w.y, w.r, 0, TAU); wctx.fill();
+    wctx.strokeStyle = 'rgba(120,180,220,.5)'; wctx.lineWidth = 1.5 / z; wctx.stroke();
   }
   // rocks (terrain)
   for(const rk of S.rocks){

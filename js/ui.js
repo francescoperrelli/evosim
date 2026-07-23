@@ -1,7 +1,7 @@
 // UI: overlays, controls, menu, language, inspect mode, creature inspector
 import { el, rnd, clamp } from './utils.js';
 import { P, S, LANG_KEY, screenToWorld, zoomAt, clampCam } from './state.js';
-import { seed, saveLocal, hasSave, loadLocal, clearLocal, snapshot, restore, meteor, startDrought, startEpidemic, addRock, clearTerrain } from './world.js';
+import { seed, saveLocal, hasSave, loadLocal, clearLocal, snapshot, restore, meteor, startDrought, startEpidemic, addRock, addWater, clearTerrain } from './world.js';
 import { makeCreature, randomGenome } from './genome.js';
 import { drawNetwork, drawEvolution } from './render.js';
 import { I18N, t, setLang, getLang } from './i18n.js';
@@ -81,6 +81,7 @@ el('btnMenu').onclick = () => { refreshMenu(); show('menu'); };
 el('evtClose').onclick = () => hide('events');
 el('btnMeteor').onclick = () => { S.tool = 'meteor'; updateModeBtn(); hide('events'); toast(t('evMeteorHint')); };
 el('btnRock').onclick = () => { S.tool = 'rock'; updateModeBtn(); hide('events'); toast(t('evRockHint')); };
+el('btnWater').onclick = () => { S.tool = 'water'; updateModeBtn(); hide('events'); toast(t('evWaterHint')); };
 el('btnDrought').onclick = () => { startDrought(); hide('events'); toast(t('evDroughtOn')); };
 el('btnEpidemic').onclick = () => { startEpidemic(); hide('events'); toast(t('evEpidemicOn')); };
 el('btnClearTerrain').onclick = () => { clearTerrain(); toast(t('evCleared')); };
@@ -196,9 +197,9 @@ world.addEventListener('pointermove', e => {
   moved += Math.abs(dx) + Math.abs(dy);
   if(moved > 6) dragging = true;
   if(dragging){
-    if(S.tool === 'rock'){
+    if(S.tool === 'rock' || S.tool === 'water'){
       const r = world.getBoundingClientRect(), w = screenToWorld(nx - r.left, ny - r.top);
-      if((w.x - lastRockX) ** 2 + (w.y - lastRockY) ** 2 > 500){ addRock(w.x, w.y); lastRockX = w.x; lastRockY = w.y; }
+      if((w.x - lastRockX) ** 2 + (w.y - lastRockY) ** 2 > 500){ (S.tool === 'water' ? addWater : addRock)(w.x, w.y); lastRockX = w.x; lastRockY = w.y; }
     } else { S.cam.x -= dx / S.cam.zoom; S.cam.y -= dy / S.cam.zoom; clampCam(); }
   }
 });
@@ -212,6 +213,7 @@ function endPointer(e){
     if(tool === 'inspect') selectAt(w.x, w.y);
     else if(tool === 'meteor'){ meteor(w.x, w.y); S.tool = 'plant'; updateModeBtn(); }
     else if(tool === 'rock') addRock(w.x, w.y);
+    else if(tool === 'water') addWater(w.x, w.y);
     else placeFood(w.x, w.y);
   }
 }
