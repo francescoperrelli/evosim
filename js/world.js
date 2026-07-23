@@ -1,7 +1,7 @@
-// Simulation engine: seasons, perception (egocentric vision, prey/threat
-// channels, memory), brain + instinct steering, interactions, and save/load.
+// Simulation engine: seasons, spatial-grid perception (egocentric vision,
+// prey/threat channels, memory), brain + instinct steering, interactions, save/load.
 import { rnd, clamp } from './utils.js';
-import { P, S, TYPES, PREDATORS, BRAIN_W, INNATE_W, NEIGH_R2, SEP_R2, SAVE_KEY, seasonInfo } from './state.js';
+import { P, S, TYPES, PREDATORS, BRAIN_W, INNATE_W, NEIGH_R2, SEP_R2, CELL, SAVE_KEY, seasonInfo } from './state.js';
 import { randomGenome, mutateGenome, makeCreature, metabolism } from './genome.js';
 import { brainForward, NIN, NOUT } from './nn.js';
 
@@ -9,18 +9,30 @@ const _in = new Array(NIN), _out = new Array(NOUT);
 const TAU2 = Math.PI * 2;
 
 export function spawnFood(n){
-  let k = Math.floor(n) + (Math.random() < (n % 1) ? 1 : 0);
+  const k = Math.floor(n) + (Math.random() < (n % 1) ? 1 : 0);
   for(let i = 0; i < k && S.food.length < P.maxFood; i++)
-    S.food.push({ x: rnd(6, S.W - 6), y: rnd(6, S.H - 6) });
+    S.food.push({ x: rnd(6, S.worldW - 6), y: rnd(6, S.worldH - 6) });
 }
 
 export function seed(){
   S.creatures = []; S.food = []; S.tick = 0; S.predations = 0; S.maxGen = 0;
   S.popHist.length = 0; S.traitHist.length = 0; S.ID = 1; S.selected = null;
-  for(let i = 0; i < P.herbStart; i++) S.creatures.push(makeCreature(rnd(0, S.W), rnd(0, S.H), 'herb', randomGenome('herb'), 0));
-  if(P.omnivoresOn) for(let i = 0; i < P.omniStart; i++) S.creatures.push(makeCreature(rnd(0, S.W), rnd(0, S.H), 'omni', randomGenome('omni'), 0));
-  if(P.predatorsOn) for(let i = 0; i < P.carnStart; i++) S.creatures.push(makeCreature(rnd(0, S.W), rnd(0, S.H), 'carn', randomGenome('carn'), 0));
+  for(let i = 0; i < P.herbStart; i++) S.creatures.push(makeCreature(rnd(0, S.worldW), rnd(0, S.worldH), 'herb', randomGenome('herb'), 0));
+  if(P.omnivoresOn) for(let i = 0; i < P.omniStart; i++) S.creatures.push(makeCreature(rnd(0, S.worldW), rnd(0, S.worldH), 'omni', randomGenome('omni'), 0));
+  if(P.predatorsOn) for(let i = 0; i < P.carnStart; i++) S.creatures.push(makeCreature(rnd(0, S.worldW), rnd(0, S.worldH), 'carn', randomGenome('carn'), 0));
   spawnFood(P.maxFood * 0.6 | 0);
+}
+
+// build a spatial hash: array of buckets, each bucket an array of items
+function buildGrid(items, cols, rows){
+  const b = new Array(cols * rows);
+  for(const it of items){
+    if(it.dead) continue;
+    const cx = clamp(Math.floor(it.x / CELL), 0, cols - 1), cy = clamp(Math.floor(it.y / CELL), 0, rows - 1);
+    const idx = cy * cols + cx;
+    (b[idx] || (b[idx] = [])).push(it);
+  }
+  return b;
 }
 
 export function step(){
@@ -29,60 +41,70 @@ export function step(){
   const seasonSig = Math.sin(si.phase * TAU2);
   spawnFood(P.foodRate * si.foodMult);
 
-  const W = S.W, H = S.H, food = S.food;
+  const WW = S.worldW, HH = S.worldH, food = S.food;
   let creatures = S.creatures;
   const newborns = [];
-  const n = creatures.length;
+  const cols = Math.max(1, Math.ceil(WW / CELL)), rows = Math.max(1, Math.ceil(HH / CELL));
+  const cgrid = buildGrid(creatures, cols, rows);
+  const fgrid = buildGrid(food, cols, rows);
 
-  for(let ci = 0; ci < n; ci++){
+  for(let ci = 0; ci < creatures.length; ci++){
     const c = creatures[ci];
     if(c.dead) continue;
     c.age++;
     const g = c.g, cfg = TYPES[c.type], senseSq = g.sense * g.sense;
     const preds = PREDATORS[c.type], hunts = cfg.hunts;
+    const gcx = clamp(Math.floor(c.x / CELL), 0, cols - 1), gcy = clamp(Math.floor(c.y / CELL), 0, rows - 1);
 
-    // heading (for egocentric vision)
     const sp = Math.hypot(c.vx, c.vy);
     const hx = sp > 1e-4 ? c.vx / sp : 1, hy = sp > 1e-4 ? c.vy / sp : 0;
 
-    // --- scan others: prey, threat, flock ---
     let preyRef = null, preyD = senseSq, preyx = 0, preyy = 0;
     let thrHas = false, thrD = senseSq, thrx = 0, thry = 0;
     let cnt = 0, sumx = 0, sumy = 0, sumvx = 0, sumvy = 0, sepx = 0, sepy = 0;
-    for(let k = 0; k < n; k++){
-      if(k === ci) continue;
-      const o = creatures[k];
-      if(o.dead) continue;
-      const dx = o.x - c.x, dy = o.y - c.y, d = dx * dx + dy * dy;
-      if(o.type === c.type){
-        if(d < NEIGH_R2){ cnt++; sumx += o.x; sumy += o.y; sumvx += o.vx; sumvy += o.vy;
-          if(d < SEP_R2){ sepx += (c.x - o.x); sepy += (c.y - o.y); } }
-        continue;
-      }
-      if(hunts.length && hunts.indexOf(o.type) >= 0){
-        let er = senseSq;
-        if(P.mimicOn){ const f = 1 - o.g.camo * (1 - g.acuity) * 0.7; er = senseSq * f * f; }
-        if(d < er && d < preyD){ preyD = d; preyRef = o; preyx = dx; preyy = dy; }
-      }
-      if(preds.length && preds.indexOf(o.type) >= 0){
-        if(d < thrD){ thrD = d; thrx = dx; thry = dy; thrHas = true; }
+    let bfx = 0, bfy = 0, bfD = senseSq, bfRef = null;
+    const fSense = (cfg.eatsPlants && P.mimicOn) ? senseSq * (1 - 0.3 * g.camo) * (1 - 0.3 * g.camo) : senseSq;
+
+    for(let ox = -1; ox <= 1; ox++){
+      const nx = gcx + ox; if(nx < 0 || nx >= cols) continue;
+      for(let oy = -1; oy <= 1; oy++){
+        const ny = gcy + oy; if(ny < 0 || ny >= rows) continue;
+        const idx = ny * cols + nx;
+        // creatures in this cell
+        const cb = cgrid[idx];
+        if(cb) for(let bi = 0; bi < cb.length; bi++){
+          const o = cb[bi];
+          if(o === c || o.dead) continue;
+          const dx = o.x - c.x, dy = o.y - c.y, d = dx * dx + dy * dy;
+          if(o.type === c.type){
+            if(d < NEIGH_R2){ cnt++; sumx += o.x; sumy += o.y; sumvx += o.vx; sumvy += o.vy;
+              if(d < SEP_R2){ sepx += (c.x - o.x); sepy += (c.y - o.y); } }
+            continue;
+          }
+          if(hunts.length && hunts.indexOf(o.type) >= 0){
+            let er = senseSq;
+            if(P.mimicOn){ const f = 1 - o.g.camo * (1 - g.acuity) * 0.7; er = senseSq * f * f; }
+            if(d < er && d < preyD){ preyD = d; preyRef = o; preyx = dx; preyy = dy; }
+          }
+          if(preds.length && preds.indexOf(o.type) >= 0){
+            if(d < thrD){ thrD = d; thrx = dx; thry = dy; thrHas = true; }
+          }
+        }
+        // food in this cell
+        if(cfg.eatsPlants){
+          const fb = fgrid[idx];
+          if(fb) for(let bi = 0; bi < fb.length; bi++){
+            const f = fb[bi]; const dx = f.x - c.x, dy = f.y - c.y, d = dx * dx + dy * dy;
+            if(d < bfD && d < fSense){ bfD = d; bfRef = f; bfx = dx; bfy = dy; }
+          }
+        }
       }
     }
 
-    // --- nearest plant (herbivores/omnivores) ---
-    let bf = -1, bfx = 0, bfy = 0, bfD = senseSq;
-    if(cfg.eatsPlants){
-      const fSense = P.mimicOn ? senseSq * (1 - 0.3 * g.camo) * (1 - 0.3 * g.camo) : senseSq;
-      for(let fi = 0; fi < food.length; fi++){
-        const dx = food[fi].x - c.x, dy = food[fi].y - c.y, d = dx * dx + dy * dy;
-        if(d < bfD && d < fSense){ bfD = d; bf = fi; bfx = dx; bfy = dy; }
-      }
-    }
-
-    // --- egocentric inputs ---
+    // egocentric inputs
     const inv = 1 / g.sense;
     const ego = (dx, dy, i) => { _in[i] = (dx * hx + dy * hy) * inv; _in[i + 1] = (-dx * hy + dy * hx) * inv; };
-    if(bf >= 0){ ego(bfx, bfy, 0); _in[2] = 1 - Math.sqrt(bfD) * inv; } else { _in[0] = _in[1] = _in[2] = 0; }
+    if(bfRef){ ego(bfx, bfy, 0); _in[2] = 1 - Math.sqrt(bfD) * inv; } else { _in[0] = _in[1] = _in[2] = 0; }
     if(preyRef){ ego(preyx, preyy, 3); _in[5] = 1 - Math.sqrt(preyD) * inv; } else { _in[3] = _in[4] = _in[5] = 0; }
     if(thrHas){ ego(thrx, thry, 6); _in[8] = 1 - Math.sqrt(thrD) * inv; } else { _in[6] = _in[7] = _in[8] = 0; }
     if(cnt){ ego(sumx / cnt - c.x, sumy / cnt - c.y, 9); _in[11] = clamp(cnt / 8, 0, 1); } else { _in[9] = _in[10] = _in[11] = 0; }
@@ -93,11 +115,11 @@ export function step(){
     brainForward(g.brain, _in, _out);
     c.mem[0] = _out[2]; c.mem[1] = _out[3];
 
-    // --- instinct prior ---
+    // instinct prior
     let ix = 0, iy = 0;
-    if(thrHas){ const d = Math.sqrt(thrD) || 1; ix -= thrx / d * 1.6; iy -= thry / d * 1.6; }   // flee
-    if(preyRef){ const d = Math.sqrt(preyD) || 1; ix += preyx / d * 1.4; iy += preyy / d * 1.4; } // hunt
-    else if(cfg.eatsPlants && bf >= 0){ const d = Math.sqrt(bfD) || 1; ix += bfx / d; iy += bfy / d; } // graze
+    if(thrHas){ const d = Math.sqrt(thrD) || 1; ix -= thrx / d * 1.6; iy -= thry / d * 1.6; }
+    if(preyRef){ const d = Math.sqrt(preyD) || 1; ix += preyx / d * 1.4; iy += preyy / d * 1.4; }
+    else if(cfg.eatsPlants && bfRef){ const d = Math.sqrt(bfD) || 1; ix += bfx / d; iy += bfy / d; }
     if(P.flocksOn && cfg.social && cnt){
       const s = g.sociality;
       ix += (sumx / cnt - c.x) * 0.010 * s; iy += (sumy / cnt - c.y) * 0.010 * s;
@@ -109,21 +131,24 @@ export function step(){
       if(hd > g.territoryR){ ix += hxx / hd * g.territoriality * 1.2; iy += hyy / hd * g.territoriality * 1.2; }
     }
 
-    // --- combine brain + instinct ---
+    // combine brain + instinct
     let dx = _out[0] * BRAIN_W + ix * INNATE_W, dy = _out[1] * BRAIN_W + iy * INNATE_W;
     if(dx * dx + dy * dy < 1e-4){ dx = rnd(-1, 1); dy = rnd(-1, 1); }
     const dl = Math.hypot(dx, dy) || 1;
     c.vx = dx / dl * g.speed; c.vy = dy / dl * g.speed;
     c.x += c.vx; c.y += c.vy;
-    if(c.x < 4){ c.x = 4; c.vx = Math.abs(c.vx); } if(c.x > W - 4){ c.x = W - 4; c.vx = -Math.abs(c.vx); }
-    if(c.y < 4){ c.y = 4; c.vy = Math.abs(c.vy); } if(c.y > H - 4){ c.y = H - 4; c.vy = -Math.abs(c.vy); }
+    if(c.x < 4){ c.x = 4; c.vx = Math.abs(c.vx); } if(c.x > WW - 4){ c.x = WW - 4; c.vx = -Math.abs(c.vx); }
+    if(c.y < 4){ c.y = 4; c.vy = Math.abs(c.vy); } if(c.y > HH - 4){ c.y = HH - 4; c.vy = -Math.abs(c.vy); }
 
-    c.energy -= metabolism(c) * (P.seasonsOn && si.idx === 3 ? 1.15 : 1);   // winter is harsher
+    c.energy -= metabolism(c) * (P.seasonsOn && si.idx === 3 ? 1.15 : 1);
 
-    // --- interactions ---
-    if(cfg.eatsPlants && bf >= 0){
-      const f = food[bf], er = g.size + 4;
-      if((f.x - c.x) ** 2 + (f.y - c.y) ** 2 < er * er){ c.energy += P.foodEnergy * cfg.plantEff; food[bf] = food[food.length - 1]; food.pop(); }
+    // interactions
+    if(cfg.eatsPlants && bfRef){
+      const er = g.size + 4;
+      if((bfRef.x - c.x) ** 2 + (bfRef.y - c.y) ** 2 < er * er){
+        c.energy += P.foodEnergy * cfg.plantEff;
+        const fi = food.indexOf(bfRef); if(fi >= 0){ food[fi] = food[food.length - 1]; food.pop(); }
+      }
     }
     if(preyRef && !preyRef.dead){
       const er = g.size + preyRef.g.size + 2;
@@ -144,12 +169,12 @@ export function step(){
   if(newborns.length) creatures = creatures.concat(newborns);
   creatures = creatures.filter(c => !c.dead);
 
-  // safety net against total extinction
+  // safety net
   let herbN = 0, omniN = 0, carnN = 0;
   for(const c of creatures){ if(c.type === 'carn') carnN++; else if(c.type === 'omni') omniN++; else herbN++; }
-  if(herbN === 0) for(let i = 0; i < 12; i++) creatures.push(makeCreature(rnd(0, W), rnd(0, H), 'herb', randomGenome('herb'), 0));
-  if(P.omnivoresOn && omniN === 0 && herbN > 20) for(let i = 0; i < 4; i++) creatures.push(makeCreature(rnd(0, W), rnd(0, H), 'omni', randomGenome('omni'), 0));
-  if(P.predatorsOn && carnN === 0 && herbN > 25) for(let i = 0; i < 3; i++) creatures.push(makeCreature(rnd(0, W), rnd(0, H), 'carn', randomGenome('carn'), 0));
+  if(herbN === 0) for(let i = 0; i < 30; i++) creatures.push(makeCreature(rnd(0, WW), rnd(0, HH), 'herb', randomGenome('herb'), 0));
+  if(P.omnivoresOn && omniN === 0 && herbN > 40) for(let i = 0; i < 10; i++) creatures.push(makeCreature(rnd(0, WW), rnd(0, HH), 'omni', randomGenome('omni'), 0));
+  if(P.predatorsOn && carnN === 0 && herbN > 50) for(let i = 0; i < 8; i++) creatures.push(makeCreature(rnd(0, WW), rnd(0, HH), 'carn', randomGenome('carn'), 0));
 
   S.creatures = creatures;
 
@@ -165,7 +190,8 @@ export function step(){
 /* ---------- save / load ---------- */
 export function snapshot(){
   return {
-    v: 4, tick: S.tick, predations: S.predations, maxGen: S.maxGen, ID: S.ID, W: S.W, H: S.H,
+    v: 5, tick: S.tick, predations: S.predations, maxGen: S.maxGen, ID: S.ID,
+    worldW: S.worldW, worldH: S.worldH,
     params: { foodRate: P.foodRate, mut: P.mut, predatorsOn: P.predatorsOn, omnivoresOn: P.omnivoresOn,
               flocksOn: P.flocksOn, terrOn: P.terrOn, mimicOn: P.mimicOn, seasonsOn: P.seasonsOn },
     creatures: S.creatures.map(c => ({
@@ -181,16 +207,16 @@ export function snapshot(){
 }
 
 export function restore(s){
-  if(!s || s.v !== 4) return false;
-  const sx = s.W ? S.W / s.W : 1, sy = s.H ? S.H / s.H : 1;
+  if(!s || s.v !== 5) return false;
+  if(s.worldW){ S.worldW = s.worldW; S.worldH = s.worldH; }
   S.creatures = s.creatures.map(o => ({
-    id: o.id, x: o.x * sx, y: o.y * sy, vx: 0, vy: 0, type: (o.t === 'carn' || o.t === 'omni' || o.t === 'herb') ? o.t : 'herb',
-    energy: o.e, age: o.a, gen: o.gn, dead: false, homeX: (o.hx || o.x) * sx, homeY: (o.hy || o.y) * sy,
+    id: o.id, x: o.x, y: o.y, vx: 0, vy: 0, type: (o.t === 'carn' || o.t === 'omni' || o.t === 'herb') ? o.t : 'herb',
+    energy: o.e, age: o.a, gen: o.gn, dead: false, homeX: (o.hx || o.x), homeY: (o.hy || o.y),
     mem: [0, 0],
     g: { speed: o.g[0], sense: o.g[1], size: o.g[2], hue: o.g[3], sociality: o.g[4], camo: o.g[5],
          territoriality: o.g[6], territoryR: o.g[7], acuity: o.g[8], brain: o.b.slice() }
   }));
-  S.food = s.food.map(a => ({ x: a[0] * sx, y: a[1] * sy }));
+  S.food = s.food.map(a => ({ x: a[0], y: a[1] }));
   S.tick = s.tick || 0; S.predations = s.predations || 0; S.maxGen = s.maxGen || 0; S.ID = s.ID || S.creatures.length + 1;
   S.selected = null;
   if(s.params) Object.assign(P, s.params);

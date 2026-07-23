@@ -2,8 +2,8 @@
 
 // Tunable ecosystem parameters
 export const P = {
-  herbStart:70, carnStart:8, omniStart:10, maxPop:460,
-  maxFood:340, foodEnergy:24, foodRate:4, mut:0.08, preyEnergy:82,
+  herbStart:200, carnStart:24, omniStart:34, maxPop:1400,
+  maxFood:900, foodEnergy:24, foodRate:4, mut:0.08, preyEnergy:82,
   herbReproE:120, herbStartE:70, herbMaxAge:2600,
   omniReproE:165, omniStartE:90, omniMaxAge:2800,
   carnReproE:255, carnStartE:150, carnMaxAge:3200,
@@ -30,8 +30,10 @@ export const BRAIN_W = 0.7;
 export const INNATE_W = 1.25;
 export const NEIGH_R = 58, NEIGH_R2 = NEIGH_R * NEIGH_R;
 export const SEP_R = 15, SEP_R2 = SEP_R * SEP_R;
+export const CELL = 175;          // spatial-grid cell (>= max sense radius)
+export const MAX_ZOOM = 2.5;
 
-export const SAVE_KEY = 'evosim_save_v4';
+export const SAVE_KEY = 'evosim_save_v5';
 export const LANG_KEY = 'evosim_lang';
 
 // Seasons: returns { idx 0..3, name key, foodMult, phase }
@@ -48,7 +50,26 @@ export const S = {
   creatures: [], food: [],
   tick: 0, predations: 0, maxGen: 0,
   running: true, stepsPerFrame: 1,
-  W: 0, H: 0, ID: 1,
+  W: 0, H: 0,                 // viewport (screen) size in CSS px
+  worldW: 0, worldH: 0,       // logical world size (larger than viewport)
+  cam: { x: 0, y: 0, zoom: 1 },
+  ID: 1,
   popHist: [], traitHist: [],
   selected: null, inspectMode: false
 };
+
+// Camera helpers
+export function minZoom(){ return Math.max(S.W / (S.worldW || 1), S.H / (S.worldH || 1), 0.05); }
+export function clampCam(){
+  const z = S.cam.zoom = Math.min(MAX_ZOOM, Math.max(minZoom(), S.cam.zoom));
+  const viewW = S.W / z, viewH = S.H / z;
+  S.cam.x = Math.min(Math.max(0, S.cam.x), Math.max(0, S.worldW - viewW));
+  S.cam.y = Math.min(Math.max(0, S.cam.y), Math.max(0, S.worldH - viewH));
+}
+export function zoomAt(sx, sy, factor){
+  const wx = S.cam.x + sx / S.cam.zoom, wy = S.cam.y + sy / S.cam.zoom;
+  S.cam.zoom = Math.min(MAX_ZOOM, Math.max(minZoom(), S.cam.zoom * factor));
+  S.cam.x = wx - sx / S.cam.zoom; S.cam.y = wy - sy / S.cam.zoom;
+  clampCam();
+}
+export const screenToWorld = (sx, sy) => ({ x: S.cam.x + sx / S.cam.zoom, y: S.cam.y + sy / S.cam.zoom });

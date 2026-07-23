@@ -1,6 +1,6 @@
 // World drawing, seasonal tint, charts, HUD and the inspector network viz
 import { clamp, TAU, el } from './utils.js';
-import { P, S, seasonInfo } from './state.js';
+import { P, S, seasonInfo, clampCam } from './state.js';
 import { NIN, NH, NOUT } from './nn.js';
 import { t } from './i18n.js';
 
@@ -11,30 +11,40 @@ export function resize(){
   const r = world.getBoundingClientRect();
   S.W = r.width; S.H = r.height;
   world.width = S.W * DPR; world.height = S.H * DPR;
-  wctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  if(S.worldW) clampCam();
 }
 
 const SEASON_TINT = ['rgba(120,190,90,.05)', 'rgba(230,200,120,.05)', 'rgba(210,150,80,.06)', 'rgba(140,180,220,.07)'];
 
 export function draw(){
-  const W = S.W, H = S.H;
+  const W = S.W, H = S.H, z = S.cam.zoom;
+  // clear + seasonal wash in screen space
+  wctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   wctx.clearRect(0, 0, W, H);
-  // seasonal wash
   if(P.seasonsOn){ wctx.fillStyle = SEASON_TINT[seasonInfo(S.tick).idx]; wctx.fillRect(0, 0, W, H); }
+  // world transform (camera)
+  wctx.setTransform(DPR * z, 0, 0, DPR * z, -S.cam.x * z * DPR, -S.cam.y * z * DPR);
+  // visible bounds (for culling)
+  const vx0 = S.cam.x - 30, vy0 = S.cam.y - 30, vx1 = S.cam.x + W / z + 30, vy1 = S.cam.y + H / z + 30;
+  const vis = (x, y, m) => x + m > vx0 && x - m < vx1 && y + m > vy0 && y - m < vy1;
+  // world border
+  wctx.strokeStyle = 'rgba(120,150,110,.18)'; wctx.lineWidth = 2 / z;
+  wctx.strokeRect(0, 0, S.worldW, S.worldH);
   // territories
   if(P.terrOn){
-    wctx.lineWidth = 1;
+    wctx.lineWidth = 1 / z;
     for(const c of S.creatures){
-      if(c.type !== 'carn') continue;
+      if(c.type !== 'carn' || !vis(c.homeX, c.homeY, c.g.territoryR)) continue;
       wctx.strokeStyle = `hsla(${c.g.hue | 0} 60% 55% / ${0.05 + c.g.territoriality * 0.06})`;
       wctx.beginPath(); wctx.arc(c.homeX, c.homeY, c.g.territoryR, 0, TAU); wctx.stroke();
     }
   }
   // plants
   wctx.fillStyle = '#3a6b2e';
-  for(const f of S.food){ wctx.beginPath(); wctx.arc(f.x, f.y, 2.1, 0, TAU); wctx.fill(); }
+  for(const f of S.food){ if(!vis(f.x, f.y, 3)) continue; wctx.beginPath(); wctx.arc(f.x, f.y, 2.1, 0, TAU); wctx.fill(); }
   // creatures
   for(const c of S.creatures){
+    if(!vis(c.x, c.y, c.g.size + 4)) continue;
     const g = c.g;
     if(c.type === 'herb'){
       const camo = P.mimicOn ? g.camo : 0;

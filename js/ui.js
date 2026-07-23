@@ -1,6 +1,6 @@
 // UI: overlays, controls, menu, language, inspect mode, creature inspector
 import { el, rnd, clamp } from './utils.js';
-import { P, S, LANG_KEY } from './state.js';
+import { P, S, LANG_KEY, screenToWorld, zoomAt, clampCam } from './state.js';
 import { seed, saveLocal, hasSave, loadLocal, clearLocal, snapshot, restore } from './world.js';
 import { makeCreature, randomGenome } from './genome.js';
 import { drawNetwork } from './render.js';
@@ -81,10 +81,11 @@ el('btnMode').onclick = function(){
 };
 
 /* ---------- menu ---------- */
-el('mNew').onclick = () => { clearLocal(); seed(); saveLocal(); hideAll(); S.running = true; syncPlayBtn(); };
+function resetCam(){ S.cam.x = 0; S.cam.y = 0; S.cam.zoom = 1; clampCam(); }
+el('mNew').onclick = () => { clearLocal(); seed(); resetCam(); saveLocal(); hideAll(); S.running = true; syncPlayBtn(); };
 el('mResume').onclick = () => { hideAll(); S.running = true; syncPlayBtn(); };
 el('mTut').onclick = () => show('tutorial');
-el('mLoad').onclick = () => { if(loadLocal()){ syncControls(); toast(t('loaded')); hideAll(); S.running = true; syncPlayBtn(); } else toast(t('noSave')); };
+el('mLoad').onclick = () => { if(loadLocal()){ syncControls(); clampCam(); toast(t('loaded')); hideAll(); S.running = true; syncPlayBtn(); } else toast(t('noSave')); };
 el('mSave').onclick = () => toast(saveLocal() ? t('saved') : t('noStore'));
 el('mOpt').onclick = () => show('options');
 el('tClose').onclick = () => { hide('tutorial'); if(!S.creatures.length){ seed(); saveLocal(); } hideAll(); S.running = true; syncPlayBtn(); };
@@ -101,7 +102,7 @@ el('oImport').onclick = () => el('fileImport').click();
 el('fileImport').onchange = function(){
   const f = this.files[0]; if(!f) return;
   const rd = new FileReader();
-  rd.onload = () => { try{ if(restore(JSON.parse(rd.result))){ syncControls(); saveLocal(); toast(t('imported')); hide('options'); } else toast(t('badFile')); }
+  rd.onload = () => { try{ if(restore(JSON.parse(rd.result))){ syncControls(); clampCam(); saveLocal(); toast(t('imported')); hide('options'); } else toast(t('badFile')); }
     catch(e){ toast(t('badFile')); } };
   rd.readAsText(f); this.value = '';
 };
@@ -142,19 +143,54 @@ export function refreshInspector(){
   drawNetwork(el('inspNet'), c);
 }
 
-/* ---------- touch: plant food or select ---------- */
+/* ---------- camera: pan / zoom / tap ---------- */
 const world = el('world');
-let pressing = false;
+const pointers = new Map();
+let dragging = false, downX = 0, downY = 0, downT = 0, moved = 0, pinchDist = 0;
+const now = () => (window.performance ? performance.now() : 0);
+function twoPts(){ const it = pointers.values(); return [it.next().value, it.next().value]; }
+function twoDist(){ const [a, b] = twoPts(); return Math.hypot(a.x - b.x, a.y - b.y); }
+function twoMid(){ const [a, b] = twoPts(); return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
+
 world.addEventListener('pointerdown', e => {
-  const r = world.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
-  if(S.inspectMode){ selectAt(mx, my); return; }
-  pressing = true; place(mx, my);
+  try{ world.setPointerCapture(e.pointerId); }catch(_){}
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if(pointers.size === 1){ dragging = false; downX = e.clientX; downY = e.clientY; downT = now(); moved = 0; }
+  else if(pointers.size === 2){ pinchDist = twoDist(); }
 });
 world.addEventListener('pointermove', e => {
-  if(!pressing || S.inspectMode) return;
-  const r = world.getBoundingClientRect(); place(e.clientX - r.left, e.clientY - r.top);
+  const prev = pointers.get(e.pointerId); if(!prev) return;
+  const nx = e.clientX, ny = e.clientY;
+  if(pointers.size >= 2){
+    pointers.set(e.pointerId, { x: nx, y: ny });
+    const d = twoDist();
+    if(pinchDist > 0){ const m = twoMid(), r = world.getBoundingClientRect(); zoomAt(m.x - r.left, m.y - r.top, d / pinchDist); }
+    pinchDist = d; return;
+  }
+  const dx = nx - prev.x, dy = ny - prev.y;
+  pointers.set(e.pointerId, { x: nx, y: ny });
+  moved += Math.abs(dx) + Math.abs(dy);
+  if(moved > 6) dragging = true;
+  if(dragging){ S.cam.x -= dx / S.cam.zoom; S.cam.y -= dy / S.cam.zoom; clampCam(); }
 });
-window.addEventListener('pointerup', () => pressing = false);
-function place(mx, my){
-  for(let i = 0; i < 6; i++) if(S.food.length < P.maxFood + 200) S.food.push({ x: mx + rnd(-18, 18), y: my + rnd(-18, 18) });
+function endPointer(e){
+  if(!pointers.has(e.pointerId)) return;
+  pointers.delete(e.pointerId);
+  if(pointers.size < 2) pinchDist = 0;
+  if(pointers.size === 0 && !dragging && (now() - downT) < 400){
+    const r = world.getBoundingClientRect(), w = screenToWorld(downX - r.left, downY - r.top);
+    if(S.inspectMode) selectAt(w.x, w.y); else placeFood(w.x, w.y);
+  }
+}
+world.addEventListener('pointerup', endPointer);
+world.addEventListener('pointercancel', endPointer);
+world.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = world.getBoundingClientRect();
+  zoomAt(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.12 : 1 / 1.12);
+}, { passive: false });
+el('btnZoomIn').onclick = () => zoomAt(S.W / 2, S.H / 2, 1.25);
+el('btnZoomOut').onclick = () => zoomAt(S.W / 2, S.H / 2, 1 / 1.25);
+function placeFood(wx, wy){
+  for(let i = 0; i < 6; i++) if(S.food.length < P.maxFood + 400) S.food.push({ x: wx + rnd(-18, 18), y: wy + rnd(-18, 18) });
 }

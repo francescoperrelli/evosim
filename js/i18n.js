@@ -1,6 +1,6 @@
 // Translations (Italian / English) and current-language state
 export const I18N = {
-  it:{ menu:"☰ Menu", hint:"Tocca per seminare · usa 🔍 per ispezionare una creatura",
+  it:{ menu:"☰ Menu", hint:"Trascina per esplorare · rotella/pizzica per zoom · tocca per seminare",
     numbers:"L'ecosistema in numeri", herbivores:"Erbivori", carnivores:"Carnivori", omnivores:"Onnivori", plants:"Piante",
     time:"Tempo", generation:"Generazione", kills:"Predazioni",
     popsOverTime:"Popolazioni nel tempo", armsRace:"Corsa agli armamenti (mimetismo)",
@@ -34,7 +34,7 @@ export const I18N = {
     tSpeed:"Velocità", tVision:"Vista", tSize:"Dimensione", tSocial:"Socialità",
     tCamo:"Camuffamento", tTerr:"Territorialità", tAcuity:"Acutezza",
     lblEnergy:"Energia", lblAge:"Età", lblGen:"Generazione" },
-  en:{ menu:"☰ Menu", hint:"Tap to plant · use 🔍 to inspect a creature",
+  en:{ menu:"☰ Menu", hint:"Drag to explore · wheel/pinch to zoom · tap to plant",
     numbers:"The ecosystem in numbers", herbivores:"Herbivores", carnivores:"Carnivores", omnivores:"Omnivores", plants:"Plants",
     time:"Time", generation:"Generation", kills:"Kills",
     popsOverTime:"Populations over time", armsRace:"Arms race (mimicry)",
