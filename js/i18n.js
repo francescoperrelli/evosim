@@ -32,7 +32,8 @@ export const I18N = {
     inspGenome:"Genoma", inspBrain:"Cervello (rete neurale)",
     typeHerb:"Erbivoro", typeOmni:"Onnivoro", typeCarn:"Carnivoro",
     tSpeed:"Velocità", tVision:"Vista", tSize:"Dimensione", tSocial:"Socialità",
-    tCamo:"Camuffamento", tTerr:"Territorialità", tAcuity:"Acutezza",
+    tCamo:"Camuffamento", tTerr:"Territorialità", tAcuity:"Acutezza", tSexual:"Sessualità",
+    reproSex:"sessuato", reproAsex:"asessuato",
     lblEnergy:"Energia", lblAge:"Età", lblGen:"Generazione" },
   en:{ menu:"☰ Menu", hint:"Drag to explore · wheel/pinch to zoom · tap to plant",
     numbers:"The ecosystem in numbers", herbivores:"Herbivores", carnivores:"Carnivores", omnivores:"Omnivores", plants:"Plants",
@@ -66,7 +67,8 @@ export const I18N = {
     inspGenome:"Genome", inspBrain:"Brain (neural net)",
     typeHerb:"Herbivore", typeOmni:"Omnivore", typeCarn:"Carnivore",
     tSpeed:"Speed", tVision:"Vision", tSize:"Size", tSocial:"Sociality",
-    tCamo:"Camouflage", tTerr:"Territoriality", tAcuity:"Acuity",
+    tCamo:"Camouflage", tTerr:"Territoriality", tAcuity:"Acuity", tSexual:"Sexuality",
+    reproSex:"sexual", reproAsex:"asexual",
     lblEnergy:"Energy", lblAge:"Age", lblGen:"Generation" }
 };
 

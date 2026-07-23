@@ -2,7 +2,7 @@
 // prey/threat channels, memory), brain + instinct steering, interactions, save/load.
 import { rnd, clamp } from './utils.js';
 import { P, S, TYPES, PREDATORS, BRAIN_W, INNATE_W, NEIGH_R2, SEP_R2, CELL, SAVE_KEY, seasonInfo } from './state.js';
-import { randomGenome, mutateGenome, makeCreature, metabolism } from './genome.js';
+import { randomGenome, mutateGenome, crossover, makeCreature, metabolism } from './genome.js';
 import { brainForward, NIN, NOUT } from './nn.js';
 
 const _in = new Array(NIN), _out = new Array(NOUT);
@@ -63,6 +63,8 @@ export function step(){
     let thrHas = false, thrD = senseSq, thrx = 0, thry = 0;
     let cnt = 0, sumx = 0, sumy = 0, sumvx = 0, sumvy = 0, sepx = 0, sepy = 0;
     let bfx = 0, bfy = 0, bfD = senseSq, bfRef = null;
+    let mateRef = null, mateD = senseSq, matex = 0, matey = 0;
+    const mateReadyE = P[cfg.reproE] * 0.85;
     const fSense = (cfg.eatsPlants && P.mimicOn) ? senseSq * (1 - 0.3 * g.camo) * (1 - 0.3 * g.camo) : senseSq;
 
     for(let ox = -1; ox <= 1; ox++){
@@ -79,6 +81,9 @@ export function step(){
           if(o.type === c.type){
             if(d < NEIGH_R2){ cnt++; sumx += o.x; sumy += o.y; sumvx += o.vx; sumvy += o.vy;
               if(d < SEP_R2){ sepx += (c.x - o.x); sepy += (c.y - o.y); } }
+            if(d < mateD && o.g.sexual > 0.5 && o.energy >= mateReadyE && o.matedTick !== S.tick){
+              mateD = d; mateRef = o; matex = dx; matey = dy;
+            }
             continue;
           }
           if(hunts.length && hunts.indexOf(o.type) >= 0){
@@ -130,6 +135,10 @@ export function step(){
       const hxx = c.homeX - c.x, hyy = c.homeY - c.y, hd = Math.hypot(hxx, hyy);
       if(hd > g.territoryR){ ix += hxx / hd * g.territoriality * 1.2; iy += hyy / hd * g.territoriality * 1.2; }
     }
+    // mate-seeking (sexual organisms ready to breed steer toward a mate)
+    if(g.sexual > 0.5 && !thrHas && mateRef && c.energy >= P[cfg.reproE] * 0.9){
+      const d = Math.sqrt(mateD) || 1; ix += matex / d * 1.1; iy += matey / d * 1.1;
+    }
 
     // combine brain + instinct
     let dx = _out[0] * BRAIN_W + ix * INNATE_W, dy = _out[1] * BRAIN_W + iy * INNATE_W;
@@ -158,10 +167,26 @@ export function step(){
       }
     }
     if(c.energy >= P[cfg.reproE] && creatures.length + newborns.length < P.maxPop){
-      c.energy *= 0.5;
-      const ch = makeCreature(c.x + rnd(-6, 6), c.y + rnd(-6, 6), c.type, mutateGenome(g, c.type), c.gen + 1);
-      ch.energy = c.energy; if(cfg.terr){ ch.homeX = c.x; ch.homeY = c.y; }
-      newborns.push(ch); if(ch.gen > S.maxGen) S.maxGen = ch.gen;
+      if(g.sexual > 0.5){
+        // sexual: needs a ready mate in contact; offspring recombines both parents
+        if(mateRef && !mateRef.dead && mateRef.matedTick !== S.tick){
+          const er = g.size + mateRef.g.size + 12;
+          if((mateRef.x - c.x) ** 2 + (mateRef.y - c.y) ** 2 < er * er){
+            const childE = (c.energy + mateRef.energy) * 0.22 * 1.2;   // hybrid vigor
+            c.energy *= 0.6; mateRef.energy *= 0.6;
+            c.matedTick = S.tick; mateRef.matedTick = S.tick;
+            const ch = makeCreature((c.x + mateRef.x) / 2, (c.y + mateRef.y) / 2, c.type, crossover(g, mateRef.g, c.type), Math.max(c.gen, mateRef.gen) + 1);
+            ch.energy = childE; if(cfg.terr){ ch.homeX = ch.x; ch.homeY = ch.y; }
+            newborns.push(ch); if(ch.gen > S.maxGen) S.maxGen = ch.gen;
+          }
+        }
+      } else {
+        // asexual: clone with mutation
+        c.energy *= 0.5;
+        const ch = makeCreature(c.x + rnd(-6, 6), c.y + rnd(-6, 6), c.type, mutateGenome(g, c.type), c.gen + 1);
+        ch.energy = c.energy; if(cfg.terr){ ch.homeX = c.x; ch.homeY = c.y; }
+        newborns.push(ch); if(ch.gen > S.maxGen) S.maxGen = ch.gen;
+      }
     }
     if(c.energy <= 0 || c.age > P[cfg.maxAge]){ c.dead = true; if(S.selected === c) S.selected = null; }
   }
@@ -179,10 +204,13 @@ export function step(){
   S.creatures = creatures;
 
   if(S.tick % 6 === 0){
-    let hn = 0, cn = 0, on = 0, camo = 0, acu = 0;
-    for(const c of creatures){ if(c.type === 'carn'){ cn++; acu += c.g.acuity; } else if(c.type === 'omni'){ on++; camo += c.g.camo; } else { hn++; camo += c.g.camo; } }
+    let hn = 0, cn = 0, on = 0, camo = 0, acu = 0, sx = 0, tot = 0;
+    for(const c of creatures){
+      tot++; if(c.g.sexual > 0.5) sx++;
+      if(c.type === 'carn'){ cn++; acu += c.g.acuity; } else if(c.type === 'omni'){ on++; camo += c.g.camo; } else { hn++; camo += c.g.camo; }
+    }
     S.popHist.push({ h: hn, c: cn, o: on, f: food.length });
-    S.traitHist.push({ camo: (hn + on) ? camo / (hn + on) : 0, acu: cn ? acu / cn : 0 });
+    S.traitHist.push({ camo: (hn + on) ? camo / (hn + on) : 0, acu: cn ? acu / cn : 0, sex: tot ? sx / tot : 0 });
     if(S.popHist.length > 240){ S.popHist.shift(); S.traitHist.shift(); }
   }
 }
@@ -190,7 +218,7 @@ export function step(){
 /* ---------- save / load ---------- */
 export function snapshot(){
   return {
-    v: 5, tick: S.tick, predations: S.predations, maxGen: S.maxGen, ID: S.ID,
+    v: 6, tick: S.tick, predations: S.predations, maxGen: S.maxGen, ID: S.ID,
     worldW: S.worldW, worldH: S.worldH,
     params: { foodRate: P.foodRate, mut: P.mut, predatorsOn: P.predatorsOn, omnivoresOn: P.omnivoresOn,
               flocksOn: P.flocksOn, terrOn: P.terrOn, mimicOn: P.mimicOn, seasonsOn: P.seasonsOn },
@@ -199,7 +227,7 @@ export function snapshot(){
       e: +c.energy.toFixed(1), a: c.age, gn: c.gen, id: c.id, hx: +c.homeX.toFixed(1), hy: +c.homeY.toFixed(1),
       g: [+c.g.speed.toFixed(3), +c.g.sense.toFixed(1), +c.g.size.toFixed(2), +c.g.hue.toFixed(1),
           +c.g.sociality.toFixed(2), +c.g.camo.toFixed(2), +c.g.territoriality.toFixed(2),
-          +c.g.territoryR.toFixed(1), +c.g.acuity.toFixed(2)],
+          +c.g.territoryR.toFixed(1), +c.g.acuity.toFixed(2), +c.g.sexual.toFixed(2)],
       b: c.g.brain.map(x => +x.toFixed(3))
     })),
     food: S.food.map(f => [+f.x.toFixed(1), +f.y.toFixed(1)])
@@ -207,14 +235,15 @@ export function snapshot(){
 }
 
 export function restore(s){
-  if(!s || s.v !== 5) return false;
+  if(!s || s.v !== 6) return false;
   if(s.worldW){ S.worldW = s.worldW; S.worldH = s.worldH; }
   S.creatures = s.creatures.map(o => ({
     id: o.id, x: o.x, y: o.y, vx: 0, vy: 0, type: (o.t === 'carn' || o.t === 'omni' || o.t === 'herb') ? o.t : 'herb',
     energy: o.e, age: o.a, gen: o.gn, dead: false, homeX: (o.hx || o.x), homeY: (o.hy || o.y),
-    mem: [0, 0],
+    mem: [0, 0], matedTick: -1,
     g: { speed: o.g[0], sense: o.g[1], size: o.g[2], hue: o.g[3], sociality: o.g[4], camo: o.g[5],
-         territoriality: o.g[6], territoryR: o.g[7], acuity: o.g[8], brain: o.b.slice() }
+         territoriality: o.g[6], territoryR: o.g[7], acuity: o.g[8],
+         sexual: o.g[9] !== undefined ? o.g[9] : 0.5, brain: o.b.slice() }
   }));
   S.food = s.food.map(a => ({ x: a[0], y: a[1] }));
   S.tick = s.tick || 0; S.predations = s.predations || 0; S.maxGen = s.maxGen || 0; S.ID = s.ID || S.creatures.length + 1;

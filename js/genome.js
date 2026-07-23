@@ -1,7 +1,7 @@
 // Genome (physical + behavioural traits + brain) and creature factory
 import { rnd, clamp, gauss } from './utils.js';
 import { P, S, TYPES } from './state.js';
-import { randomBrain, mutateBrain, NMEM } from './nn.js';
+import { randomBrain, mutateBrain, NMEM, BRAINLEN } from './nn.js';
 
 export function randomGenome(type){
   const cfg = TYPES[type];
@@ -10,7 +10,7 @@ export function randomGenome(type){
     hue: cfg.hueC + rnd(-cfg.hueSpan, cfg.hueSpan) * 0.5,
     sociality: rnd(0.2, 0.9), camo: rnd(0, 0.3),
     territoriality: rnd(0.2, 0.8), territoryR: rnd(55, 120),
-    acuity: rnd(0.2, 0.5), brain: randomBrain()
+    acuity: rnd(0.2, 0.5), sexual: cfg.sexual ? 1 : 0, brain: randomBrain()
   };
 }
 
@@ -26,8 +26,26 @@ export function mutateGenome(g, type){
     territoriality: clamp(g.territoriality + gauss() * m * 1.3, 0, 1),
     territoryR: clamp(g.territoryR + gauss() * 30 * m * 1.5, 30, 180),
     acuity: clamp(g.acuity + gauss() * m * 1.3, 0, 1),
+    sexual: cfg.sexual ? 1 : 0,          // reproduction mode is a species trait
     brain: mutateBrain(g.brain)
   };
+}
+
+// Sexual reproduction: recombine two parents' genomes and brains, then mutate
+function crossBrain(a, b){
+  const out = new Array(BRAINLEN);
+  for(let i = 0; i < BRAINLEN; i++) out[i] = Math.random() < 0.5 ? a[i] : b[i];
+  return out;
+}
+export function crossover(ga, gb, type){
+  const pk = (x, y) => Math.random() < 0.5 ? x : y;
+  const base = {
+    speed: pk(ga.speed, gb.speed), sense: pk(ga.sense, gb.sense), size: pk(ga.size, gb.size),
+    hue: pk(ga.hue, gb.hue), sociality: pk(ga.sociality, gb.sociality), camo: pk(ga.camo, gb.camo),
+    territoriality: pk(ga.territoriality, gb.territoriality), territoryR: pk(ga.territoryR, gb.territoryR),
+    acuity: pk(ga.acuity, gb.acuity), sexual: pk(ga.sexual, gb.sexual), brain: crossBrain(ga.brain, gb.brain)
+  };
+  return mutateGenome(base, type);
 }
 
 export function makeCreature(x, y, type, genome, gen){
@@ -35,7 +53,7 @@ export function makeCreature(x, y, type, genome, gen){
   return {
     id: S.ID++, x, y, vx: rnd(-1, 1), vy: rnd(-1, 1), type, g: genome,
     energy: startE, age: 0, gen: gen || 0, dead: false, homeX: x, homeY: y,
-    mem: new Array(NMEM).fill(0)
+    mem: new Array(NMEM).fill(0), matedTick: -1
   };
 }
 

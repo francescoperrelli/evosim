@@ -132,7 +132,7 @@ export function refreshInspector(){
   const g = c.g;
   el('inspDot').style.background = `hsl(${g.hue | 0} 60% 55%)`;
   el('inspType').textContent = t(TYPE_KEY[c.type]);
-  el('inspMeta').textContent = `${t('lblEnergy')} ${c.energy | 0} · ${t('lblAge')} ${c.age} · ${t('lblGen')} ${c.gen}`;
+  el('inspMeta').textContent = `${t('lblEnergy')} ${c.energy | 0} · ${t('lblAge')} ${c.age} · ${t('lblGen')} ${c.gen} · ${g.sexual > 0.5 ? t('reproSex') : t('reproAsex')}`;
   el('bgSpeed').style.width = barPct(g.speed, 0.4, 3.4) + '%';
   el('bgVision').style.width = barPct(g.sense, 20, 165) + '%';
   el('bgSize').style.width = barPct(g.size, 2.5, 9) + '%';
@@ -140,6 +140,7 @@ export function refreshInspector(){
   el('bgCamo').style.width = (g.camo * 100) + '%';
   el('bgTerr').style.width = (g.territoriality * 100) + '%';
   el('bgAcuity').style.width = (g.acuity * 100) + '%';
+  el('bgSexual').style.width = (g.sexual * 100) + '%';
   drawNetwork(el('inspNet'), c);
 }
 
