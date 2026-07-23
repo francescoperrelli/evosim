@@ -3,7 +3,7 @@
 import { rnd, clamp } from './utils.js';
 import { P, S, TYPES, PREDATORS, BRAIN_W, INNATE_W, NEIGH_R2, SEP_R2, CELL, SAVE_KEY, seasonInfo } from './state.js';
 import { randomGenome, mutateGenome, crossover, makeCreature, metabolism } from './genome.js';
-import { brainForward, NIN, NOUT } from './nn.js';
+import { brainForward, getHidden, NIN, NOUT } from './nn.js';
 
 const _in = new Array(NIN), _out = new Array(NOUT);
 const TAU2 = Math.PI * 2;
@@ -14,12 +14,14 @@ export function spawnFood(n){
     S.food.push({ x: rnd(6, S.worldW - 6), y: rnd(6, S.worldH - 6) });
 }
 
+function founder(type){ const c = makeCreature(rnd(0, S.worldW), rnd(0, S.worldH), type, randomGenome(type), 0); c.lineage = c.id; return c; }
 export function seed(){
   S.creatures = []; S.food = []; S.tick = 0; S.predations = 0; S.maxGen = 0;
-  S.popHist.length = 0; S.traitHist.length = 0; S.ID = 1; S.selected = null;
-  for(let i = 0; i < P.herbStart; i++) S.creatures.push(makeCreature(rnd(0, S.worldW), rnd(0, S.worldH), 'herb', randomGenome('herb'), 0));
-  if(P.omnivoresOn) for(let i = 0; i < P.omniStart; i++) S.creatures.push(makeCreature(rnd(0, S.worldW), rnd(0, S.worldH), 'omni', randomGenome('omni'), 0));
-  if(P.predatorsOn) for(let i = 0; i < P.carnStart; i++) S.creatures.push(makeCreature(rnd(0, S.worldW), rnd(0, S.worldH), 'carn', randomGenome('carn'), 0));
+  S.popHist.length = 0; S.traitHist.length = 0; S.evoHist.length = 0; S.ID = 1; S.selected = null;
+  S.records = { oldestAge: 0, maxKids: 0, maxGen: 0 };
+  for(let i = 0; i < P.herbStart; i++) S.creatures.push(founder('herb'));
+  if(P.omnivoresOn) for(let i = 0; i < P.omniStart; i++) S.creatures.push(founder('omni'));
+  if(P.predatorsOn) for(let i = 0; i < P.carnStart; i++) S.creatures.push(founder('carn'));
   spawnFood(P.maxFood * 0.6 | 0);
 }
 
@@ -119,6 +121,7 @@ export function step(){
     _in[16] = 1;
     brainForward(g.brain, _in, _out);
     c.mem[0] = _out[2]; c.mem[1] = _out[3];
+    if(c === S.selected){ c.act = { inp: _in.slice(), hid: getHidden().slice(), out: _out.slice() }; }
 
     // instinct prior
     let ix = 0, iy = 0;
@@ -176,7 +179,9 @@ export function step(){
             c.energy *= 0.6; mateRef.energy *= 0.6;
             c.matedTick = S.tick; mateRef.matedTick = S.tick;
             const ch = makeCreature((c.x + mateRef.x) / 2, (c.y + mateRef.y) / 2, c.type, crossover(g, mateRef.g, c.type), Math.max(c.gen, mateRef.gen) + 1);
-            ch.energy = childE; if(cfg.terr){ ch.homeX = ch.x; ch.homeY = ch.y; }
+            ch.energy = childE; ch.lineage = c.lineage; if(cfg.terr){ ch.homeX = ch.x; ch.homeY = ch.y; }
+            c.kids++; mateRef.kids++;
+            if(c.kids > S.records.maxKids) S.records.maxKids = c.kids;
             newborns.push(ch); if(ch.gen > S.maxGen) S.maxGen = ch.gen;
           }
         }
@@ -184,11 +189,12 @@ export function step(){
         // asexual: clone with mutation
         c.energy *= 0.5;
         const ch = makeCreature(c.x + rnd(-6, 6), c.y + rnd(-6, 6), c.type, mutateGenome(g, c.type), c.gen + 1);
-        ch.energy = c.energy; if(cfg.terr){ ch.homeX = c.x; ch.homeY = c.y; }
+        ch.energy = c.energy; ch.lineage = c.lineage; if(cfg.terr){ ch.homeX = c.x; ch.homeY = c.y; }
+        c.kids++; if(c.kids > S.records.maxKids) S.records.maxKids = c.kids;
         newborns.push(ch); if(ch.gen > S.maxGen) S.maxGen = ch.gen;
       }
     }
-    if(c.energy <= 0 || c.age > P[cfg.maxAge]){ c.dead = true; if(S.selected === c) S.selected = null; }
+    if(c.energy <= 0 || c.age > P[cfg.maxAge]){ c.dead = true; if(c.age > S.records.oldestAge) S.records.oldestAge = c.age; if(S.selected === c) S.selected = null; }
   }
 
   if(newborns.length) creatures = creatures.concat(newborns);
@@ -197,21 +203,25 @@ export function step(){
   // safety net
   let herbN = 0, omniN = 0, carnN = 0;
   for(const c of creatures){ if(c.type === 'carn') carnN++; else if(c.type === 'omni') omniN++; else herbN++; }
-  if(herbN === 0) for(let i = 0; i < 30; i++) creatures.push(makeCreature(rnd(0, WW), rnd(0, HH), 'herb', randomGenome('herb'), 0));
-  if(P.omnivoresOn && omniN === 0 && herbN > 40) for(let i = 0; i < 10; i++) creatures.push(makeCreature(rnd(0, WW), rnd(0, HH), 'omni', randomGenome('omni'), 0));
-  if(P.predatorsOn && carnN === 0 && herbN > 50) for(let i = 0; i < 8; i++) creatures.push(makeCreature(rnd(0, WW), rnd(0, HH), 'carn', randomGenome('carn'), 0));
+  if(herbN === 0) for(let i = 0; i < 30; i++) creatures.push(founder('herb'));
+  if(P.omnivoresOn && omniN === 0 && herbN > 40) for(let i = 0; i < 10; i++) creatures.push(founder('omni'));
+  if(P.predatorsOn && carnN === 0 && herbN > 50) for(let i = 0; i < 8; i++) creatures.push(founder('carn'));
 
   S.creatures = creatures;
 
   if(S.tick % 6 === 0){
-    let hn = 0, cn = 0, on = 0, camo = 0, acu = 0, sx = 0, tot = 0;
+    let hn = 0, cn = 0, on = 0, camo = 0, acu = 0, sx = 0, tot = 0, genSum = 0;
+    const lin = new Set();
     for(const c of creatures){
-      tot++; if(c.g.sexual > 0.5) sx++;
+      tot++; if(c.g.sexual > 0.5) sx++; genSum += c.gen; lin.add(c.lineage);
       if(c.type === 'carn'){ cn++; acu += c.g.acuity; } else if(c.type === 'omni'){ on++; camo += c.g.camo; } else { hn++; camo += c.g.camo; }
     }
     S.popHist.push({ h: hn, c: cn, o: on, f: food.length });
     S.traitHist.push({ camo: (hn + on) ? camo / (hn + on) : 0, acu: cn ? acu / cn : 0, sex: tot ? sx / tot : 0 });
+    S.evoHist.push({ gen: tot ? genSum / tot : 0, sex: tot ? sx / tot : 0, lin: lin.size });
     if(S.popHist.length > 240){ S.popHist.shift(); S.traitHist.shift(); }
+    if(S.evoHist.length > 240){ S.evoHist.shift(); }
+    if(S.maxGen > S.records.maxGen) S.records.maxGen = S.maxGen;
   }
 }
 
@@ -240,7 +250,7 @@ export function restore(s){
   S.creatures = s.creatures.map(o => ({
     id: o.id, x: o.x, y: o.y, vx: 0, vy: 0, type: (o.t === 'carn' || o.t === 'omni' || o.t === 'herb') ? o.t : 'herb',
     energy: o.e, age: o.a, gen: o.gn, dead: false, homeX: (o.hx || o.x), homeY: (o.hy || o.y),
-    mem: [0, 0], matedTick: -1,
+    mem: [0, 0], matedTick: -1, lineage: o.id, kids: 0, act: null,
     g: { speed: o.g[0], sense: o.g[1], size: o.g[2], hue: o.g[3], sociality: o.g[4], camo: o.g[5],
          territoriality: o.g[6], territoryR: o.g[7], acuity: o.g[8],
          sexual: o.g[9] !== undefined ? o.g[9] : 0.5, brain: o.b.slice() }

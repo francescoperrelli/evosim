@@ -121,6 +121,32 @@ export function updateHUD(){
   if(se){ const si = seasonInfo(S.tick); se.textContent = P.seasonsOn ? SEASON_ICON[si.idx] + ' ' + t(si.key) : ''; }
 }
 
+/* ---------- evolution panel charts ---------- */
+export function drawEvolution(){
+  const H = S.evoHist; const pad = 6;
+  // average generation
+  let cv = el('evGen'), ctx = cv.getContext('2d'); let d = fitChart(cv, ctx);
+  ctx.clearRect(0, 0, d.w, d.h); ctx.fillStyle = '#0c120c'; ctx.fillRect(0, 0, d.w, d.h);
+  let mg = 1; for(const e of H) if(e.gen > mg) mg = e.gen;
+  line(ctx, H, e => d.h - pad - (d.h - 2 * pad) * (e.gen / mg), '#74bccb', d.w, d.h, pad);
+  // sexual %
+  cv = el('evSex'); ctx = cv.getContext('2d'); d = fitChart(cv, ctx);
+  ctx.clearRect(0, 0, d.w, d.h); ctx.fillStyle = '#0c120c'; ctx.fillRect(0, 0, d.w, d.h);
+  line(ctx, H, e => d.h - pad - (d.h - 2 * pad) * e.sex, '#a97fe0', d.w, d.h, pad);
+  // dominant lineages (bar chart of current population by lineage)
+  cv = el('evLin'); ctx = cv.getContext('2d'); d = fitChart(cv, ctx);
+  ctx.clearRect(0, 0, d.w, d.h); ctx.fillStyle = '#0c120c'; ctx.fillRect(0, 0, d.w, d.h);
+  const tally = new Map();
+  for(const c of S.creatures){ tally.set(c.lineage, (tally.get(c.lineage) || 0) + 1); }
+  const arr = [...tally.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const mx = arr.length ? arr[0][1] : 1, bw = (d.w - 2 * pad) / Math.max(arr.length, 1);
+  for(let i = 0; i < arr.length; i++){
+    const [lid, cnt] = arr[i]; const h = (d.h - 2 * pad) * (cnt / mx);
+    ctx.fillStyle = `hsl(${(lid * 47) % 360} 55% 55%)`;
+    ctx.fillRect(pad + i * bw + 1, d.h - pad - h, bw - 2, h);
+  }
+}
+
 /* ---------- inspector: neural network drawing ---------- */
 const OFF_B1 = NIN * NH, OFF_W2 = OFF_B1 + NH, OFF_B2 = OFF_W2 + NH * NOUT;
 export function drawNetwork(cv, c){
@@ -156,9 +182,11 @@ export function drawNetwork(cv, c){
       ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(colX[2], yOf(k, NOUT)); ctx.stroke();
     }
   }
-  // nodes
-  const node = (x, y, col) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, 3.2, 0, TAU); ctx.fill(); };
-  for(let i = 0; i < NIN; i++) node(colX[0], yOf(i, NIN), '#74bccb');
-  for(let j = 0; j < NH; j++) node(colX[1], yOf(j, NH), '#ece7d7');
-  for(let k = 0; k < NOUT; k++) node(colX[2], yOf(k, NOUT), '#e0a458');
+  // nodes (coloured by live activation when available)
+  const act = c.act;
+  const actCol = v => { const a = clamp(Math.abs(v), 0, 1); return v >= 0 ? `rgba(143,196,74,${0.2 + 0.8 * a})` : `rgba(221,111,87,${0.2 + 0.8 * a})`; };
+  const node = (x, y, col, r) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, r || 3.2, 0, TAU); ctx.fill(); };
+  for(let i = 0; i < NIN; i++) node(colX[0], yOf(i, NIN), act ? actCol(act.inp[i]) : '#74bccb', act ? 2.5 + 2 * clamp(Math.abs(act.inp[i]), 0, 1) : 3.2);
+  for(let j = 0; j < NH; j++) node(colX[1], yOf(j, NH), act ? actCol(act.hid[j]) : '#ece7d7', act ? 2.5 + 2 * clamp(Math.abs(act.hid[j]), 0, 1) : 3.2);
+  for(let k = 0; k < NOUT; k++) node(colX[2], yOf(k, NOUT), act ? actCol(act.out[k]) : '#e0a458', act ? 2.5 + 2 * clamp(Math.abs(act.out[k]), 0, 1) : 3.2);
 }

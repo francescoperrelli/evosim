@@ -34,7 +34,10 @@ export const I18N = {
     tSpeed:"Velocità", tVision:"Vista", tSize:"Dimensione", tSocial:"Socialità",
     tCamo:"Camuffamento", tTerr:"Territorialità", tAcuity:"Acutezza", tSexual:"Sessualità",
     reproSex:"sessuato", reproAsex:"asessuato",
-    lblEnergy:"Energia", lblAge:"Età", lblGen:"Generazione" },
+    lblEnergy:"Energia", lblAge:"Età", lblGen:"Generazione",
+    evoBtn:"📊 Evoluzione", evoEyebrow:"L'evoluzione in diretta", evoTitle:"Evoluzione",
+    evoGenChart:"Generazione media nel tempo", evoSexChart:"Sessuati (%) nel tempo", evoLineages:"Stirpi fondatrici dominanti",
+    recGen:"Generazione max", recAge:"Età record", recKids:"Più prolifico", recLin:"Stirpi vive" },
   en:{ menu:"☰ Menu", hint:"Drag to explore · wheel/pinch to zoom · tap to plant",
     numbers:"The ecosystem in numbers", herbivores:"Herbivores", carnivores:"Carnivores", omnivores:"Omnivores", plants:"Plants",
     time:"Time", generation:"Generation", kills:"Kills",
@@ -69,7 +72,10 @@ export const I18N = {
     tSpeed:"Speed", tVision:"Vision", tSize:"Size", tSocial:"Sociality",
     tCamo:"Camouflage", tTerr:"Territoriality", tAcuity:"Acuity", tSexual:"Sexuality",
     reproSex:"sexual", reproAsex:"asexual",
-    lblEnergy:"Energy", lblAge:"Age", lblGen:"Generation" }
+    lblEnergy:"Energy", lblAge:"Age", lblGen:"Generation",
+    evoBtn:"📊 Evolution", evoEyebrow:"Evolution, live", evoTitle:"Evolution",
+    evoGenChart:"Average generation over time", evoSexChart:"Sexual (%) over time", evoLineages:"Dominant founding lineages",
+    recGen:"Max generation", recAge:"Oldest age", recKids:"Most prolific", recLin:"Living lineages" }
 };
 
 let lang = 'it';

@@ -59,6 +59,7 @@
         <button class="btn ghost" id="btnSave" data-i18n="save">💾 Salva</button>
         <button class="btn ghost" id="btnOpt" data-i18n="options">⚙ Opzioni</button>
       </div>
+      <div class="row"><button class="btn ghost" id="btnEvo" data-i18n="evoBtn">📊 Evoluzione</button></div>
       <label class="ctl"><span data-i18n="timeSpeed">Velocità del tempo</span> <b id="vSpeed">1×</b>
         <input type="range" id="rSpeed" min="0" max="8" step="1" value="1"></label>
     </div>
@@ -77,6 +78,7 @@
         <button class="btn" id="mLoad" data-i18n="load">📂 Carica</button>
         <button class="btn" id="mSave" data-i18n="save">💾 Salva</button>
         <button class="btn" id="mOpt" data-i18n="options">⚙ Opzioni</button>
+        <button class="btn" id="mEvo" data-i18n="evoBtn">📊 Evoluzione</button>
       </div>
       <p class="foot" data-i18n="footer">Pubblicato su GitHub Pages · si salva da solo nel browser</p>
       <div class="lang"><button data-lang="it">Italiano</button><button data-lang="en">English</button></div>
@@ -154,6 +156,27 @@
         <span><i style="background:#dd6f57"></i>−</span>
       </div>
       <div class="row"><button class="btn primary" id="inspClose" data-i18n="close">Chiudi</button></div>
+    </div>
+  </div>
+
+  <!-- EVOLUTION -->
+  <div class="overlay" id="evolution">
+    <div class="card">
+      <p class="eyebrow" data-i18n="evoEyebrow">L'evoluzione in diretta</p>
+      <h3 data-i18n="evoTitle">Evoluzione</h3>
+      <div class="ev-records">
+        <div class="ev-rec"><div class="k" data-i18n="recGen">Generazione max</div><div class="v" id="recGen">0</div></div>
+        <div class="ev-rec"><div class="k" data-i18n="recAge">Età record</div><div class="v" id="recAge">0</div></div>
+        <div class="ev-rec"><div class="k" data-i18n="recKids">Più prolifico</div><div class="v" id="recKids">0</div></div>
+        <div class="ev-rec"><div class="k" data-i18n="recLin">Stirpi vive</div><div class="v" id="recLin">0</div></div>
+      </div>
+      <p class="insp-sub" data-i18n="evoGenChart">Generazione media nel tempo</p>
+      <canvas id="evGen"></canvas>
+      <p class="insp-sub" data-i18n="evoSexChart">Sessuati (%) nel tempo</p>
+      <canvas id="evSex"></canvas>
+      <p class="insp-sub" data-i18n="evoLineages">Stirpi fondatrici dominanti</p>
+      <canvas id="evLin"></canvas>
+      <div class="row"><button class="btn primary" id="evClose" data-i18n="close">Chiudi</button></div>
     </div>
   </div>
 

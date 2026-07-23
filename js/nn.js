@@ -38,5 +38,6 @@ export function brainForward(b, inp, out){
   }
 }
 
-// Expose layer sizes for the inspector visualization
+// Expose layer sizes and last hidden activations for the inspector
 export const LAYERS = { NIN, NH, NOUT };
+export const getHidden = () => _h;

@@ -120,3 +120,11 @@ input[type=range]{width:100%; accent-color:var(--moss); margin-top:5px}
 .ctlbtn{pointer-events:auto; width:34px; background:rgba(10,15,10,.6); color:var(--ink);
   border:1px solid var(--line); border-radius:20px; padding:7px 0; cursor:pointer; font-size:16px; line-height:1; backdrop-filter:blur(4px)}
 .ctlbtn:hover{border-color:var(--moss); color:#fff}
+
+/* --- evolution panel --- */
+.ev-records{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:0 0 18px}
+.ev-rec{background:var(--panel2); border:1px solid var(--line); border-radius:9px; padding:8px 10px; text-align:left}
+.ev-rec .k{font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px}
+.ev-rec .v{font-size:18px; font-weight:700; margin-top:2px; font-variant-numeric:tabular-nums}
+#evGen,#evSex,#evLin{width:100%; display:block; background:#0c120c; border:1px solid var(--line); border-radius:9px; margin:6px 0 2px}
+#evGen,#evSex{height:74px} #evLin{height:110px}

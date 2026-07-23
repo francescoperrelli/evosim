@@ -3,13 +3,13 @@ import { el, rnd, clamp } from './utils.js';
 import { P, S, LANG_KEY, screenToWorld, zoomAt, clampCam } from './state.js';
 import { seed, saveLocal, hasSave, loadLocal, clearLocal, snapshot, restore } from './world.js';
 import { makeCreature, randomGenome } from './genome.js';
-import { drawNetwork } from './render.js';
+import { drawNetwork, drawEvolution } from './render.js';
 import { I18N, t, setLang, getLang } from './i18n.js';
 
 /* ---------- overlays ---------- */
 function show(id){ el(id).classList.add('show'); }
 function hide(id){ el(id).classList.remove('show'); }
-function hideAll(){ ['menu','tutorial','options','inspector'].forEach(hide); }
+function hideAll(){ ['menu','tutorial','options','inspector','evolution'].forEach(hide); }
 export { show };
 
 let toastT = null;
@@ -73,6 +73,7 @@ bindToggle('tFlock', 'flocksOn'); bindToggle('tTerr', 'terrOn'); bindToggle('tMi
 
 el('btnSave').onclick = () => toast(saveLocal() ? t('saved') : t('noStore'));
 el('btnOpt').onclick = () => show('options');
+el('btnEvo').onclick = () => show('evolution');
 el('btnMenu').onclick = () => { refreshMenu(); show('menu'); };
 el('btnMode').onclick = function(){
   S.inspectMode = !S.inspectMode;
@@ -88,6 +89,8 @@ el('mTut').onclick = () => show('tutorial');
 el('mLoad').onclick = () => { if(loadLocal()){ syncControls(); clampCam(); toast(t('loaded')); hideAll(); S.running = true; syncPlayBtn(); } else toast(t('noSave')); };
 el('mSave').onclick = () => toast(saveLocal() ? t('saved') : t('noStore'));
 el('mOpt').onclick = () => show('options');
+el('mEvo').onclick = () => show('evolution');
+el('evClose').onclick = () => hide('evolution');
 el('tClose').onclick = () => { hide('tutorial'); if(!S.creatures.length){ seed(); saveLocal(); } hideAll(); S.running = true; syncPlayBtn(); };
 
 /* ---------- options: export / import ---------- */
@@ -142,6 +145,15 @@ export function refreshInspector(){
   el('bgAcuity').style.width = (g.acuity * 100) + '%';
   el('bgSexual').style.width = (g.sexual * 100) + '%';
   drawNetwork(el('inspNet'), c);
+}
+
+export function refreshEvolution(){
+  if(!el('evolution').classList.contains('show')) return;
+  el('recGen').textContent = S.records.maxGen;
+  el('recAge').textContent = S.records.oldestAge;
+  el('recKids').textContent = S.records.maxKids;
+  el('recLin').textContent = new Set(S.creatures.map(c => c.lineage)).size;
+  drawEvolution();
 }
 
 /* ---------- camera: pan / zoom / tap ---------- */

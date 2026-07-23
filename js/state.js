@@ -54,7 +54,8 @@ export const S = {
   worldW: 0, worldH: 0,       // logical world size (larger than viewport)
   cam: { x: 0, y: 0, zoom: 1 },
   ID: 1,
-  popHist: [], traitHist: [],
+  popHist: [], traitHist: [], evoHist: [],
+  records: { oldestAge: 0, maxKids: 0, maxGen: 0 },
   selected: null, inspectMode: false
 };
 
