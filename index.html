@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EvoSim — Vita Artificiale</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🧬</text></svg>">
+
 <style>
   :root{
     --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --line:#2a3140;
@@ -77,8 +79,14 @@
       <p class="sub">Vita artificiale — le creature evolvono da sole per selezione naturale</p>
       <div class="row">
         <button id="btnPlay" class="primary">⏸ Pausa</button>
-        <button id="btnReset">↻ Reset</button>
+        <button id="btnReset">🆕 Nuovo mondo</button>
       </div>
+      <div class="row">
+        <button id="btnExport">⬇ Esporta</button>
+        <button id="btnImport">⬆ Importa</button>
+      </div>
+      <input type="file" id="fileImport" accept="application/json,.json" style="display:none">
+      <p class="tip" id="saveStatus" style="margin-top:8px">💾 Salvataggio automatico attivo — riprende da solo quando riapri la pagina</p>
     </div>
 
     <div class="sec">
@@ -193,6 +201,54 @@
     for(let i=0;i<P.startPop;i++)
       creatures.push(makeCreature(rnd(0,W),rnd(0,H),randomGenome(),0));
     spawnFood(P.maxFood*0.6|0);
+  }
+
+  // ---------- salvataggio / caricamento ----------
+  const SAVE_KEY='evosim_save_v1';
+  // impacchetta lo stato in un oggetto leggero e serializzabile
+  function snapshot(){
+    return {
+      v:1, tick, births, deaths, maxGen, ID,
+      W, H,                        // dimensioni con cui era stato salvato (per riscalare)
+      params:{ foodRate:P.foodRate, mut:P.mut },
+      creatures: creatures.map(c=>[
+        +c.x.toFixed(1), +c.y.toFixed(1), +c.vx.toFixed(2), +c.vy.toFixed(2),
+        +c.g.speed.toFixed(3), +c.g.sense.toFixed(1), +c.g.size.toFixed(2), +c.g.hue.toFixed(1),
+        +c.energy.toFixed(1), c.age, c.gen, c.id
+      ]),
+      food: food.map(f=>[+f.x.toFixed(1), +f.y.toFixed(1)])
+    };
+  }
+  // ricostruisce lo stato da uno snapshot (riscala le posizioni se lo schermo è diverso)
+  function restore(s){
+    if(!s || s.v!==1) return false;
+    const sx = s.W? W/s.W : 1, sy = s.H? H/s.H : 1;
+    creatures = s.creatures.map(a=>({
+      id:a[11], x:a[0]*sx, y:a[1]*sy, vx:a[2], vy:a[3],
+      g:{ speed:a[4], sense:a[5], size:a[6], hue:a[7] },
+      energy:a[8], age:a[9], gen:a[10], dead:false
+    }));
+    food = s.food.map(a=>({ x:a[0]*sx, y:a[1]*sy }));
+    tick=s.tick||0; births=s.births||0; deaths=s.deaths||0; maxGen=s.maxGen||0;
+    ID=s.ID||creatures.length+1;
+    if(s.params){ P.foodRate=s.params.foodRate; P.mut=s.params.mut; syncSliders(); }
+    popHist.length=0; traitHist.length=0;
+    return true;
+  }
+  function saveLocal(){
+    try{ localStorage.setItem(SAVE_KEY, JSON.stringify(snapshot())); return true; }
+    catch(e){ return false; }   // sandbox senza storage: fallisce silenziosamente
+  }
+  function loadLocal(){
+    try{ const raw=localStorage.getItem(SAVE_KEY); return raw? restore(JSON.parse(raw)) : false; }
+    catch(e){ return false; }
+  }
+  function clearLocal(){ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} }
+  // allinea gli slider ai parametri correnti (usato dopo un load/import)
+  function syncSliders(){
+    const rF=document.getElementById('rFood'), rM=document.getElementById('rMut');
+    if(rF){ rF.value=P.foodRate; rF.dispatchEvent(new Event('input')); }
+    if(rM){ rM.value=Math.round(P.mut*100); rM.dispatchEvent(new Event('input')); }
   }
 
   // ---------- passo di simulazione ----------
@@ -343,19 +399,52 @@
   }
 
   // ---------- loop ----------
-  let stepsPerFrame=1;
+  let stepsPerFrame=1, saveCounter=0;
   function frame(){
     if(running){ for(let i=0;i<stepsPerFrame;i++) step(); }
     draw(); drawCharts(); updateHUD();
+    // salvataggio automatico ogni ~180 frame (~3 secondi)
+    if(running && ++saveCounter>=180){ saveCounter=0; saveLocal(); }
     requestAnimationFrame(frame);
   }
+  // salva anche quando chiudi/lasci la pagina, per non perdere gli ultimi secondi
+  window.addEventListener('pagehide', saveLocal);
+  document.addEventListener('visibilitychange', ()=>{ if(document.hidden) saveLocal(); });
 
   // ---------- controlli ----------
   el('btnPlay').onclick=function(){
     running=!running; this.textContent=running?'⏸ Pausa':'▶ Riprendi';
     this.classList.toggle('primary',running);
   };
-  el('btnReset').onclick=()=>{ seed(); };
+  el('btnReset').onclick=()=>{
+    if(confirm('Vuoi davvero iniziare un mondo nuovo? Il mondo attuale salvato verrà perso.')){
+      clearLocal(); seed(); saveLocal();
+    }
+  };
+  // Esporta: scarica lo stato come file .json (per spostarlo su un altro dispositivo)
+  el('btnExport').onclick=()=>{
+    const blob=new Blob([JSON.stringify(snapshot())],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download='evosim-mondo.json'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  };
+  // Importa: carica uno stato da un file .json
+  el('btnImport').onclick=()=> el('fileImport').click();
+  el('fileImport').onchange=function(){
+    const f=this.files[0]; if(!f) return;
+    const rd=new FileReader();
+    rd.onload=()=>{ try{
+        if(restore(JSON.parse(rd.result))){ saveLocal(); flashStatus('✅ Mondo importato'); }
+        else flashStatus('⚠ File non valido');
+      }catch(e){ flashStatus('⚠ File non leggibile'); } };
+    rd.readAsText(f); this.value='';
+  };
+  function flashStatus(msg){
+    const s=el('saveStatus'); if(!s) return;
+    const old=s.textContent; s.textContent=msg;
+    setTimeout(()=>{ s.textContent=old; },2500);
+  }
   el('rSpeed').oninput=function(){
     stepsPerFrame=+this.value; el('vSpeed').textContent=(stepsPerFrame||'0')+'×';
     if(stepsPerFrame===0){ /* pausa di fatto */ }
@@ -381,7 +470,17 @@
   }
 
   // ---------- avvio ----------
-  resize(); seed(); requestAnimationFrame(frame);
+  resize();
+  // prova a riprendere il mondo salvato; se non c'è (o lo storage è bloccato) parti da zero
+  if(loadLocal()){
+    el('saveStatus').textContent='💾 Mondo ripreso dal salvataggio automatico';
+  } else {
+    seed();
+    // verifica se il salvataggio è disponibile in questo ambiente
+    if(!saveLocal())
+      el('saveStatus').textContent='ℹ️ Salvataggio non disponibile qui (usa il sito pubblicato)';
+  }
+  requestAnimationFrame(frame);
 })();
 </script>
 </body>
