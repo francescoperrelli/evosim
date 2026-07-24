@@ -177,6 +177,7 @@ export function step(){
     _in[16] = cnt ? sumSig / cnt : 0;   // signal heard from same-type neighbours
     _in[17] = 1;
     if(cnt && sumSig / cnt < -0.4) c.alert = 30;   // an alarm call was heard -> become vigilant
+    c.groupSize = cnt;                              // remembered for cooperative defense
     brainForward(g.brain, _in, _out);
     c.mem[0] = _out[2]; c.mem[1] = _out[3]; c.signal = _out[4];
     if(c === S.selected){ const gh = getHidden(); c.act = { inp: _in.slice(), hid: gh.h.slice(0, gh.nh), out: _out.slice() }; }
@@ -229,7 +230,7 @@ export function step(){
     }
     if(preyRef && !preyRef.dead){
       const er = c.rad + (preyRef.rad || preyRef.g.size) + 2;
-      if((preyRef.x - c.x) ** 2 + (preyRef.y - c.y) ** 2 < er * er){
+      if((preyRef.x - c.x) ** 2 + (preyRef.y - c.y) ** 2 < er * er && Math.random() < 1 / (1 + 0.12 * (preyRef.groupSize || 0))){
         preyRef.dead = true; S.predations++;
         const packBonus = 1 + 0.25 * Math.min(cnt, 3);     // hunting near allies pays off
         c.energy += P.preyEnergy * cfg.preyEff * packBonus;
@@ -326,7 +327,7 @@ export function restore(s){
   S.creatures = s.creatures.map(o => ({
     id: o.id, x: o.x, y: o.y, vx: 0, vy: 0, type: (o.t === 'carn' || o.t === 'omni' || o.t === 'herb') ? o.t : 'herb',
     energy: o.e, age: o.a, gen: o.gn, dead: false, homeX: (o.hx || o.x), homeY: (o.hy || o.y),
-    mem: [0, 0], matedTick: -1, lineage: o.id, kids: 0, act: null, sick: 0, parent: 0, anc: [], signal: 0, rad: o.g[2], alert: 0,
+    mem: [0, 0], matedTick: -1, lineage: o.id, kids: 0, act: null, sick: 0, parent: 0, anc: [], signal: 0, rad: o.g[2], alert: 0, groupSize: 0,
     g: { speed: o.g[0], sense: o.g[1], size: o.g[2], hue: o.g[3], sociality: o.g[4], camo: o.g[5],
          territoriality: o.g[6], territoryR: o.g[7], acuity: o.g[8],
          sexual: o.g[9] !== undefined ? o.g[9] : 0.5,

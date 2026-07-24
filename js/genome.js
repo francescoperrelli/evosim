@@ -63,7 +63,7 @@ export function makeCreature(x, y, type, genome, gen){
     energy: startE, age: 0, gen: gen || 0, dead: false, homeX: x, homeY: y,
     mem: new Array(NMEM).fill(0), matedTick: -1,
     lineage: 0, kids: 0, act: null, sick: 0, parent: 0, anc: [], signal: 0,
-    rad: genome.size * 0.45, alert: 0
+    rad: genome.size * 0.45, alert: 0, groupSize: 0
   };
 }
 
