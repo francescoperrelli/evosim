@@ -147,27 +147,46 @@ let lastChronLen = -1;
 function centerCameraOn(x, y){
   const z = S.cam.zoom = Math.min(2.5, Math.max(S.cam.zoom, 1.5));
   S.cam.x = x - (S.W / z) / 2; S.cam.y = y - (S.H / z) / 2;
-  clampCam(); hide('chronicle'); toast('📍 ' + t('chronJump'));
+  clampCam(); hide('chronicle');
 }
+// clicking a located event jumps there; if it names a still-living creature, select + inspect it
+function chronClick(e){
+  if(e.cid != null){
+    const cr = S.creatures.find(c => c.id === e.cid && !c.dead);
+    if(cr){ S.selected = cr; centerCameraOn(cr.x, cr.y); show('inspector'); refreshInspector(); return; }
+  }
+  centerCameraOn(e.x, e.y); toast('📍 ' + t('chronJump'));
+}
+let chronTopTick = -1;
 function buildChronicle(){
   const list = el('chronList'); list.innerHTML = '';
-  if(!S.chronicle.length){ list.innerHTML = `<div class="chron-empty">${t('chronEmpty')}</div>`; return; }
+  if(!S.chronicle.length){ list.innerHTML = `<div class="chron-empty">${t('chronEmpty')}</div>`; chronTopTick = -1; return; }
   for(const e of S.chronicle){
     const located = e.x != null && e.y != null;
-    const item = document.createElement('div'); item.className = 'chron-item' + (located ? ' clickable' : '');
+    const item = document.createElement('div');
+    item.className = 'chron-item' + (located ? ' clickable' : '') + (e.tick > chronTopTick ? ' chron-new' : '');
     const tk = document.createElement('span'); tk.className = 'tk'; tk.textContent = 't' + e.tick;
     const tx = document.createElement('span'); tx.textContent = t('chr_' + e.key).replace('{n}', e.n);
     item.appendChild(tk); item.appendChild(tx);
     if(located){ const pin = document.createElement('span'); pin.className = 'chron-pin'; pin.textContent = '📍';
-      item.appendChild(pin); item.onclick = () => centerCameraOn(e.x, e.y); }
+      item.appendChild(pin); item.onclick = () => chronClick(e); }
     list.appendChild(item);
   }
+  chronTopTick = S.chronicle[0].tick;
 }
-el('btnChronicle').onclick = () => { buildChronicle(); lastChronLen = S.chronicle.length; show('chronicle'); };
+el('btnChronicle').onclick = () => {
+  chronTopTick = S.chronicle.length ? S.chronicle[0].tick : -1;   // nothing flashes on first open
+  buildChronicle(); lastChronLen = S.chronicle.length; show('chronicle');
+};
 el('chronClose').onclick = () => hide('chronicle');
 export function refreshChronicle(){
   if(!el('chronicle').classList.contains('show')) return;
-  if(S.chronicle.length !== lastChronLen){ buildChronicle(); lastChronLen = S.chronicle.length; }
+  if(S.chronicle.length !== lastChronLen){
+    const list = el('chronList'); const prev = list.scrollTop, nearTop = prev < 40;
+    buildChronicle();                       // new events are flagged .chron-new and flash
+    lastChronLen = S.chronicle.length;
+    list.scrollTop = nearTop ? 0 : prev;    // reveal new events if at top; otherwise hold the reader's place
+  }
 }
 
 export function refreshChallenge(){

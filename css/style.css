@@ -8,7 +8,7 @@
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
 body{background:var(--bg); color:var(--ink); font:14px/1.55 var(--sans);
-  display:flex; height:100vh; overflow:hidden; -webkit-font-smoothing:antialiased;}
+  display:flex; height:100vh; height:100dvh; overflow:hidden; -webkit-font-smoothing:antialiased;}
 #stage{flex:1; position:relative; min-width:0; background:radial-gradient(120% 120% at 50% 30%,#0f150f 0%,#080b08 100%);}
 #world{position:absolute; inset:0; width:100%; height:100%; display:block; cursor:crosshair; touch-action:none;}
 #stage::after{content:""; position:absolute; inset:0; pointer-events:none; box-shadow:inset 0 0 160px 40px rgba(0,0,0,.55);}
@@ -59,7 +59,7 @@ input[type=range]{width:100%; accent-color:var(--moss); margin-top:5px}
   background:radial-gradient(120% 100% at 50% 20%,rgba(10,16,10,.55),rgba(5,8,5,.85)); backdrop-filter:blur(6px); padding:24px}
 .overlay.show{display:flex; animation:fade .4s ease}
 @keyframes fade{from{opacity:0} to{opacity:1}}
-.card{width:min(560px,100%); max-height:90vh; overflow-y:auto; background:linear-gradient(180deg,rgba(20,28,20,.96),rgba(14,20,14,.98));
+.card{width:min(560px,100%); max-height:90vh; max-height:90dvh; overflow-y:auto; background:linear-gradient(180deg,rgba(20,28,20,.96),rgba(14,20,14,.98));
   border:1px solid var(--line); border-radius:18px; padding:34px 34px 30px; box-shadow:0 30px 80px rgba(0,0,0,.6); text-align:center}
 .card::-webkit-scrollbar{width:8px} .card::-webkit-scrollbar-thumb{background:#2a3a2b;border-radius:8px}
 .eyebrow{font-size:11px; letter-spacing:3px; text-transform:uppercase; color:var(--moss); margin:0 0 10px}
@@ -86,10 +86,13 @@ input[type=range]{width:100%; accent-color:var(--moss); margin-top:5px}
 .lang button.on{background:var(--moss-d); color:#fff}
 @media (max-width:780px){
   body{flex-direction:column}
-  #stage{flex:none; height:54vh}
-  aside{width:100%; border-left:none; border-top:1px solid var(--line)}
+  #stage{flex:none; height:54vh; height:54dvh}
+  /* the panel fills the remaining height and scrolls its own content */
+  aside{width:100%; border-left:none; border-top:1px solid var(--line); flex:1 1 auto; min-height:0}
   .title{font-size:36px}
-  .card{padding:26px 22px}
+  /* tall overlays (Diario, Evoluzione…) scroll the overlay itself so the bottom is reachable */
+  .overlay{align-items:flex-start; overflow-y:auto; -webkit-overflow-scrolling:touch}
+  .card{max-height:none; margin:auto; padding:26px 22px}
   .btn{padding:12px 14px}
 }
 
@@ -191,4 +194,6 @@ input[type=range]{width:100%; accent-color:var(--moss); margin-top:5px}
 .chron-item.clickable{cursor:pointer; transition:border-color .15s, background .15s}
 .chron-item.clickable:hover{border-color:var(--moss); background:#17231790}
 .chron-item .chron-pin{margin-left:auto; flex:none; opacity:.7; font-size:12px}
+@keyframes chronflash{0%{background:rgba(143,196,74,.28); border-color:var(--moss)} 100%{background:var(--panel2); border-color:var(--line)}}
+.chron-item.chron-new{animation:chronflash 1.8s ease}
 .chron-empty{font-size:12.5px; color:var(--muted); font-style:italic; padding:8px 2px}

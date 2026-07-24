@@ -119,7 +119,8 @@ function geneVec(c){ const g = c.g; return [g.speed / 3.4, g.sense / 165, g.size
 // Chronicle: a running log of notable events for the player to read back
 export function logEvent(key, n, loc){
   S.chronicle.unshift({ tick: S.tick, key, n: n === undefined ? null : n,
-    x: loc ? Math.round(loc.x) : null, y: loc ? Math.round(loc.y) : null });
+    x: loc ? Math.round(loc.x) : null, y: loc ? Math.round(loc.y) : null,
+    cid: loc && loc.id != null ? loc.id : null });
   if(S.chronicle.length > 80) S.chronicle.pop();
 }
 function checkChronicle(){
@@ -140,7 +141,7 @@ function checkChronicle(){
   }
   if(total > pv.total * 1.8 && total > 420) logEvent('boom', total);
   if(total < pv.total * 0.4 && pv.total > 180) logEvent('crash', total);
-  if(maxBrain > pv.maxBrain && maxBrain >= 12) logEvent('brain', maxBrain, maxBrainC ? { x: maxBrainC.x, y: maxBrainC.y } : undefined);
+  if(maxBrain > pv.maxBrain && maxBrain >= 12) logEvent('brain', maxBrain, maxBrainC ? { x: maxBrainC.x, y: maxBrainC.y, id: maxBrainC.id } : undefined);
   const sp = speciesCount();
   if(sp > pv.speciesMax && sp >= 6) logEvent('species', sp);
   const dv = dialectStats().divergence;
