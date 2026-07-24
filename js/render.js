@@ -265,6 +265,17 @@ export function draw(){
       wctx.setLineDash([5 / z, 5 / z]); wctx.beginPath(); wctx.arc(nz.x, nz.y, nz.r, 0, TAU); wctx.stroke(); wctx.setLineDash([]);
     }
   }
+  // caches — stored-food piles built by hoarders (size grows with the stock)
+  if(P.hoardOn && S.caches.length){
+    for(const ca of S.caches){
+      const rr = clamp(4 + ca.amount * 0.12, 4, 16);
+      if(!vis(ca.x, ca.y, rr + 4)) continue;
+      wctx.fillStyle = 'rgba(214,176,96,0.9)'; wctx.strokeStyle = 'rgba(120,92,40,0.9)'; wctx.lineWidth = 1.4 / z;
+      // a little heap of grains
+      for(let g = 0; g < 3; g++){ const a = g * 2.1, ox = Math.cos(a) * rr * 0.4, oy = Math.sin(a) * rr * 0.4;
+        wctx.beginPath(); wctx.arc(ca.x + ox, ca.y + oy, rr * 0.62, 0, TAU); wctx.fill(); wctx.stroke(); }
+    }
+  }
   // plants
   wctx.fillStyle = '#3a6b2e';
   for(const f of S.food){ if(!vis(f.x, f.y, 3)) continue; wctx.beginPath(); wctx.arc(f.x, f.y, 2.1, 0, TAU); wctx.fill(); }

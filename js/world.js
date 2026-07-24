@@ -242,7 +242,7 @@ export function seed(seedVal){
   S.popHist.length = 0; S.traitHist.length = 0; S.evoHist.length = 0; S.ornHist.length = 0; S.dataLog.length = 0; S.ID = 1; S.selected = null;
   S.records = { oldestAge: 0, maxKids: 0, maxGen: 0 };
   S.chronicle = []; S.chronPrev = null; S.lex = newLex(); S.dialect = {};
-  S.rocks = []; S.water = []; S.drought = 0; S.effects = []; S.challenge = null; S.shares = 0; S.packKills = 0; S.nests = []; generateBiomes();
+  S.rocks = []; S.water = []; S.drought = 0; S.effects = []; S.challenge = null; S.shares = 0; S.packKills = 0; S.nests = []; S.caches = []; generateBiomes();
   pherInit();
   for(let i = 0; i < P.herbStart; i++) S.creatures.push(founder('herb'));
   if(P.omnivoresOn) for(let i = 0; i < P.omniStart; i++) S.creatures.push(founder('omni'));
@@ -463,6 +463,13 @@ export function step(){
     if(migPeakY >= 0 && g.migrate > 0.05 && !thrHas){
       iy += clamp((migPeakY - c.y) / 300, -1, 1) * g.migrate * 0.5;
     }
+    // a hungry hoarder heads for its nearest stocked cache
+    if(P.hoardOn && !thrHas && c.energy < P[cfg.reproE] * 0.32 && S.caches.length){
+      let bc = null, bd = senseSq * 4;
+      for(let ci2 = 0; ci2 < S.caches.length; ci2++){ const ca = S.caches[ci2]; if(ca.lineage !== c.lineage || ca.amount < 6) continue;
+        const dd = (ca.x - c.x) ** 2 + (ca.y - c.y) ** 2; if(dd < bd){ bd = dd; bc = ca; } }
+      if(bc){ const dd = Math.sqrt(bd) || 1; ix += (bc.x - c.x) / dd * 0.8; iy += (bc.y - c.y) / dd * 0.8; }
+    }
 
     // combine brain + instinct
     let dx = _out[0] * BRAIN_W + ix * INNATE_W, dy = _out[1] * BRAIN_W + iy * INNATE_W;
@@ -496,9 +503,28 @@ export function step(){
     if(cfg.eatsPlants && bfRef){
       const er = c.rad + 4;
       if((bfRef.x - c.x) ** 2 + (bfRef.y - c.y) ** 2 < er * er){
-        c.energy += P.foodEnergy * cfg.plantEff;
+        const gain = P.foodEnergy * cfg.plantEff;
+        // a well-fed hoarder pockets the surplus instead of eating it (to cache later)
+        if(P.hoardOn && g.hoard > 0.1 && c.energy > P[cfg.reproE] * 0.55 && c.carry < g.hoard * 55) c.carry += gain;
+        else c.energy += gain;
         if(P.learnOn && c.plast) learn(g.brain, c.plast, _out, 0.12);   // reinforce the foraging that just fed it
         const fi = food.indexOf(bfRef); if(fi >= 0){ food[fi] = food[food.length - 1]; food.pop(); }
+      }
+    }
+    // niche construction: drop a load into a cache (a built resource store), and
+    // draw from one when starving — so hoarders buffer their kind through scarcity
+    if(P.hoardOn){
+      if(c.carry >= 20){
+        // deposit into a nearby granary of one's own lineage, or start a new one
+        let best = null, bd = 120 * 120;
+        for(let ci2 = 0; ci2 < S.caches.length; ci2++){ const ca = S.caches[ci2]; if(ca.lineage !== c.lineage) continue; const dd = (ca.x - c.x) ** 2 + (ca.y - c.y) ** 2; if(dd < bd){ bd = dd; best = ca; } }
+        if(best){ best.amount += c.carry; c.carry = 0; }
+        else if(S.caches.length < 40){ S.caches.push({ x: c.x, y: c.y, type: c.type, lineage: c.lineage, amount: c.carry }); c.carry = 0; }
+      }
+      if(c.energy < P[cfg.reproE] * 0.32){
+        // only kin draw from the family granary (so hoarding pays via kin selection, not free-riders)
+        for(let ci2 = 0; ci2 < S.caches.length; ci2++){ const ca = S.caches[ci2]; if(ca.lineage !== c.lineage || ca.amount <= 0) continue;
+          if((ca.x - c.x) ** 2 + (ca.y - c.y) ** 2 < 52 * 52){ const take = Math.min(ca.amount, 16); ca.amount -= take; c.energy += take; break; } }
       }
     }
     if(preyRef && !preyRef.dead){
@@ -595,6 +621,9 @@ export function step(){
   }
   if(S.challenge && S.tick % 15 === 0) evalChallenge();
   if(P.nestsOn && S.tick % 150 === 0) updateNests(); else if(!P.nestsOn && S.nests.length) S.nests.length = 0;
+  if(S.caches.length && S.tick % 120 === 0){   // stored food spoils slowly enough to last from summer into winter
+    for(let i = S.caches.length - 1; i >= 0; i--){ const ca = S.caches[i]; ca.amount *= 0.985; if(ca.amount < 2) S.caches.splice(i, 1); }
+  }
   // endemic disease: keep a faint level of infection alive so pathogens persist and co-evolve
   if(P.plaguesOn && S.tick % 40 === 0 && S.creatures.length > 30){
     let infected = 0; for(const c of S.creatures) if(c.sick > 0){ infected++; if(infected >= 3) break; }
@@ -618,7 +647,7 @@ export function snapshot(){
     worldW: S.worldW, worldH: S.worldH,
     params: { foodRate: P.foodRate, mut: P.mut, predatorsOn: P.predatorsOn, omnivoresOn: P.omnivoresOn,
               flocksOn: P.flocksOn, terrOn: P.terrOn, mimicOn: P.mimicOn, seasonsOn: P.seasonsOn,
-              pherOn: P.pherOn, cultureOn: P.cultureOn, learnOn: P.learnOn, nestsOn: P.nestsOn, plaguesOn: P.plaguesOn, migrateOn: P.migrateOn },
+              pherOn: P.pherOn, cultureOn: P.cultureOn, learnOn: P.learnOn, nestsOn: P.nestsOn, plaguesOn: P.plaguesOn, migrateOn: P.migrateOn, hoardOn: P.hoardOn },
     creatures: S.creatures.map(c => ({
       x: +c.x.toFixed(1), y: +c.y.toFixed(1), t: c.type,
       e: +c.energy.toFixed(1), a: c.age, gn: c.gen, id: c.id, hx: +c.homeX.toFixed(1), hy: +c.homeY.toFixed(1),
@@ -626,13 +655,14 @@ export function snapshot(){
           +c.g.sociality.toFixed(2), +c.g.camo.toFixed(2), +c.g.territoriality.toFixed(2),
           +c.g.territoryR.toFixed(1), +c.g.acuity.toFixed(2), +c.g.sexual.toFixed(2), +c.g.diet.toFixed(3),
           +c.g.shape.toFixed(2), +c.g.pattern.toFixed(2), +c.g.altruism.toFixed(2),
-          +(c.g.ornament || 0).toFixed(2), +(c.g.preference || 0).toFixed(2), +(c.g.resist || 0).toFixed(2), +(c.g.reciprocity || 0).toFixed(2), +(c.g.migrate || 0).toFixed(2)],
+          +(c.g.ornament || 0).toFixed(2), +(c.g.preference || 0).toFixed(2), +(c.g.resist || 0).toFixed(2), +(c.g.reciprocity || 0).toFixed(2), +(c.g.migrate || 0).toFixed(2), +(c.g.hoard || 0).toFixed(2)],
       b: { nh: c.g.brain.nh, w: c.g.brain.w.map(x => +x.toFixed(3)) }
     })),
     food: S.food.map(f => [+f.x.toFixed(1), +f.y.toFixed(1)]),
     rocks: S.rocks.map(r => [+r.x.toFixed(1), +r.y.toFixed(1), +r.r.toFixed(1)]),
     water: S.water.map(w => [+w.x.toFixed(1), +w.y.toFixed(1), +w.r.toFixed(1)]),
-    biomes: S.biomes.map(bm => [+bm.x.toFixed(0), +bm.y.toFixed(0), +bm.r.toFixed(0), +bm.fert.toFixed(2)])
+    biomes: S.biomes.map(bm => [+bm.x.toFixed(0), +bm.y.toFixed(0), +bm.r.toFixed(0), +bm.fert.toFixed(2)]),
+    caches: S.caches.map(ca => [+ca.x.toFixed(0), +ca.y.toFixed(0), ca.type, +ca.amount.toFixed(0), ca.lineage || 0])
   };
 }
 
@@ -642,7 +672,7 @@ export function restore(s){
   S.creatures = s.creatures.map(o => ({
     id: o.id, x: o.x, y: o.y, vx: 0, vy: 0, type: (o.t === 'carn' || o.t === 'omni' || o.t === 'herb') ? o.t : 'herb',
     energy: o.e, age: o.a, gen: o.gn, dead: false, homeX: (o.hx || o.x), homeY: (o.hy || o.y),
-    mem: [0, 0], matedTick: -1, lineage: o.id, kids: 0, act: null, sick: 0, pathogen: null, immune: 0, ledger: [], parent: 0, anc: [], sig: [0, 0, 0], rad: o.g[2], alert: 0, groupSize: 0,
+    mem: [0, 0], matedTick: -1, lineage: o.id, kids: 0, act: null, sick: 0, pathogen: null, immune: 0, ledger: [], carry: 0, parent: 0, anc: [], sig: [0, 0, 0], rad: o.g[2], alert: 0, groupSize: 0,
     g: { speed: o.g[0], sense: o.g[1], size: o.g[2], hue: o.g[3], sociality: o.g[4], camo: o.g[5],
          territoriality: o.g[6], territoryR: o.g[7], acuity: o.g[8],
          sexual: o.g[9] !== undefined ? o.g[9] : 0.5,
@@ -651,7 +681,7 @@ export function restore(s){
          altruism: o.g[13] !== undefined ? o.g[13] : 0.2,
          ornament: o.g[14] !== undefined ? o.g[14] : 0.1, preference: o.g[15] !== undefined ? o.g[15] : 0.15,
          resist: o.g[16] !== undefined ? o.g[16] : 0.05, reciprocity: o.g[17] !== undefined ? o.g[17] : 0.1,
-         migrate: o.g[18] !== undefined ? o.g[18] : 0.1,
+         migrate: o.g[18] !== undefined ? o.g[18] : 0.1, hoard: o.g[19] !== undefined ? o.g[19] : 0.1,
          // migrate single-channel (v8) brains up to the three-channel layout
          brain: o.b.w.length === brainLenOld(o.b.nh) ? migrateBrain(o.b.nh, o.b.w) : { nh: o.b.nh, w: o.b.w.slice() } }
   }));
@@ -659,6 +689,7 @@ export function restore(s){
   S.rocks = (s.rocks || []).map(a => ({ x: a[0], y: a[1], r: a[2] }));
   S.water = (s.water || []).map(a => ({ x: a[0], y: a[1], r: a[2] }));
   S.biomes = (s.biomes || []).map(a => ({ x: a[0], y: a[1], r: a[2], fert: a[3] }));
+  S.caches = (s.caches || []).map(a => ({ x: a[0], y: a[1], type: a[2], amount: a[3], lineage: a[4] || 0 }));
   S.drought = 0; S.effects = []; S.nests = []; pherInit();
   S.tick = s.tick || 0; S.predations = s.predations || 0; S.maxGen = s.maxGen || 0; S.ID = s.ID || S.creatures.length + 1; S.seed = s.seed || 0;
   S.selected = null;

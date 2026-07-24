@@ -58,6 +58,14 @@ can reopen it any time from the menu (📖 Tutorial).
   says so.
 - **Cooperation** — an altruism gene lets the well-fed share energy with starving
   kin; carnivores hunting near allies get a pack bonus; alarm calls warn the herd.
+  A **reciprocity** gene extends helping to non-kin who reciprocate (and cuts off
+  cheaters via a small partner ledger).
+- **Niche construction — foraging & caching** — a **hoard** gene lets a well-fed
+  creature pocket surplus food and deposit it into a **granary** (a built resource
+  store); kin draw from the family granary through scarcity. Because only kin use
+  it, hoarding pays via kin selection and the gene evolves upward. Creatures that
+  interact with the environment, collect resources and build something — emergent,
+  not scripted.
 - **Cultural transmission** — a newborn can imitate the brain of the most thriving
   same-type neighbour of its parent (not just kin), so a successful behaviour can
   spread horizontally through a population faster than genes alone.
