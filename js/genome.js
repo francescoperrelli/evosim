@@ -81,6 +81,6 @@ export function metabolism(c){
   let m = cfg.baseMeta + (g.speed * g.speed) * 0.05 + ((c.rad || g.size) * 0.012) + (g.sense * 0.0016);
   if(cfg.hunts.length && P.mimicOn) m += g.acuity * 0.03;   // cost of acuity for predators
   m += g.brain.nh * 0.0016;                                  // a bigger brain costs energy (modest, so complexity can accrue)
-  if(g.sexual > 0.5 && g.ornament) m += g.ornament * 0.014;  // a showy ornament is costly to carry (survival vs. mating trade-off)
+  if(g.ornament) m += g.ornament * 0.014;   // a showy ornament is costly to carry, whatever it advertises
   return m;
 }

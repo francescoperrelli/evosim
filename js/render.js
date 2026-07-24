@@ -24,12 +24,7 @@ function bodyColor(c){
     const camo = P.mimicOn ? g.camo : 0;
     return { hue: (g.hue * (1 - camo) + 120 * camo) | 0, sat: 62 - camo * 30, light: clamp((38 + c.energy * 0.18) * (1 - camo * 0.35), 24, 70) };
   }
-  if(c.type === 'omni'){
-    // sexual selection reshapes the whole look: a showier ornament means a more
-    // saturated, more vivid coat — courtship, not just survival, colours them.
-    const orn = g.ornament || 0;
-    return { hue: g.hue | 0, sat: clamp(55 + orn * 40, 55, 96), light: clamp(46 + c.energy * 0.08 + orn * 9, 46, 76) };
-  }
+  if(c.type === 'omni') return { hue: g.hue | 0, sat: 55, light: clamp(46 + c.energy * 0.08, 46, 68) };
   return { hue: g.hue | 0, sat: 68, light: clamp(40 + c.energy * 0.1, 42, 66) };
 }
 
@@ -37,6 +32,9 @@ function bodyColor(c){
 // body segments/elongation with the shape gene, markings with the pattern gene.
 function drawCreature(c, z){
   const g = c.g, col = bodyColor(c), size = c.rad || g.size, appR = size * z;
+  // an ornament (of any kind) makes the coat more saturated and vivid
+  const orn = g.ornament || 0;
+  if(orn > 0.05){ col.sat = clamp(col.sat + orn * 35, 0, 96); col.light = clamp(col.light + orn * 8, 8, 82); }
   const fill = `hsl(${col.hue} ${col.sat}% ${col.light}%)`;
   const dark = `hsl(${col.hue} ${col.sat}% ${clamp(col.light - 20, 8, 60)}%)`;
   const sp = Math.hypot(c.vx, c.vy) || 1, cos = c.vx / sp, sin = c.vy / sp;
@@ -76,8 +74,7 @@ function drawCreature(c, z){
     }
   }
 
-  // sexual ornament: a colourful display fan at the rear, growing with the ornament gene
-  const orn = (g.sexual > 0.5) ? (g.ornament || 0) : 0;
+  // ornament: a colourful display fan at the rear, growing with the ornament gene
   if(orn > 0.08 && appR >= 5){
     const rays = 3 + Math.round(orn * 5), len = size * (0.7 + orn * 2.2);
     const bx = c.x - cos * size * 0.7, by = c.y - sin * size * 0.7;

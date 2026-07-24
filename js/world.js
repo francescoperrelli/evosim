@@ -261,6 +261,7 @@ export function step(){
     let preyRef = null, preyD = senseSq, preyx = 0, preyy = 0;
     let thrHas = false, thrD = senseSq, thrx = 0, thry = 0;
     let cnt = 0, sumx = 0, sumy = 0, sumvx = 0, sumvy = 0, sepx = 0, sepy = 0, sumS0 = 0, sumS1 = 0, sumS2 = 0;
+    let ornRival = 0, attrx = 0, attry = 0, attW = 0;   // contest (carn) & social-display (herb) selection
     let bfx = 0, bfy = 0, bfD = senseSq, bfRef = null;
     let mateRef = null, mateScore = Infinity, matex = 0, matey = 0;
     const mateReadyE = P[cfg.reproE] * 0.85;
@@ -281,6 +282,9 @@ export function step(){
           if(o.type === c.type){
             if(d < NEIGH_R2){ cnt++; sumx += o.x; sumy += o.y; sumvx += o.vx; sumvy += o.vy;
               sumS0 += o.sig[0]; sumS1 += o.sig[1]; sumS2 += o.sig[2];
+              const ow = o.g.ornament || 0;
+              if(cfg.terr){ if(ow > ornRival) ornRival = ow; }                 // carnivore contest: note the showiest rival
+              else if(ow > 0.1){ attrx += o.x * ow; attry += o.y * ow; attW += ow; }   // social pull toward showy kin
               if(d < SEP_R2){ sepx += (c.x - o.x); sepy += (c.y - o.y); } }
             if(d < senseSq && o.g.sexual > 0.5 && o.energy >= mateReadyE && o.matedTick !== S.tick && mateCompatible(g, o.g)){
               // mate choice: a showy ornament looks "closer" to a choosy partner (sexual selection)
@@ -405,6 +409,9 @@ export function step(){
 
     const sigCost = (Math.abs(c.sig[0]) + Math.abs(c.sig[1]) + Math.abs(c.sig[2])) * 0.012;   // honest signalling costs
     c.energy -= metabolism(c) * (P.seasonsOn && si.idx === 3 ? 1.15 : 1) + sigCost;
+    // carnivore contest: yielding to a showier rival costs energy, so intimidation
+    // displays escalate (armament selection), bounded by the ornament's metabolic cost
+    if(cfg.terr && ornRival > (g.ornament || 0) + 0.08) c.energy -= 0.05;
     if(c.sick > 0){ c.sick--; c.energy -= 0.14; }        // disease drains energy
 
     // interactions
@@ -478,7 +485,13 @@ export function step(){
         else creatures.push(founder('omni'));
       }
     }
-    if(P.predatorsOn && carnN < 4 && herbN > 38) creatures.push(founder('carn'), founder('carn'));
+    if(P.predatorsOn && carnN < 4 && herbN > 38){
+      for(let k = 0; k < 2; k++){
+        let src = null; for(const cc of creatures){ if(cc.type === 'carn'){ if(!src || Math.random() < 0.4) src = cc; } }
+        if(src){ const ch = makeCreature(rnd(0, WW), rnd(0, HH), 'carn', mutateGenome(src.g), src.gen); ch.lineage = src.lineage; ch.homeX = ch.x; ch.homeY = ch.y; creatures.push(ch); }
+        else creatures.push(founder('carn'));
+      }
+    }
   }
 
   S.creatures = creatures;
