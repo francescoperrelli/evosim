@@ -3,7 +3,7 @@
 import { rnd, clamp } from './utils.js';
 import { P, S, TYPES, PREDATORS, BRAIN_W, INNATE_W, NEIGH_R2, SEP_R2, CELL, SAVE_KEY, seasonInfo, dayInfo, newLex } from './state.js';
 import { randomGenome, mutateGenome, crossover, makeCreature, metabolism } from './genome.js';
-import { brainForward, getHidden, NIN, NOUT, NCHAN, IN_HEARD, OUT_SIG, migrateBrain, brainLenOld } from './nn.js';
+import { brainForward, getHidden, NIN, NOUT, NCHAN, IN_HEARD, OUT_SIG, migrateBrain, brainLenOld, blendToward } from './nn.js';
 import { evalChallenge } from './challenges.js';
 
 const _in = new Array(NIN), _out = new Array(NOUT);
@@ -169,6 +169,21 @@ export function step(){
   const cols = Math.max(1, Math.ceil(WW / CELL)), rows = Math.max(1, Math.ceil(HH / CELL));
   const cgrid = buildGrid(creatures, cols, rows);
   const fgrid = buildGrid(food, cols, rows);
+
+  // cultural transmission: a newborn imitates the brain of the most thriving
+  // same-type neighbour of its parent (not necessarily kin), so a successful
+  // behaviour can spread through a population faster than genes alone.
+  function imitateNearby(child, parent, pgx, pgy){
+    if(!P.cultureOn || Math.random() >= 0.35) return;
+    let model = null, bestE = parent.energy * 1.05;
+    for(let ox = -1; ox <= 1; ox++){ const nx = pgx + ox; if(nx < 0 || nx >= cols) continue;
+      for(let oy = -1; oy <= 1; oy++){ const ny = pgy + oy; if(ny < 0 || ny >= rows) continue;
+        const cb = cgrid[ny * cols + nx]; if(!cb) continue;
+        for(let bi = 0; bi < cb.length; bi++){ const o = cb[bi];
+          if(o.dead || o === parent || o.type !== parent.type) continue;
+          if(o.energy > bestE && o.g.brain.nh === child.g.brain.nh){ bestE = o.energy; model = o; } } } }
+    if(model) blendToward(child.g.brain, model.g.brain, 0.25);
+  }
 
   for(let ci = 0; ci < creatures.length; ci++){
     const c = creatures[ci];
@@ -344,6 +359,7 @@ export function step(){
             c.matedTick = S.tick; mateRef.matedTick = S.tick;
             const ch = makeCreature((c.x + mateRef.x) / 2, (c.y + mateRef.y) / 2, c.type, crossover(g, mateRef.g), Math.max(c.gen, mateRef.gen) + 1);
             ch.energy = childE; ch.lineage = c.lineage; ch.parent = c.id; ch.anc = ancestryOf(c); if(cfg.terr){ ch.homeX = ch.x; ch.homeY = ch.y; }
+            imitateNearby(ch, c, gcx, gcy);
             c.kids++; mateRef.kids++;
             if(c.kids > S.records.maxKids) S.records.maxKids = c.kids;
             newborns.push(ch); if(ch.gen > S.maxGen) S.maxGen = ch.gen;
@@ -354,6 +370,7 @@ export function step(){
         c.energy *= 0.5;
         const ch = makeCreature(c.x + rnd(-6, 6), c.y + rnd(-6, 6), c.type, mutateGenome(g), c.gen + 1);
         ch.energy = c.energy; ch.lineage = c.lineage; ch.parent = c.id; ch.anc = ancestryOf(c); if(cfg.terr){ ch.homeX = c.x; ch.homeY = c.y; }
+        imitateNearby(ch, c, gcx, gcy);
         c.kids++; if(c.kids > S.records.maxKids) S.records.maxKids = c.kids;
         newborns.push(ch); if(ch.gen > S.maxGen) S.maxGen = ch.gen;
       }
@@ -405,7 +422,8 @@ export function snapshot(){
     v: 9, tick: S.tick, predations: S.predations, maxGen: S.maxGen, ID: S.ID,
     worldW: S.worldW, worldH: S.worldH,
     params: { foodRate: P.foodRate, mut: P.mut, predatorsOn: P.predatorsOn, omnivoresOn: P.omnivoresOn,
-              flocksOn: P.flocksOn, terrOn: P.terrOn, mimicOn: P.mimicOn, seasonsOn: P.seasonsOn },
+              flocksOn: P.flocksOn, terrOn: P.terrOn, mimicOn: P.mimicOn, seasonsOn: P.seasonsOn,
+              pherOn: P.pherOn, cultureOn: P.cultureOn },
     creatures: S.creatures.map(c => ({
       x: +c.x.toFixed(1), y: +c.y.toFixed(1), t: c.type,
       e: +c.energy.toFixed(1), a: c.age, gn: c.gen, id: c.id, hx: +c.homeX.toFixed(1), hy: +c.homeY.toFixed(1),

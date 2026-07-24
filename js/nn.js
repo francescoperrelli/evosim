@@ -97,6 +97,15 @@ export function crossBrain(ba, bb){
   return Math.random() < 0.5 ? { nh: ba.nh, w: ba.w.slice() } : { nh: bb.nh, w: bb.w.slice() };
 }
 
+// cultural transmission: nudge a brain's weights toward a role model's
+// (only when they share the same hidden size). Used at birth for imitation.
+export function blendToward(child, model, alpha){
+  if(child.nh !== model.nh) return child;
+  const w = child.w, m = model.w;
+  for(let i = 0; i < w.length; i++) w[i] = w[i] * (1 - alpha) + m[i] * alpha;
+  return child;
+}
+
 const _h = new Array(MAX_NH);
 let _lastNH = 0;
 export function brainForward(b, inp, out){
