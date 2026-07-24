@@ -34,6 +34,32 @@ function mateCompatible(a, b){
 }
 // genome fingerprint for approximate species clustering
 function geneVec(c){ const g = c.g; return [g.speed / 3.4, g.sense / 165, g.size / 9, g.diet || 0, (g.hue || 0) / 360, g.shape || 0.3, g.pattern || 0.5]; }
+// Chronicle: a running log of notable events for the player to read back
+export function logEvent(key, n){
+  S.chronicle.unshift({ tick: S.tick, key, n: n === undefined ? null : n });
+  if(S.chronicle.length > 80) S.chronicle.pop();
+}
+function checkChronicle(){
+  let herb = 0, omni = 0, carn = 0, maxBrain = 0;
+  for(const c of S.creatures){ if(c.type === 'carn') carn++; else if(c.type === 'omni') omni++; else herb++; if(c.g.brain.nh > maxBrain) maxBrain = c.g.brain.nh; }
+  const total = S.creatures.length;
+  const pv = S.chronPrev || (S.chronPrev = { herb, omni, carn, total, genTier: 0, maxBrain: 0, speciesMax: 0 });
+  const genTier = Math.floor(S.maxGen / 10);
+  if(genTier > pv.genTier && S.maxGen >= 10) logEvent('gen', S.maxGen);
+  const types = { herb, omni, carn };
+  for(const tk of ['herb', 'omni', 'carn']){
+    if(types[tk] === 0 && pv[tk] > 0) logEvent('extinct_' + tk);
+    else if(types[tk] > 0 && pv[tk] === 0) logEvent('return_' + tk);
+  }
+  if(total > pv.total * 1.8 && total > 420) logEvent('boom', total);
+  if(total < pv.total * 0.4 && pv.total > 180) logEvent('crash', total);
+  if(maxBrain > pv.maxBrain && maxBrain >= 12) logEvent('brain', maxBrain);
+  const sp = speciesCount();
+  if(sp > pv.speciesMax && sp >= 6) logEvent('species', sp);
+  S.chronPrev = { herb, omni, carn, total, genTier: Math.max(genTier, pv.genTier), maxBrain: Math.max(maxBrain, pv.maxBrain), speciesMax: Math.max(sp, pv.speciesMax) };
+}
+export { checkChronicle };
+
 export function speciesCount(){
   const TH2 = 0.42 * 0.42, reps = [];
   for(const c of S.creatures){
@@ -60,6 +86,7 @@ export function seed(){
   S.creatures = []; S.food = []; S.tick = 0; S.predations = 0; S.maxGen = 0;
   S.popHist.length = 0; S.traitHist.length = 0; S.evoHist.length = 0; S.ID = 1; S.selected = null;
   S.records = { oldestAge: 0, maxKids: 0, maxGen: 0 };
+  S.chronicle = []; S.chronPrev = null;
   S.rocks = []; S.water = []; S.drought = 0; S.effects = []; S.challenge = null; S.shares = 0; S.packKills = 0; generateBiomes();
   for(let i = 0; i < P.herbStart; i++) S.creatures.push(founder('herb'));
   if(P.omnivoresOn) for(let i = 0; i < P.omniStart; i++) S.creatures.push(founder('omni'));
@@ -296,6 +323,7 @@ export function step(){
     if(S.maxGen > S.records.maxGen) S.records.maxGen = S.maxGen;
   }
   if(S.challenge && S.tick % 15 === 0) evalChallenge();
+  if(S.tick % 60 === 0) checkChronicle();
 }
 
 /* ---------- save / load ---------- */

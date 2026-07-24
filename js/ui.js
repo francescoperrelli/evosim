@@ -1,7 +1,7 @@
 // UI: overlays, controls, menu, language, inspect mode, creature inspector
 import { el, rnd, clamp } from './utils.js';
 import { P, S, LANG_KEY, screenToWorld, zoomAt, clampCam } from './state.js';
-import { seed, saveLocal, hasSave, loadLocal, clearLocal, snapshot, restore, meteor, startDrought, startEpidemic, addRock, addWater, clearTerrain, speciesCount } from './world.js';
+import { seed, saveLocal, hasSave, loadLocal, clearLocal, snapshot, restore, meteor, startDrought, startEpidemic, addRock, addWater, clearTerrain, speciesCount, logEvent } from './world.js';
 import { makeCreature, randomGenome } from './genome.js';
 import { drawNetwork, drawEvolution, selectedThought } from './render.js';
 import { CHALLENGES, startChallenge, stopChallenge } from './challenges.js';
@@ -12,7 +12,7 @@ import { I18N, t, setLang, getLang } from './i18n.js';
 /* ---------- overlays ---------- */
 function show(id){ el(id).classList.add('show'); }
 function hide(id){ el(id).classList.remove('show'); }
-function hideAll(){ ['menu','tutorial','options','inspector','evolution','events','genealogy','challenges','slots'].forEach(hide); }
+function hideAll(){ ['menu','tutorial','options','inspector','evolution','events','genealogy','challenges','slots','chronicle'].forEach(hide); }
 export { show };
 
 let toastT = null;
@@ -141,6 +141,25 @@ el('mSlots').onclick = openSlots;
 el('slotsClose').onclick = () => hide('slots');
 el('slotSave').onclick = () => { if(saveSlot(el('slotName').value)){ el('slotName').value = ''; buildSlotList(); toast(t('slotSaved')); } };
 
+/* ---------- chronicle ---------- */
+let lastChronLen = -1;
+function buildChronicle(){
+  const list = el('chronList'); list.innerHTML = '';
+  if(!S.chronicle.length){ list.innerHTML = `<div class="chron-empty">${t('chronEmpty')}</div>`; return; }
+  for(const e of S.chronicle){
+    const item = document.createElement('div'); item.className = 'chron-item';
+    const tk = document.createElement('span'); tk.className = 'tk'; tk.textContent = 't' + e.tick;
+    const tx = document.createElement('span'); tx.textContent = t('chr_' + e.key).replace('{n}', e.n);
+    item.appendChild(tk); item.appendChild(tx); list.appendChild(item);
+  }
+}
+el('btnChronicle').onclick = () => { buildChronicle(); lastChronLen = S.chronicle.length; show('chronicle'); };
+el('chronClose').onclick = () => hide('chronicle');
+export function refreshChronicle(){
+  if(!el('chronicle').classList.contains('show')) return;
+  if(S.chronicle.length !== lastChronLen){ buildChronicle(); lastChronLen = S.chronicle.length; }
+}
+
 export function refreshChallenge(){
   const bar = el('challengeBar'), ch = S.challenge;
   if(!ch){ bar.classList.remove('show', 'won', 'lost'); return; }
@@ -151,7 +170,7 @@ export function refreshChallenge(){
   bar.classList.toggle('won', ch.status === 'won');
   bar.classList.toggle('lost', ch.status === 'lost');
   el('chStatus').textContent = ch.status === 'won' ? t('chWon') : ch.status === 'lost' ? t('chLost') : Math.round(ch.progress * 100) + '%';
-  if(ch.status !== 'active' && !ch._notified){ ch._notified = true; (ch.status === 'won' ? sfxWin : sfxLose)(); toast((ch.status === 'won' ? t('chWon') : t('chLost')) + ' — ' + t('ch' + cap + 'Name')); }
+  if(ch.status !== 'active' && !ch._notified){ ch._notified = true; (ch.status === 'won' ? sfxWin : sfxLose)(); logEvent(ch.status === 'won' ? 'challengeWon' : 'challengeLost', t('ch' + cap + 'Name')); toast((ch.status === 'won' ? t('chWon') : t('chLost')) + ' — ' + t('ch' + cap + 'Name')); }
 }
 function updateModeBtn(){
   const on = S.tool === 'inspect';

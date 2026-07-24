@@ -64,7 +64,14 @@ export const I18N = {
     slotEmpty:"Nessun mondo salvato. Dai un nome e premi Salva.", slotSaved:"💾 Slot salvato", slotLoaded:"📂 Slot caricato", slotDeleted:"🗑 Slot eliminato",
     optMusic:"Musica ambientale", optSfx:"Effetti sonori", optBubbles:"Nuvolette dei pensieri",
     thFlee:"Un predatore!", thHunt:"Una preda...", thFood:"Cibo!", thHungry:"Ho fame...", thHeard:"Chi mi chiama?",
-    thCall:"Ehi!", thFlock:"Il branco!", thCalm:"Che pace...", thWander:"Mah...", thSick:"Non sto bene...", thGrowl:"Grr!" },
+    thCall:"Ehi!", thFlock:"Il branco!", thCalm:"Che pace...", thWander:"Mah...", thSick:"Non sto bene...", thGrowl:"Grr!",
+    chronicleBtn:"📜 Diario", chronicleEyebrow:"La cronaca del mondo", chronicleTitle:"Diario", chronEmpty:"Ancora nessun evento. Lascia evolvere il mondo.",
+    chr_gen:"Raggiunta la generazione {n}",
+    chr_extinct_herb:"Gli erbivori si sono estinti", chr_extinct_omni:"Gli onnivori si sono estinti", chr_extinct_carn:"I carnivori si sono estinti",
+    chr_return_herb:"Gli erbivori sono ricomparsi", chr_return_omni:"Gli onnivori sono ricomparsi", chr_return_carn:"I carnivori sono ricomparsi",
+    chr_boom:"Boom demografico: {n} creature", chr_crash:"Crollo della popolazione: {n} rimaste",
+    chr_brain:"Nuovo record di cervello: {n} neuroni", chr_species:"Nuova diversità: {n} specie",
+    chr_challengeWon:"Sfida vinta: {n}", chr_challengeLost:"Sfida fallita: {n}" },
   en:{ menu:"☰ Menu", hint:"Drag to explore · wheel/pinch to zoom · tap to plant",
     numbers:"The ecosystem in numbers", herbivores:"Herbivores", carnivores:"Carnivores", omnivores:"Omnivores", plants:"Plants",
     time:"Time", generation:"Generation", kills:"Kills",
@@ -129,7 +136,14 @@ export const I18N = {
     slotEmpty:"No saved worlds yet. Give one a name and press Save.", slotSaved:"💾 Slot saved", slotLoaded:"📂 Slot loaded", slotDeleted:"🗑 Slot deleted",
     optMusic:"Ambient music", optSfx:"Sound effects", optBubbles:"Thought bubbles",
     thFlee:"A predator!", thHunt:"Prey...", thFood:"Food!", thHungry:"So hungry...", thHeard:"Who's calling?",
-    thCall:"Hey!", thFlock:"The herd!", thCalm:"So peaceful...", thWander:"Hmm...", thSick:"I feel ill...", thGrowl:"Grr!" }
+    thCall:"Hey!", thFlock:"The herd!", thCalm:"So peaceful...", thWander:"Hmm...", thSick:"I feel ill...", thGrowl:"Grr!",
+    chronicleBtn:"📜 Chronicle", chronicleEyebrow:"The world's chronicle", chronicleTitle:"Chronicle", chronEmpty:"No events yet. Let the world evolve.",
+    chr_gen:"Reached generation {n}",
+    chr_extinct_herb:"Herbivores went extinct", chr_extinct_omni:"Omnivores went extinct", chr_extinct_carn:"Carnivores went extinct",
+    chr_return_herb:"Herbivores reappeared", chr_return_omni:"Omnivores reappeared", chr_return_carn:"Carnivores reappeared",
+    chr_boom:"Population boom: {n} creatures", chr_crash:"Population crash: {n} left",
+    chr_brain:"New brain record: {n} neurons", chr_species:"New diversity: {n} species",
+    chr_challengeWon:"Challenge won: {n}", chr_challengeLost:"Challenge failed: {n}" }
 };
 
 let lang = 'it';

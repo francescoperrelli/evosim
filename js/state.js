@@ -67,7 +67,8 @@ export const S = {
   records: { oldestAge: 0, maxKids: 0, maxGen: 0 },
   selected: null, tool: 'plant',        // 'plant' | 'inspect' | 'meteor' | 'rock' | 'water'
   drought: 0, effects: [], rocks: [], water: [], biomes: [],
-  challenge: null, shares: 0, packKills: 0
+  challenge: null, shares: 0, packKills: 0,
+  chronicle: [], chronPrev: null
 };
 
 // Camera helpers
