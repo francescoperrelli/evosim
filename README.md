@@ -24,10 +24,20 @@ it all emerges.
 - **Two reproduction modes** — cloning (asexual) and mating with genome + brain
   **crossover** (sexual), with mate-seeking behaviour. Partners must be genetically
   compatible, so **reproductive isolation and speciation** can emerge.
-- **Communication** — a brain-controlled signal and a heard-signal input; alarms
-  make listeners vigilant (harder to catch), so calls can gain real meaning.
+- **A proto-language** — communication is no longer a single call but **three
+  brain-controlled channels** with matching heard-signal inputs. Their meanings
+  are free to evolve (channel 0 keeps an innate alarm role); an **emergent-lexicon
+  meter** measures, live across the population, how each channel correlates with
+  context (threat / prey / food / crowd) — so you can read what each evolved "word"
+  has come to mean.
 - **Cooperation** — an altruism gene lets the well-fed share energy with starving
-  kin; carnivores hunting near allies get a pack bonus.
+  kin; carnivores hunting near allies get a pack bonus; alarm calls warn the herd.
+- **Cultural transmission** — a newborn can imitate the brain of the most thriving
+  same-type neighbour of its parent (not just kin), so a successful behaviour can
+  spread horizontally through a population faster than genes alone.
+- **Pheromone trails (stigmergy)** — each species lays a faint scent field as it
+  moves; others drift up the gradient of their own kind, so paths and gathering
+  points form on their own. Shown as soft coloured trails.
 - **Flocks, territories, mimicry** — herding, patrolled dens, and a camouflage vs.
   acuity arms race.
 - **A world that matters** — biomes (fertile/barren), water and rocks, seasons and
@@ -35,8 +45,12 @@ it all emerges.
 - **Play-god events** — meteors, droughts, epidemics.
 - **Deep observability** — inspector with genome, live neural network, current
   "thought" and a navigable genealogy; an Evolution panel with average generation,
-  brain size, diet distribution, dominant lineages, live **species count** and
-  cooperation stats.
+  brain size, diet distribution, dominant lineages, live **species count**,
+  cooperation stats and the **emergent-lexicon** heat grid.
+- **A chronicle** — a running 📜 diary that logs notable events (generation
+  milestones, extinctions and returns, population booms and crashes, brain-size
+  records, new species diversity, challenge outcomes) so you can read back the
+  story of a world you left running.
 - **Thought bubbles** — an honest narrative layer: ambient bubbles and the
   inspector verbalize each creature's *real* internal state (they don't invent it).
 - **Challenge mode** — eight objectives, including cooperation-driven ones
