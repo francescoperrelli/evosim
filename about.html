@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EvoSim — Vita artificiale che evolve nel browser</title>
 <meta name="description" content="EvoSim è una simulazione di vita artificiale: creature con cervelli a rete neurale che evolvono, comunicano, cooperano e sviluppano ornamenti — nessun comportamento è scriptato.">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0a0f0a">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
+<link rel="icon" href="assets/icon-192.png">
 <style>
   :root{
     --bg:#0a0f0a; --bg2:#070b07; --ink:#e8eddc; --muted:#93a091; --faint:#6c776b;
@@ -195,5 +199,6 @@
   <p>EvoSim — un esperimento di vita artificiale · algoritmi genetici, reti neurali evolutive, comunicazione e comportamento emergente.</p>
 </footer>
 
+<script>if('serviceWorker' in navigator){ addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(()=>{})); }</script>
 </body>
 </html>

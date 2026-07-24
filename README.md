@@ -98,6 +98,8 @@ can reopen it any time from the menu (📖 Tutorial).
 - **Reproducible, shareable worlds** — every world is grown from a **seed**; open
   `?seed=123456` to load that exact world, or copy a share link from the Options
   panel. Same seed → the same world, every time.
+- **Installable PWA** — add it to your home screen and it runs **offline**; a
+  service worker caches the whole app shell.
 - **Named save slots**, ambient music & sound effects, a pannable/zoomable world
   backed by a spatial grid, Italian / English, and browser auto-save.
 

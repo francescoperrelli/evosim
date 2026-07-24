@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="38%" r="75%">
+      <stop offset="0%" stop-color="#16311a"/>
+      <stop offset="60%" stop-color="#0c1a0e"/>
+      <stop offset="100%" stop-color="#070d08"/>
+    </radialGradient>
+    <radialGradient id="body" cx="42%" cy="38%" r="70%">
+      <stop offset="0%" stop-color="#b6e86a"/>
+      <stop offset="100%" stop-color="#6fae32"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- faint plants -->
+  <g fill="#3a6b2e">
+    <circle cx="120" cy="150" r="7"/><circle cx="398" cy="132" r="6"/>
+    <circle cx="150" cy="392" r="6"/><circle cx="386" cy="386" r="7"/>
+    <circle cx="96" cy="286" r="5"/>
+  </g>
+  <!-- signal ring -->
+  <circle cx="256" cy="262" r="150" fill="none" stroke="#78c8e6" stroke-opacity="0.35" stroke-width="7"/>
+  <!-- ornament tail fan -->
+  <g stroke="#e668c8" stroke-width="13" stroke-linecap="round" opacity="0.9">
+    <line x1="256" y1="330" x2="188" y2="420"/>
+    <line x1="256" y1="330" x2="256" y2="440"/>
+    <line x1="256" y1="330" x2="324" y2="420"/>
+  </g>
+  <!-- body -->
+  <circle cx="256" cy="262" r="118" fill="url(#body)"/>
+  <!-- eyes -->
+  <circle cx="214" cy="238" r="30" fill="#f2efe6"/><circle cx="298" cy="238" r="30" fill="#f2efe6"/>
+  <circle cx="222" cy="246" r="14" fill="#15130e"/><circle cx="306" cy="246" r="14" fill="#15130e"/>
+</svg>
