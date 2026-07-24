@@ -14,7 +14,7 @@ export function randomGenome(type){
     territoriality: rnd(0.2, 0.8), territoryR: rnd(55, 120),
     acuity: rnd(0.2, 0.5), diet: rnd(cfg.dietLo, cfg.dietHi),
     shape: rnd(0, 0.5), pattern: rnd(0, 1), altruism: rnd(0, 0.5),
-    ornament: rnd(0, 0.3), preference: rnd(0.1, 0.5), resist: rnd(0, 0.2),
+    ornament: rnd(0, 0.3), preference: rnd(0.1, 0.5), resist: rnd(0, 0.2), reciprocity: rnd(0, 0.4),
     sexual: cfg.sexual ? 1 : 0, brain: randomBrain()
   };
 }
@@ -41,6 +41,7 @@ export function mutateGenome(g){
     ornament: clamp((g.ornament === undefined ? 0.1 : g.ornament) + gauss() * m * 1.3, 0, 1),
     preference: clamp((g.preference === undefined ? 0.15 : g.preference) + gauss() * m * 1.3, 0, 1),
     resist: clamp((g.resist === undefined ? 0.05 : g.resist) + gauss() * m * 1.3, 0, 1),
+    reciprocity: clamp((g.reciprocity === undefined ? 0.1 : g.reciprocity) + gauss() * m * 1.3, 0, 1),
     sexual: cfg.sexual ? 1 : 0,
     brain: mutateBrain(g.brain)
   };
@@ -60,7 +61,7 @@ export function crossover(ga, gb){
     territoriality: pk(ga.territoriality, gb.territoriality), territoryR: pk(ga.territoryR, gb.territoryR),
     acuity: pk(ga.acuity, gb.acuity), diet: pk(ga.diet, gb.diet),
     shape: pk(ga.shape, gb.shape), pattern: pk(ga.pattern, gb.pattern), altruism: pk(ga.altruism, gb.altruism),
-    ornament: sp.ornament, preference: sp.preference, resist: pk(ga.resist, gb.resist), brain: crossBrain(ga.brain, gb.brain)
+    ornament: sp.ornament, preference: sp.preference, resist: pk(ga.resist, gb.resist), reciprocity: pk(ga.reciprocity, gb.reciprocity), brain: crossBrain(ga.brain, gb.brain)
   };
   return mutateGenome(base);
 }
@@ -72,7 +73,7 @@ export function makeCreature(x, y, type, genome, gen){
     id: S.ID++, x, y, vx: rnd(-1, 1), vy: rnd(-1, 1), type: t, g: genome,
     energy: startE, age: 0, gen: gen || 0, dead: false, homeX: x, homeY: y,
     mem: new Array(NMEM).fill(0), matedTick: -1,
-    lineage: 0, kids: 0, act: null, sick: 0, pathogen: null, immune: 0, parent: 0, anc: [], sig: [0, 0, 0],
+    lineage: 0, kids: 0, act: null, sick: 0, pathogen: null, immune: 0, ledger: [], parent: 0, anc: [], sig: [0, 0, 0],
     rad: genome.size * 0.45, alert: 0, groupSize: 0
   };
 }

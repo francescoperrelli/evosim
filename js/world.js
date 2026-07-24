@@ -91,6 +91,18 @@ function pherUpdate(){
   S.pher = pher;
 }
 
+// ---- direct reciprocity (tit-for-tat) ----
+// Each creature keeps a tiny ledger of recent non-kin partners: a negative score
+// means "I gave and they never gave back" (a cheat, cut off); >= 0 means they've
+// reciprocated or are still unknown (cooperate). Bounded memory, evicted LRU.
+function ledgerScore(c, id){ const L = c.ledger; for(let i = 0; i < L.length; i++) if(L[i].id === id) return L[i].s; return 0; }
+function ledgerBump(c, id, d){
+  const L = c.ledger;
+  for(let i = 0; i < L.length; i++){ if(L[i].id === id){ L[i].s = clamp(L[i].s + d, -4, 4); L[i].t = S.tick; return; } }
+  if(L.length >= 5){ let old = 0; for(let i = 1; i < L.length; i++) if(L[i].t < L[old].t) old = i; L.splice(old, 1); }
+  L.push({ id, s: clamp(d, -4, 4), t: S.tick });
+}
+
 // ---- co-evolving disease ----
 // A pathogen strain carries evolvable virulence (harm) and transmissibility.
 // It mutates as it jumps hosts, so — traded off against the host's evolving
@@ -332,6 +344,14 @@ export function step(){
             // kin food-sharing: a well-fed altruist gives energy to a starving relative nearby
             if(d < 900 && o.lineage === c.lineage && c.energy > P[cfg.reproE] * 0.7 && o.energy < P[cfg.reproE] * 0.35 && rand() < g.altruism * 0.08){
               c.energy -= 8; o.energy += 6; S.shares++;
+            }
+            // reciprocal altruism: help a NON-kin neighbour in need — unless they've taken without giving back
+            else if(d < 900 && o.lineage !== c.lineage && g.reciprocity > 0.05 && c.energy > P[cfg.reproE] * 0.7 && o.energy < P[cfg.reproE] * 0.3){
+              if(ledgerScore(c, o.id) >= 0 && rand() < g.reciprocity * 0.05){
+                c.energy -= 8; o.energy += 6; S.shares++;
+                ledgerBump(c, o.id, -1);   // I've given to them — now they owe me
+                ledgerBump(o, c.id, +1);   // they remember I helped, and should pay it back
+              }
             }
             continue;
           }
@@ -593,7 +613,7 @@ export function snapshot(){
           +c.g.sociality.toFixed(2), +c.g.camo.toFixed(2), +c.g.territoriality.toFixed(2),
           +c.g.territoryR.toFixed(1), +c.g.acuity.toFixed(2), +c.g.sexual.toFixed(2), +c.g.diet.toFixed(3),
           +c.g.shape.toFixed(2), +c.g.pattern.toFixed(2), +c.g.altruism.toFixed(2),
-          +(c.g.ornament || 0).toFixed(2), +(c.g.preference || 0).toFixed(2), +(c.g.resist || 0).toFixed(2)],
+          +(c.g.ornament || 0).toFixed(2), +(c.g.preference || 0).toFixed(2), +(c.g.resist || 0).toFixed(2), +(c.g.reciprocity || 0).toFixed(2)],
       b: { nh: c.g.brain.nh, w: c.g.brain.w.map(x => +x.toFixed(3)) }
     })),
     food: S.food.map(f => [+f.x.toFixed(1), +f.y.toFixed(1)]),
@@ -609,7 +629,7 @@ export function restore(s){
   S.creatures = s.creatures.map(o => ({
     id: o.id, x: o.x, y: o.y, vx: 0, vy: 0, type: (o.t === 'carn' || o.t === 'omni' || o.t === 'herb') ? o.t : 'herb',
     energy: o.e, age: o.a, gen: o.gn, dead: false, homeX: (o.hx || o.x), homeY: (o.hy || o.y),
-    mem: [0, 0], matedTick: -1, lineage: o.id, kids: 0, act: null, sick: 0, pathogen: null, immune: 0, parent: 0, anc: [], sig: [0, 0, 0], rad: o.g[2], alert: 0, groupSize: 0,
+    mem: [0, 0], matedTick: -1, lineage: o.id, kids: 0, act: null, sick: 0, pathogen: null, immune: 0, ledger: [], parent: 0, anc: [], sig: [0, 0, 0], rad: o.g[2], alert: 0, groupSize: 0,
     g: { speed: o.g[0], sense: o.g[1], size: o.g[2], hue: o.g[3], sociality: o.g[4], camo: o.g[5],
          territoriality: o.g[6], territoryR: o.g[7], acuity: o.g[8],
          sexual: o.g[9] !== undefined ? o.g[9] : 0.5,
@@ -617,7 +637,7 @@ export function restore(s){
          shape: o.g[11] !== undefined ? o.g[11] : 0.3, pattern: o.g[12] !== undefined ? o.g[12] : 0.5,
          altruism: o.g[13] !== undefined ? o.g[13] : 0.2,
          ornament: o.g[14] !== undefined ? o.g[14] : 0.1, preference: o.g[15] !== undefined ? o.g[15] : 0.15,
-         resist: o.g[16] !== undefined ? o.g[16] : 0.05,
+         resist: o.g[16] !== undefined ? o.g[16] : 0.05, reciprocity: o.g[17] !== undefined ? o.g[17] : 0.1,
          // migrate single-channel (v8) brains up to the three-channel layout
          brain: o.b.w.length === brainLenOld(o.b.nh) ? migrateBrain(o.b.nh, o.b.w) : { nh: o.b.nh, w: o.b.w.slice() } }
   }));

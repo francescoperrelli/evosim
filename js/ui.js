@@ -363,6 +363,7 @@ export function refreshInspector(){
   el('bgOrnament').style.width = ((g.ornament || 0) * 100) + '%';
   el('bgPreference').style.width = ((g.preference || 0) * 100) + '%';
   el('bgResist').style.width = ((g.resist || 0) * 100) + '%';
+  el('bgReciprocity').style.width = ((g.reciprocity || 0) * 100) + '%';
   // live "voice": each channel's current output as a centre-anchored bar
   const CHCOL = ['#e6a578', '#78c8e6', '#aa8ce6'], sg = c.sig || [0, 0, 0];
   for(let k = 0; k < 3; k++){

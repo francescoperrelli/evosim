@@ -95,7 +95,7 @@ const rt = await page.evaluate(async () => {
   return { v: snap.v, gLen: snap.creatures[0] ? snap.creatures[0].g.length : 0, ok, err, hasSeed: snap.seed !== undefined };
 });
 check('snapshot is versioned (v9)', rt.v === 9);
-check('genome serialises 17 fields', rt.gLen === 17, 'len=' + rt.gLen);
+check('genome serialises 18 fields', rt.gLen === 18, 'len=' + rt.gLen);
 check('snapshot records the seed', rt.hasSeed);
 check('restore + step runs without error', rt.ok && !rt.err, rt.err);
 
