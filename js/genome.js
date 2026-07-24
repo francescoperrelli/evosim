@@ -48,13 +48,18 @@ export function mutateGenome(g){
 // Sexual reproduction: recombine two parents' genomes and brains, then mutate
 export function crossover(ga, gb){
   const pk = (x, y) => Math.random() < 0.5 ? x : y;
+  // Ornament and preference are inherited as a LINKED pair (both from the same
+  // parent). Independent assortment would break the ornament–preference genetic
+  // correlation every generation and kill any Fisherian runaway; linkage lets
+  // the correlation — and thus runaway sexual selection — build up.
+  const sp = Math.random() < 0.5 ? ga : gb;
   const base = {
     speed: pk(ga.speed, gb.speed), sense: pk(ga.sense, gb.sense), size: pk(ga.size, gb.size),
     hue: pk(ga.hue, gb.hue), sociality: pk(ga.sociality, gb.sociality), camo: pk(ga.camo, gb.camo),
     territoriality: pk(ga.territoriality, gb.territoriality), territoryR: pk(ga.territoryR, gb.territoryR),
     acuity: pk(ga.acuity, gb.acuity), diet: pk(ga.diet, gb.diet),
     shape: pk(ga.shape, gb.shape), pattern: pk(ga.pattern, gb.pattern), altruism: pk(ga.altruism, gb.altruism),
-    ornament: pk(ga.ornament, gb.ornament), preference: pk(ga.preference, gb.preference), brain: crossBrain(ga.brain, gb.brain)
+    ornament: sp.ornament, preference: sp.preference, brain: crossBrain(ga.brain, gb.brain)
   };
   return mutateGenome(base);
 }

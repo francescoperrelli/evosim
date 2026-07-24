@@ -5,9 +5,9 @@ export const P = {
   herbStart:200, carnStart:24, omniStart:44, maxPop:1400,
   maxFood:900, foodEnergy:24, foodRate:4, mut:0.08, preyEnergy:82,
   herbReproE:120, herbStartE:70, herbMaxAge:2600,
-  omniReproE:150, omniStartE:90, omniMaxAge:2800,
+  omniReproE:140, omniStartE:85, omniMaxAge:2800,
   carnReproE:255, carnStartE:150, carnMaxAge:3200,
-  seasonLength:3600, dayLength:1400,
+  seasonLength:3600, dayLength:1400, sexSel:1.4,
   predatorsOn:true, omnivoresOn:true, flocksOn:true, terrOn:true, mimicOn:true, seasonsOn:true, dayNightOn:true, bubblesOn:true, pherOn:true, cultureOn:true, learnOn:true, nestsOn:true
 };
 
@@ -16,7 +16,7 @@ export const TYPES = {
   herb:{ hueC:115, hueSpan:40, reproE:'herbReproE', startE:'herbStartE', maxAge:'herbMaxAge',
          baseMeta:0.05, eatsPlants:true, hunts:[], terr:false, social:true, plantEff:1.0, preyEff:0, sexual:false, dietLo:0.03, dietHi:0.30 },
   omni:{ hueC:272, hueSpan:20, reproE:'omniReproE', startE:'omniStartE', maxAge:'omniMaxAge',
-         baseMeta:0.074, eatsPlants:true, hunts:['herb'], terr:false, social:true, plantEff:0.72, preyEff:0.7, sexual:true, dietLo:0.40, dietHi:0.60 },
+         baseMeta:0.064, eatsPlants:true, hunts:['herb'], terr:false, social:true, plantEff:0.81, preyEff:0.73, sexual:true, dietLo:0.40, dietHi:0.60 },
   carn:{ hueC:18, hueSpan:24, reproE:'carnReproE', startE:'carnStartE', maxAge:'carnMaxAge',
          baseMeta:0.09, eatsPlants:false, hunts:['herb','omni'], terr:true, social:false, plantEff:0, preyEff:1.0, sexual:false, dietLo:0.72, dietHi:0.97 }
 };

@@ -284,7 +284,7 @@ export function step(){
               if(d < SEP_R2){ sepx += (c.x - o.x); sepy += (c.y - o.y); } }
             if(d < senseSq && o.g.sexual > 0.5 && o.energy >= mateReadyE && o.matedTick !== S.tick && mateCompatible(g, o.g)){
               // mate choice: a showy ornament looks "closer" to a choosy partner (sexual selection)
-              const desir = d - g.preference * (o.g.ornament || 0) * senseSq * 0.9;
+              const desir = d - g.preference * (o.g.ornament || 0) * senseSq * P.sexSel;
               if(desir < mateScore){ mateScore = desir; mateRef = o; matex = dx; matey = dy; }
             }
             // kin food-sharing: a well-fed altruist gives energy to a starving relative nearby
