@@ -2,59 +2,68 @@
 
 An artificial-life simulation that runs entirely in the browser. Creatures are
 born, graze, hunt, flee, reproduce and **evolve** — guided by nothing but
-natural selection. No behavior is scripted: it all emerges.
+natural selection. No behaviour is scripted: it all emerges.
 
 **▶ Live:** https://francescoperrelli.github.io/evosim/
 
 ## What's inside
 
-- **Neural-network brains** — every creature is steered by a small feed-forward
-  network (10 → 8 → 2). Its weights are part of the genome and evolve by
-  mutation, generation after generation, on top of a light instinctive prior
-  that keeps the ecosystem viable from the first frame.
-- **A food chain** — **herbivores** (green) graze on plants and flee predators;
-  **carnivores** (red) hunt herbivores. The result is the classic predator–prey
-  oscillation (Lotka–Volterra), with no code telling it to happen.
-- **Flocks** — herbivores school together (cohesion, alignment, separation);
-  sociality is an evolving gene, and moving in groups is a defense against
-  predators.
-- **Territories** — when not chasing prey, carnivores patrol a territory around
-  their birthplace (den). Territory radius and territoriality are genetic.
-- **Mimicry** — prey evolve camouflage to blend into the background, while
-  predators evolve visual acuity to counter it: a genuine evolutionary arms
-  race, plotted live in the charts.
-- **Two languages** — full Italian / English UI, remembered across visits.
-- **Auto-save** — the world saves itself to the browser and resumes when you
-  reopen the page. Export / import a world as a JSON file to move it between
-  devices.
+- **Neural-network brains** — every creature is steered by a small recurrent
+  network (17 → 10 → 4) with egocentric directional vision and short-term
+  memory. Its weights are part of the genome and evolve by mutation, on top of a
+  light instinctive prior that keeps the ecosystem viable from the first frame.
+- **An evolving food web** — **diet is a continuous heritable gene**
+  (herbivore → omnivore → carnivore). The feeding "band" is derived from it, so a
+  lineage can shift its whole feeding strategy over generations. Herbivores graze
+  and flee, carnivores hunt, omnivores do both — and predator–prey oscillations
+  (Lotka–Volterra) emerge on their own.
+- **Reproduction, two ways** — some organisms clone (asexual); others must find a
+  mate and produce offspring by **crossover of both parents' genomes and brains**,
+  so mate-seeking emerges as behaviour.
+- **Flocks, territories & mimicry** — herbivores school for safety; carnivores
+  patrol a territory; prey evolve camouflage while predators evolve visual
+  acuity, an ongoing arms race.
+- **Terrain that matters** — each world has **biomes** (fertile/barren regions
+  that concentrate food) plus placeable **water** (slows movement) and **rocks**
+  (block it), so geography shapes evolution.
+- **Seasons & day/night** — plant growth rises and falls with the season and the
+  daylight; winter is harsher.
+- **Play-god events** — meteor strikes, droughts, contagious epidemics.
+- **Deep observability** — an inspector with a genome readout and a **live**
+  neural network (neurons light up as the creature thinks), a navigable
+  **genealogy tree**, an Evolution panel (average generation, sexual %, diet
+  distribution, dominant lineages) and all-time records.
+- **Challenge mode** — five objectives (Dynasty, Balance, Rise of the Predators,
+  Survivors, The Giant) tracked live with a progress bar and win/lose states.
+- **Two languages** (Italian / English), a big pannable/zoomable world backed by
+  a spatial grid, and **auto-save** in the browser (export/import worlds as JSON).
 
 ## How to use it
 
 Open the live link (works on desktop and phone). From the home screen:
 **New game**, **Resume**, **Tutorial**, **Load**, **Save**, **Options**.
-Tap the environment to grow plants. In **Options** you can tune plant growth,
-mutation rate, and toggle predators, flocks, territories and mimicry on or off
-to study each phenomenon in isolation.
-
-The two charts read the evolution at a glance: populations over time
-(herbivores, carnivores, plants) and the mimicry arms race (average prey
-camouflage vs. average predator acuity).
+Drag to explore the world, wheel/pinch to zoom, tap to grow plants. Use the
+top-right button to switch to **🔍 Inspect** and tap a creature to open its
+genome, brain and genealogy. The side panel opens **📊 Evolution**, **⚡ Events**
+and **🎯 Challenges**.
 
 ## Project structure
 
 ```
-index.html           markup only
-css/style.css         all styling
+index.html            markup only
+css/style.css          all styling
 js/
-  utils.js            shared helpers (rng, clamp, gaussian noise)
-  state.js            tunable parameters, constants, shared world state
-  nn.js               minimal feed-forward neural network
-  genome.js           genome, mutation and creature factory
-  world.js            simulation engine (perception, brain, interactions) + save/load
-  render.js           canvas drawing, charts and the numeric HUD
-  i18n.js             Italian / English translations
-  ui.js               overlays, controls, menu, language, touch input
-  main.js             bootstrap, animation loop, auto-save
+  utils.js             shared helpers (rng, clamp, gaussian noise)
+  state.js             parameters, constants, shared world state, camera, seasons
+  nn.js                recurrent neural network
+  genome.js            genome (incl. evolving diet), mutation/crossover, creatures
+  world.js             simulation engine (spatial grid, perception, interactions,
+                       terrain, events) + save/load
+  render.js            canvas drawing, camera, charts, HUD, network/genealogy viz
+  i18n.js              Italian / English translations
+  ui.js                overlays, controls, menu, tools, inspector, genealogy
+  challenges.js        challenge definitions and live evaluation
+  main.js              bootstrap, animation loop, auto-save
 ```
 
 The code uses native ES modules, so open it through the live URL (or any static
@@ -69,4 +78,4 @@ about a minute.
 ---
 
 Built as an experiment in *artificial life* — genetic algorithms, evolving
-neural networks and emergent behavior.
+neural networks and emergent behaviour.
