@@ -97,9 +97,25 @@ function checkChronicle(){
   if(maxBrain > pv.maxBrain && maxBrain >= 12) logEvent('brain', maxBrain);
   const sp = speciesCount();
   if(sp > pv.speciesMax && sp >= 6) logEvent('species', sp);
-  S.chronPrev = { herb, omni, carn, total, genTier: Math.max(genTier, pv.genTier), maxBrain: Math.max(maxBrain, pv.maxBrain), speciesMax: Math.max(sp, pv.speciesMax) };
+  const dv = dialectStats().divergence;
+  const dvTier = Math.floor(dv / 0.35);
+  if(dvTier > (pv.dialTier || 0) && dv >= 0.5) logEvent('dialect', Math.round(dv * 100));
+  S.chronPrev = { herb, omni, carn, total, genTier: Math.max(genTier, pv.genTier), maxBrain: Math.max(maxBrain, pv.maxBrain), speciesMax: Math.max(sp, pv.speciesMax), dialTier: Math.max(dvTier, pv.dialTier || 0) };
 }
 export { checkChronicle };
+
+// summarise dialects: dominant lineages' accent vectors + how far apart they are
+export function dialectStats(){
+  const D = S.dialect, arr = [];
+  for(const k in D){ const e = D[k]; if(e.n >= 3) arr.push({ lin: +k, v: [e.s[0] / e.n, e.s[1] / e.n, e.s[2] / e.n], n: e.n }); }
+  arr.sort((a, b) => b.n - a.n);
+  const top = arr.slice(0, 6);
+  let div = 0, pairs = 0;
+  for(let i = 0; i < top.length; i++) for(let j = i + 1; j < top.length; j++){
+    const a = top[i].v, b = top[j].v; div += Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]); pairs++;
+  }
+  return { top, divergence: pairs ? div / pairs : 0 };
+}
 
 export function speciesCount(){
   const TH2 = 0.42 * 0.42, reps = [];
@@ -127,7 +143,7 @@ export function seed(){
   S.creatures = []; S.food = []; S.tick = 0; S.predations = 0; S.maxGen = 0;
   S.popHist.length = 0; S.traitHist.length = 0; S.evoHist.length = 0; S.ID = 1; S.selected = null;
   S.records = { oldestAge: 0, maxKids: 0, maxGen: 0 };
-  S.chronicle = []; S.chronPrev = null; S.lex = newLex();
+  S.chronicle = []; S.chronPrev = null; S.lex = newLex(); S.dialect = {};
   S.rocks = []; S.water = []; S.drought = 0; S.effects = []; S.challenge = null; S.shares = 0; S.packKills = 0; generateBiomes();
   pherInit();
   for(let i = 0; i < P.herbStart; i++) S.creatures.push(founder('herb'));
@@ -279,6 +295,14 @@ export function step(){
       L.s[0] += c.sig[0]; L.s[1] += c.sig[1]; L.s[2] += c.sig[2];
       const present = [_in[8] > 0.25, _in[5] > 0.25, _in[2] > 0.25, _in[11] > 0.35];   // threat, prey, food, crowd
       for(let f = 0; f < 4; f++) if(present[f]){ const cc = L.ctx[f]; cc.n++; cc.s[0] += c.sig[0]; cc.s[1] += c.sig[1]; cc.s[2] += c.sig[2]; }
+      // dialect: measure each lineage's "accent" in a shared reference context
+      // (relaxed chatter among neighbours, no threat/prey) so differences reflect
+      // HOW a lineage vocalises, not just what's happening around it.
+      if(_in[11] > 0.3 && _in[8] < 0.2 && _in[5] < 0.2){
+        const D = S.dialect, key = c.lineage;
+        const e = D[key] || (D[key] = { s: [0, 0, 0], n: 0 });
+        e.n++; e.s[0] += c.sig[0]; e.s[1] += c.sig[1]; e.s[2] += c.sig[2];
+      }
     }
     if(c === S.selected){ const gh = getHidden(); c.act = { inp: _in.slice(), hid: gh.h.slice(0, gh.nh), out: _out.slice() }; }
 
@@ -417,6 +441,9 @@ export function step(){
   if(S.lex && S.tick % 300 === 0){
     const L = S.lex; L.n *= 0.5; for(let k = 0; k < 3; k++) L.s[k] *= 0.5;
     for(const cc of L.ctx){ cc.n *= 0.5; cc.s[0] *= 0.5; cc.s[1] *= 0.5; cc.s[2] *= 0.5; }
+    // fade + prune the dialect table so it reflects living lineages
+    const D = S.dialect;
+    for(const k in D){ const e = D[k]; e.n *= 0.5; e.s[0] *= 0.5; e.s[1] *= 0.5; e.s[2] *= 0.5; if(e.n < 0.6) delete D[k]; }
   }
 }
 

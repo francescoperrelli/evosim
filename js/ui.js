@@ -1,7 +1,7 @@
 // UI: overlays, controls, menu, language, inspect mode, creature inspector
 import { el, rnd, clamp } from './utils.js';
 import { P, S, LANG_KEY, screenToWorld, zoomAt, clampCam } from './state.js';
-import { seed, saveLocal, hasSave, loadLocal, clearLocal, snapshot, restore, meteor, startDrought, startEpidemic, addRock, addWater, clearTerrain, speciesCount, logEvent } from './world.js';
+import { seed, saveLocal, hasSave, loadLocal, clearLocal, snapshot, restore, meteor, startDrought, startEpidemic, addRock, addWater, clearTerrain, speciesCount, dialectStats, logEvent } from './world.js';
 import { makeCreature, randomGenome } from './genome.js';
 import { drawNetwork, drawEvolution, selectedThought } from './render.js';
 import { CHALLENGES, startChallenge, stopChallenge } from './challenges.js';
@@ -297,6 +297,7 @@ export function refreshEvolution(){
   el('recLin').textContent = new Set(S.creatures.map(c => c.lineage)).size;
   el('recSpecies').textContent = speciesCount();
   el('recShares').textContent = S.shares;
+  el('recDialect').textContent = Math.round(dialectStats().divergence * 100);
   drawEvolution();
 }
 

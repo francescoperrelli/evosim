@@ -42,6 +42,7 @@ export const I18N = {
     evoBtn:"📊 Evoluzione", evoEyebrow:"L'evoluzione in diretta", evoTitle:"Evoluzione",
     evoGenChart:"Generazione (blu) e cervello medio (ambra)", evoSexChart:"Sessuati (%) nel tempo", evoLineages:"Stirpi fondatrici dominanti",
     evoLexicon:"Lessico emergente (cosa significa ogni segnale)", lexThreat:"Pericolo", lexPrey:"Preda", lexFood:"Cibo", lexCrowd:"Folla",
+    evoDialects:"Dialetti delle stirpi dominanti (l'accento di ciascuna)", recDialect:"Divergenza dialetti",
     recGen:"Generazione max", recAge:"Età record", recKids:"Più prolifico", recLin:"Stirpi vive", recSpecies:"Specie", recShares:"Condivisioni",
     eventsBtn:"⚡ Eventi", eventsEyebrow:"Interviene la mano del destino", eventsTitle:"Eventi",
     eventsLead:"Scatena forze sull'ecosistema e osserva chi sopravvive.",
@@ -72,6 +73,7 @@ export const I18N = {
     chr_return_herb:"Gli erbivori sono ricomparsi", chr_return_omni:"Gli onnivori sono ricomparsi", chr_return_carn:"I carnivori sono ricomparsi",
     chr_boom:"Boom demografico: {n} creature", chr_crash:"Crollo della popolazione: {n} rimaste",
     chr_brain:"Nuovo record di cervello: {n} neuroni", chr_species:"Nuova diversità: {n} specie",
+    chr_dialect:"È emerso un dialetto distinto (divergenza {n})",
     chr_challengeWon:"Sfida vinta: {n}", chr_challengeLost:"Sfida fallita: {n}" },
   en:{ menu:"☰ Menu", hint:"Drag to explore · wheel/pinch to zoom · tap to plant",
     numbers:"The ecosystem in numbers", herbivores:"Herbivores", carnivores:"Carnivores", omnivores:"Omnivores", plants:"Plants",
@@ -115,6 +117,7 @@ export const I18N = {
     evoBtn:"📊 Evolution", evoEyebrow:"Evolution, live", evoTitle:"Evolution",
     evoGenChart:"Avg generation (blue) & brain size (amber)", evoSexChart:"Sexual (%) over time", evoLineages:"Dominant founding lineages",
     evoLexicon:"Emergent lexicon (what each signal has come to mean)", lexThreat:"Threat", lexPrey:"Prey", lexFood:"Food", lexCrowd:"Crowd",
+    evoDialects:"Dialects of the dominant lineages (each one's accent)", recDialect:"Dialect divergence",
     recGen:"Max generation", recAge:"Oldest age", recKids:"Most prolific", recLin:"Living lineages", recSpecies:"Species", recShares:"Sharing acts",
     eventsBtn:"⚡ Events", eventsEyebrow:"The hand of fate intervenes", eventsTitle:"Events",
     eventsLead:"Unleash forces on the ecosystem and see who survives.",
@@ -145,6 +148,7 @@ export const I18N = {
     chr_return_herb:"Herbivores reappeared", chr_return_omni:"Omnivores reappeared", chr_return_carn:"Carnivores reappeared",
     chr_boom:"Population boom: {n} creatures", chr_crash:"Population crash: {n} left",
     chr_brain:"New brain record: {n} neurons", chr_species:"New diversity: {n} species",
+    chr_dialect:"A distinct dialect has emerged (divergence {n})",
     chr_challengeWon:"Challenge won: {n}", chr_challengeLost:"Challenge failed: {n}" }
 };
 

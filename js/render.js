@@ -2,6 +2,7 @@
 import { clamp, TAU, el } from './utils.js';
 import { P, S, seasonInfo, dayInfo, clampCam } from './state.js';
 import { NIN, NOUT, MAX_NH } from './nn.js';
+import { dialectStats } from './world.js';
 import { t } from './i18n.js';
 
 const world = el('world'), wctx = world.getContext('2d');
@@ -355,6 +356,28 @@ export function drawEvolution(){
         ctx.fillStyle = v >= 0 ? `rgba(143,196,74,${0.12 + 0.8 * mag})` : `rgba(221,111,87,${0.12 + 0.8 * mag})`;
         ctx.fillRect(x + 1, y + 1, gx - 2, gy - 2);
       }
+    }
+  }
+  // dialects: one swatch per dominant lineage, coloured by its accent vector.
+  // Distinct colours = distinct accents (how each lineage vocalises when relaxed).
+  cv = el('evDialect'); if(cv){
+    ctx = cv.getContext('2d'); d = fitChart(cv, ctx);
+    ctx.clearRect(0, 0, d.w, d.h); ctx.fillStyle = '#0c120c'; ctx.fillRect(0, 0, d.w, d.h);
+    const ds = dialectStats(), top = ds.top;
+    if(top.length){
+      const bw = (d.w - 2 * pad) / top.length;
+      ctx.font = '9px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+      for(let i = 0; i < top.length; i++){
+        const v = top[i].v;
+        const r = 128 + clamp(v[0], -1, 1) * 120, g = 128 + clamp(v[1], -1, 1) * 120, bl = 128 + clamp(v[2], -1, 1) * 120;
+        ctx.fillStyle = `rgb(${r | 0} ${g | 0} ${bl | 0})`;
+        ctx.fillRect(pad + i * bw + 2, pad, bw - 4, d.h - 2 * pad - 12);
+        ctx.fillStyle = `hsl(${(top[i].lin * 47) % 360} 55% 60%)`;
+        ctx.fillText('#' + (top[i].lin % 1000), pad + i * bw + bw / 2, d.h - pad);
+      }
+    } else {
+      ctx.fillStyle = '#6a746a'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(t('chronicleEmpty') || '—', d.w / 2, d.h / 2);
     }
   }
 }

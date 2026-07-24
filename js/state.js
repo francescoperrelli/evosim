@@ -71,7 +71,10 @@ export const S = {
   chronicle: [], chronPrev: null,
   // emergent-lexicon meter: how each of the 3 signal channels correlates with
   // context (threat / prey / food / crowd), measured live from the population
-  lex: null
+  lex: null,
+  // regional dialects: per-lineage average "accent" (signal vector) measured in a
+  // shared reference context (idle chatter among neighbours), keyed by lineage id
+  dialect: {}
 };
 export function newLex(){
   return { s: [0, 0, 0], n: 0, ctx: [ { s: [0, 0, 0], n: 0 }, { s: [0, 0, 0], n: 0 }, { s: [0, 0, 0], n: 0 }, { s: [0, 0, 0], n: 0 } ] };
