@@ -277,6 +277,15 @@ export function refreshInspector(){
   el('bgSexual').style.width = (g.sexual * 100) + '%';
   el('bgDiet').style.width = ((g.diet || 0) * 100) + '%';
   el('bgAltruism').style.width = ((g.altruism || 0) * 100) + '%';
+  // live "voice": each channel's current output as a centre-anchored bar
+  const CHCOL = ['#e6a578', '#78c8e6', '#aa8ce6'], sg = c.sig || [0, 0, 0];
+  for(let k = 0; k < 3; k++){
+    const f = el('vc' + k); if(!f) continue;
+    const v = Math.max(-1, Math.min(1, sg[k]));
+    f.style.width = Math.abs(v) * 50 + '%';
+    f.style.marginLeft = (v >= 0 ? 50 : 50 - Math.abs(v) * 50) + '%';
+    f.style.background = CHCOL[k];
+  }
   drawNetwork(el('inspNet'), c);
 }
 

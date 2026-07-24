@@ -115,6 +115,11 @@ input[type=range]{width:100%; accent-color:var(--moss); margin-top:5px}
 #inspNet{width:100%; height:230px; display:block; background:#0c120c; border:1px solid var(--line); border-radius:12px}
 .netlegend{display:flex; gap:16px; justify-content:center; margin-top:8px; font-size:11px; color:var(--muted)}
 .netlegend i{display:inline-block; width:10px; height:3px; border-radius:2px; margin-right:5px; vertical-align:2px}
+.voice-row{display:flex; flex-direction:column; gap:6px; margin-bottom:16px}
+.vchan{display:grid; grid-template-columns:34px 1fr; gap:8px; align-items:center; font-size:11px; color:var(--muted)}
+.vtrack{position:relative; height:8px; background:#0c120c; border:1px solid var(--line); border-radius:6px; overflow:hidden}
+.vtrack::before{content:""; position:absolute; left:50%; top:0; bottom:0; width:1px; background:var(--line)}
+.vfill{height:100%; border-radius:3px; transition:width .1s, margin-left .1s}
 
 /* --- zoom buttons --- */
 .ctlbtn{pointer-events:auto; width:34px; background:rgba(10,15,10,.6); color:var(--ink);
