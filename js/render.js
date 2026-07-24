@@ -377,6 +377,16 @@ export function drawEvolution(){
     ctx.fillStyle = `hsl(${(lid * 47) % 360} 55% 55%)`;
     ctx.fillRect(pad + i * bw + 1, d.h - pad - h, bw - 2, h);
   }
+  // average ornament per species over time — watch the three selection regimes:
+  // omnivores spike (sexual runaway), carnivores climb (contest), herbivores settle (social)
+  cv = el('evOrn'); if(cv){
+    ctx = cv.getContext('2d'); d = fitChart(cv, ctx);
+    ctx.clearRect(0, 0, d.w, d.h); ctx.fillStyle = '#0c120c'; ctx.fillRect(0, 0, d.w, d.h);
+    const map = v => d.h - pad - (d.h - 2 * pad) * clamp(v, 0, 1);
+    line(ctx, S.ornHist, o => map(o.h), '#8fc44a', d.w, d.h, pad);
+    line(ctx, S.ornHist, o => map(o.o), '#a97fe0', d.w, d.h, pad);
+    line(ctx, S.ornHist, o => map(o.c), '#dd6f57', d.w, d.h, pad);
+  }
   // emergent lexicon: a 4x3 heat grid of how each channel deviates in each context
   cv = el('evLex'); if(cv){
     ctx = cv.getContext('2d'); d = fitChart(cv, ctx);

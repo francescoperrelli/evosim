@@ -70,7 +70,10 @@ it all emerges.
 - **Deep observability** — inspector with genome, live neural network, current
   "thought" and a navigable genealogy; an Evolution panel with average generation,
   brain size, diet distribution, dominant lineages, live **species count**,
-  cooperation stats and the **emergent-lexicon** heat grid.
+  cooperation stats, the **emergent-lexicon** heat grid, per-lineage **dialects**,
+  and **average ornament per species over time** (so you can watch the three
+  selection regimes diverge: omnivore sexual runaway, carnivore contest, herbivore
+  social balance).
 - **A chronicle** — a running 📜 diary that logs notable events (generation
   milestones, extinctions and returns, population booms and crashes, brain-size
   records, new species diversity, challenge outcomes) so you can read back the
