@@ -88,6 +88,9 @@ can reopen it any time from the menu (📖 Tutorial).
   inspector verbalize each creature's *real* internal state (they don't invent it).
 - **Challenge mode** — eight objectives, including cooperation-driven ones
   (Society, Adaptive radiation, The pack).
+- **Reproducible, shareable worlds** — every world is grown from a **seed**; open
+  `?seed=123456` to load that exact world, or copy a share link from the Options
+  panel. Same seed → the same world, every time.
 - **Named save slots**, ambient music & sound effects, a pannable/zoomable world
   backed by a spatial grid, Italian / English, and browser auto-save.
 
@@ -97,6 +100,21 @@ Open the live link (works on desktop and phone). Drag to explore, wheel/pinch to
 zoom, tap to grow plants. Switch to **🔍 Inspect** (top-right) and tap a creature
 to open its genome, brain, thought and genealogy. The side panel opens
 **📊 Evolution**, **⚡ Events** and **🎯 Challenges**; the menu has **📁 Save slots**.
+
+## Tests
+
+A headless suite checks the core invariants — determinism (same seed → identical
+world), ecosystem survival over a long run, save/load round-trips, and v8→v9
+brain migration — by driving the real page with Playwright/Chromium.
+
+```
+npm install
+npx playwright install chromium
+npm test
+```
+
+(In an environment with a preinstalled browser, point `CHROMIUM_PATH` at the
+binary instead of running `playwright install`.)
 
 ## Project structure
 

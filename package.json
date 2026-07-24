@@ -1,0 +1,15 @@
+{
+  "name": "evosim",
+  "version": "1.0.0",
+  "description": "A browser-based artificial-life simulation: creatures with evolving neural-network brains that communicate, cooperate and evolve.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "serve": "python3 -m http.server 8080",
+    "test": "node tests/sim.test.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.40.0"
+  },
+  "license": "MIT"
+}
