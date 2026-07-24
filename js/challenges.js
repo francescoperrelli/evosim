@@ -1,5 +1,6 @@
 // Challenge mode: pick an objective; it is evaluated live with win/lose states.
 import { S } from './state.js';
+import { speciesCount } from './world.js';
 
 // Each challenge has a translation-key base (chXName / chXDesc) and a goal.
 export const CHALLENGES = [
@@ -7,7 +8,10 @@ export const CHALLENGES = [
   { key: 'balance' },     // keep all three diet bands >=15 for 1500 ticks
   { key: 'predators' },   // make carnivores outnumber herbivores
   { key: 'survivors' },   // keep population >=80 for 2500 ticks (lose if it crashes)
-  { key: 'giant' }        // evolve a creature of size >= 8.5
+  { key: 'giant' },       // evolve a creature of size >= 8.5
+  { key: 'society' },     // reach 150 kin-sharing acts
+  { key: 'radiation' },   // have 8 distinct species at once
+  { key: 'pack' }         // reach 200 pack kills
 ];
 
 export function startChallenge(key){
@@ -45,6 +49,13 @@ export function evalChallenge(){
     }
     case 'giant':
       progress = Math.min(1, maxSize / 8.5); won = maxSize >= 8.5; break;
+    case 'society':
+      progress = Math.min(1, S.shares / 600); won = S.shares >= 600; break;
+    case 'radiation': {
+      const sp = speciesCount(); progress = Math.min(1, sp / 8); won = sp >= 8; break;
+    }
+    case 'pack':
+      progress = Math.min(1, S.packKills / 500); won = S.packKills >= 500; break;
   }
   ch.progress = progress;
   if(won) ch.status = 'won';
