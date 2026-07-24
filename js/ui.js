@@ -143,14 +143,24 @@ el('slotSave').onclick = () => { if(saveSlot(el('slotName').value)){ el('slotNam
 
 /* ---------- chronicle ---------- */
 let lastChronLen = -1;
+// pan the camera to a world point and reveal it (used by clickable chronicle events)
+function centerCameraOn(x, y){
+  const z = S.cam.zoom = Math.min(2.5, Math.max(S.cam.zoom, 1.5));
+  S.cam.x = x - (S.W / z) / 2; S.cam.y = y - (S.H / z) / 2;
+  clampCam(); hide('chronicle'); toast('📍 ' + t('chronJump'));
+}
 function buildChronicle(){
   const list = el('chronList'); list.innerHTML = '';
   if(!S.chronicle.length){ list.innerHTML = `<div class="chron-empty">${t('chronEmpty')}</div>`; return; }
   for(const e of S.chronicle){
-    const item = document.createElement('div'); item.className = 'chron-item';
+    const located = e.x != null && e.y != null;
+    const item = document.createElement('div'); item.className = 'chron-item' + (located ? ' clickable' : '');
     const tk = document.createElement('span'); tk.className = 'tk'; tk.textContent = 't' + e.tick;
     const tx = document.createElement('span'); tx.textContent = t('chr_' + e.key).replace('{n}', e.n);
-    item.appendChild(tk); item.appendChild(tx); list.appendChild(item);
+    item.appendChild(tk); item.appendChild(tx);
+    if(located){ const pin = document.createElement('span'); pin.className = 'chron-pin'; pin.textContent = '📍';
+      item.appendChild(pin); item.onclick = () => centerCameraOn(e.x, e.y); }
+    list.appendChild(item);
   }
 }
 el('btnChronicle').onclick = () => { buildChronicle(); lastChronLen = S.chronicle.length; show('chronicle'); };

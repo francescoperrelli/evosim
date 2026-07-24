@@ -64,7 +64,7 @@ function updateNests(){
     if(nz.str < 0.7){ nests.splice(i, 1); continue; }
     nz.r = 40 + nz.str * 6;
     // announce a home once it has consolidated into a solid site (no spam from weak ones)
-    if(!nz.announced && nz.str >= 6){ nz.announced = true; logEvent('nest_' + nz.type); }
+    if(!nz.announced && nz.str >= 6){ nz.announced = true; logEvent('nest_' + nz.type, null, { x: nz.x, y: nz.y }); }
   }
 }
 // is a creature within the shelter of a nest of its own kind?
@@ -117,15 +117,16 @@ function mateCompatible(a, b){
 // genome fingerprint for approximate species clustering
 function geneVec(c){ const g = c.g; return [g.speed / 3.4, g.sense / 165, g.size / 9, g.diet || 0, (g.hue || 0) / 360, g.shape || 0.3, g.pattern || 0.5]; }
 // Chronicle: a running log of notable events for the player to read back
-export function logEvent(key, n){
-  S.chronicle.unshift({ tick: S.tick, key, n: n === undefined ? null : n });
+export function logEvent(key, n, loc){
+  S.chronicle.unshift({ tick: S.tick, key, n: n === undefined ? null : n,
+    x: loc ? Math.round(loc.x) : null, y: loc ? Math.round(loc.y) : null });
   if(S.chronicle.length > 80) S.chronicle.pop();
 }
 function checkChronicle(){
-  let herb = 0, omni = 0, carn = 0, maxBrain = 0, hOrn = 0, oOrn = 0, cOrn = 0;
+  let herb = 0, omni = 0, carn = 0, maxBrain = 0, maxBrainC = null, hOrn = 0, oOrn = 0, cOrn = 0;
   for(const c of S.creatures){ const orn = c.g.ornament || 0;
     if(c.type === 'carn'){ carn++; cOrn += orn; } else if(c.type === 'omni'){ omni++; oOrn += orn; } else { herb++; hOrn += orn; }
-    if(c.g.brain.nh > maxBrain) maxBrain = c.g.brain.nh; }
+    if(c.g.brain.nh > maxBrain){ maxBrain = c.g.brain.nh; maxBrainC = c; } }
   const avgOrn = omni ? oOrn / omni : 0;                 // omnivores are the sexual species
   const carnOrn = carn ? cOrn / carn : 0, herbOrn = herb ? hOrn / herb : 0;
   const total = S.creatures.length;
@@ -139,7 +140,7 @@ function checkChronicle(){
   }
   if(total > pv.total * 1.8 && total > 420) logEvent('boom', total);
   if(total < pv.total * 0.4 && pv.total > 180) logEvent('crash', total);
-  if(maxBrain > pv.maxBrain && maxBrain >= 12) logEvent('brain', maxBrain);
+  if(maxBrain > pv.maxBrain && maxBrain >= 12) logEvent('brain', maxBrain, maxBrainC ? { x: maxBrainC.x, y: maxBrainC.y } : undefined);
   const sp = speciesCount();
   if(sp > pv.speciesMax && sp >= 6) logEvent('species', sp);
   const dv = dialectStats().divergence;
