@@ -41,8 +41,9 @@ it all emerges.
   so you can watch linguistic diversity split lineage from lineage.
 - **Sexual selection** — the sexual species carries heritable *ornament* and
   *preference* genes; choosy partners favour showier mates (Fisherian dynamics)
-  while the ornament costs energy to carry. Ornaments render as an evolving
-  display-fan — appearance shaped by courtship, not just survival.
+  while the ornament costs energy to carry. As it evolves it reshapes the whole
+  look — a more vivid coat, a head-crown and a tail-fan — so appearance is shaped
+  by courtship, not just survival. When ornaments run away, the chronicle says so.
 - **Cooperation** — an altruism gene lets the well-fed share energy with starving
   kin; carnivores hunting near allies get a pack bonus; alarm calls warn the herd.
 - **Cultural transmission** — a newborn can imitate the brain of the most thriving

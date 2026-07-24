@@ -24,7 +24,12 @@ function bodyColor(c){
     const camo = P.mimicOn ? g.camo : 0;
     return { hue: (g.hue * (1 - camo) + 120 * camo) | 0, sat: 62 - camo * 30, light: clamp((38 + c.energy * 0.18) * (1 - camo * 0.35), 24, 70) };
   }
-  if(c.type === 'omni') return { hue: g.hue | 0, sat: 55, light: clamp(46 + c.energy * 0.08, 46, 68) };
+  if(c.type === 'omni'){
+    // sexual selection reshapes the whole look: a showier ornament means a more
+    // saturated, more vivid coat — courtship, not just survival, colours them.
+    const orn = g.ornament || 0;
+    return { hue: g.hue | 0, sat: clamp(55 + orn * 40, 55, 96), light: clamp(46 + c.energy * 0.08 + orn * 9, 46, 76) };
+  }
   return { hue: g.hue | 0, sat: 68, light: clamp(40 + c.energy * 0.1, 42, 66) };
 }
 
@@ -91,6 +96,20 @@ function drawCreature(c, z){
   for(let s = 0; s < segs; s++){
     const off = -s * size * 0.85, r = size * (1 - s * 0.16);
     wctx.beginPath(); wctx.arc(c.x + cos * off, c.y + sin * off, r, 0, TAU); wctx.fill();
+  }
+
+  // sexual ornament, part 2: a crown of tipped rays at the head, growing with the gene
+  if(orn > 0.12 && appR >= 6){
+    const hx = c.x + cos * size * 0.5, hy = c.y + sin * size * 0.5;
+    const crays = 3 + Math.round(orn * 4), clen = size * (0.45 + orn * 1.3), baseAng = Math.atan2(sin, cos);
+    wctx.strokeStyle = `hsl(${(col.hue + 20) % 360} 92% 66%)`; wctx.lineWidth = Math.max(0.6, size * 0.11);
+    for(let i = 0; i < crays; i++){
+      const a = baseAng + (crays > 1 ? (i / (crays - 1) - 0.5) : 0) * 1.7;
+      const tx = hx + Math.cos(a) * clen, ty = hy + Math.sin(a) * clen;
+      wctx.beginPath(); wctx.moveTo(hx, hy); wctx.lineTo(tx, ty); wctx.stroke();
+      wctx.fillStyle = `hsl(${(col.hue + 60) % 360} 90% 70%)`;
+      wctx.beginPath(); wctx.arc(tx, ty, Math.max(0.6, size * 0.13), 0, TAU); wctx.fill();
+    }
   }
 
   // markings from the pattern gene
