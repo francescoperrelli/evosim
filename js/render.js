@@ -35,11 +35,15 @@ function drawCreature(c, z){
   const dark = `hsl(${col.hue} ${col.sat}% ${clamp(col.light - 20, 8, 60)}%)`;
   const sp = Math.hypot(c.vx, c.vy) || 1, cos = c.vx / sp, sin = c.vy / sp;
 
-  // communication: a visible pulse when the creature broadcasts a signal
-  const sig = c.signal || 0;
-  if(Math.abs(sig) > 0.35 && appR >= 2){
-    const a = clamp((Math.abs(sig) - 0.35) / 0.65, 0, 1);
-    wctx.strokeStyle = sig >= 0 ? `rgba(120,200,230,${0.5 * a})` : `rgba(230,165,120,${0.5 * a})`;
+  // communication: a visible pulse when the creature broadcasts, coloured by
+  // which of its three channels ("words") is loudest
+  const sg = c.sig || [0, 0, 0];
+  let dom = 0, dm = Math.abs(sg[0]);
+  for(let k = 1; k < 3; k++){ const v = Math.abs(sg[k]); if(v > dm){ dm = v; dom = k; } }
+  if(dm > 0.35 && appR >= 2){
+    const a = clamp((dm - 0.35) / 0.65, 0, 1);
+    const CH = ['230,165,120', '120,200,230', '170,140,230'];   // alarm / call / other
+    wctx.strokeStyle = `rgba(${CH[dom]},${0.5 * a})`;
     wctx.lineWidth = Math.max(0.8, size * 0.16);
     wctx.beginPath(); wctx.arc(c.x, c.y, size + 3 + a * 7, 0, TAU); wctx.stroke();
   }
@@ -111,7 +115,8 @@ function sickRing(c, size, z){
 // short ambient line from cheap state (no perception needed)
 function ambientText(c){
   if(c.sick > 0) return t('thSick');
-  if(Math.abs(c.signal || 0) > 0.6) return (c.g.diet || 0) > 0.6 ? t('thGrowl') : t('thCall');
+  const sg = c.sig || [0, 0, 0];
+  if(Math.max(Math.abs(sg[0]), Math.abs(sg[1]), Math.abs(sg[2])) > 0.6) return (c.g.diet || 0) > 0.6 ? t('thGrowl') : t('thCall');
   if(c.energy < 26) return t('thHungry');
   return null;
 }
@@ -124,8 +129,8 @@ export function selectedThought(c){
   if(inp[5] > 0.3 && (c.g.diet || 0) > 0.5) return t('thHunt'); // prey in sight
   if(inp[12] < 0.4 && inp[2] > 0.2) return t('thFood');         // hungry with food near
   if(inp[12] < 0.4) return t('thHungry');
-  if(Math.abs(inp[16]) > 0.4) return t('thHeard');             // hears a call
-  if(Math.abs(a.out[4]) > 0.5) return t('thCall');             // broadcasting
+  if(Math.max(Math.abs(inp[16]), Math.abs(inp[17]), Math.abs(inp[18])) > 0.4) return t('thHeard');   // hears a call
+  if(Math.max(Math.abs(a.out[4]), Math.abs(a.out[5]), Math.abs(a.out[6])) > 0.5) return t('thCall'); // broadcasting
   if(inp[11] > 0.4) return t('thFlock');                        // among the herd
   if(inp[12] > 1.0) return t('thCalm');
   return t('thWander');

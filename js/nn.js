@@ -5,11 +5,41 @@
 import { clamp, gauss } from './utils.js';
 import { P } from './state.js';
 
-// Inputs (18): food fwd/lat/pres, prey fwd/lat/pres, threat fwd/lat/pres,
-//              neighbour fwd/lat/density, energy, season, mem0, mem1, heard-signal, bias
-// Outputs (5): moveX, moveY, mem0, mem1, signal (broadcast call)
-export const NIN = 18, NOUT = 5, NMEM = 2;
+// Inputs (20): food fwd/lat/pres, prey fwd/lat/pres, threat fwd/lat/pres,
+//              neighbour fwd/lat/density, energy, season, mem0, mem1,
+//              heard-signal x3 (a small evolvable "vocabulary"), bias
+// Outputs (7): moveX, moveY, mem0, mem1, signal0/1/2 (three broadcast channels)
+export const NCHAN = 3;                 // number of communication channels
+export const NIN = 20, NOUT = 7, NMEM = 2;
+export const IN_HEARD = 16;             // heard channels occupy inputs 16..16+NCHAN-1
+export const OUT_SIG = 4;               // signal channels occupy outputs 4..4+NCHAN-1
 export const MIN_NH = 4, MAX_NH = 24;
+
+// previous topology (single signal channel) — kept for migrating old saved brains
+const NIN_OLD = 18, NOUT_OLD = 5;
+export const brainLenOld = nh => nh * NIN_OLD + nh + nh * NOUT_OLD + NOUT_OLD;
+// remap a v8 brain (18 in / 5 out) into the new 20 in / 7 out layout,
+// preserving every learned weight and seeding the two new channels faintly.
+export function migrateBrain(nh, wOld){
+  const b1o = nh * NIN_OLD, w2o = nh * NIN_OLD + nh, b2o = nh * NIN_OLD + nh + nh * NOUT_OLD;
+  const w = new Array(brainLen(nh)); let p = 0;
+  for(let j = 0; j < nh; j++){                     // input->hidden
+    const base = j * NIN_OLD;
+    for(let i = 0; i < 16; i++) w[p++] = wOld[base + i];  // 0..15 unchanged
+    w[p++] = wOld[base + 16];                             // heard0 <- old heard
+    w[p++] = gauss() * 0.2; w[p++] = gauss() * 0.2;       // heard1, heard2 (new)
+    w[p++] = wOld[base + 17];                             // bias(19) <- old bias(17)
+  }
+  for(let j = 0; j < nh; j++) w[p++] = wOld[b1o + j];     // hidden bias (unchanged)
+  for(let j = 0; j < nh; j++){                     // hidden->output
+    const base = w2o + j * NOUT_OLD;
+    for(let k = 0; k < 5; k++) w[p++] = wOld[base + k];   // move,mem,sig0
+    w[p++] = gauss() * 0.2; w[p++] = gauss() * 0.2;       // sig1, sig2 (new)
+  }
+  for(let k = 0; k < 5; k++) w[p++] = wOld[b2o + k];      // output bias 0..4
+  w[p++] = gauss() * 0.2; w[p++] = gauss() * 0.2;         // sig1, sig2 bias
+  return { nh, w };
+}
 
 // weight layout for a given hidden size (hidden-major):
 //   [0 .. nh*NIN)          input->hidden, neuron j inputs contiguous at j*NIN

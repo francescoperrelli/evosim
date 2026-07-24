@@ -3,7 +3,7 @@
 import { rnd, clamp } from './utils.js';
 import { P, S, TYPES, PREDATORS, BRAIN_W, INNATE_W, NEIGH_R2, SEP_R2, CELL, SAVE_KEY, seasonInfo, dayInfo } from './state.js';
 import { randomGenome, mutateGenome, crossover, makeCreature, metabolism } from './genome.js';
-import { brainForward, getHidden, NIN, NOUT } from './nn.js';
+import { brainForward, getHidden, NIN, NOUT, NCHAN, IN_HEARD, OUT_SIG, migrateBrain, brainLenOld } from './nn.js';
 import { evalChallenge } from './challenges.js';
 
 const _in = new Array(NIN), _out = new Array(NOUT);
@@ -186,7 +186,7 @@ export function step(){
 
     let preyRef = null, preyD = senseSq, preyx = 0, preyy = 0;
     let thrHas = false, thrD = senseSq, thrx = 0, thry = 0;
-    let cnt = 0, sumx = 0, sumy = 0, sumvx = 0, sumvy = 0, sepx = 0, sepy = 0, sumSig = 0;
+    let cnt = 0, sumx = 0, sumy = 0, sumvx = 0, sumvy = 0, sepx = 0, sepy = 0, sumS0 = 0, sumS1 = 0, sumS2 = 0;
     let bfx = 0, bfy = 0, bfD = senseSq, bfRef = null;
     let mateRef = null, mateD = senseSq, matex = 0, matey = 0;
     const mateReadyE = P[cfg.reproE] * 0.85;
@@ -205,7 +205,8 @@ export function step(){
           const dx = o.x - c.x, dy = o.y - c.y, d = dx * dx + dy * dy;
           if(c.sick > 0 && o.sick === 0 && d < 700 && Math.random() < 0.04) o.sick = 500;   // contagion
           if(o.type === c.type){
-            if(d < NEIGH_R2){ cnt++; sumx += o.x; sumy += o.y; sumvx += o.vx; sumvy += o.vy; sumSig += o.signal;
+            if(d < NEIGH_R2){ cnt++; sumx += o.x; sumy += o.y; sumvx += o.vx; sumvy += o.vy;
+              sumS0 += o.sig[0]; sumS1 += o.sig[1]; sumS2 += o.sig[2];
               if(d < SEP_R2){ sepx += (c.x - o.x); sepy += (c.y - o.y); } }
             if(d < mateD && o.g.sexual > 0.5 && o.energy >= mateReadyE && o.matedTick !== S.tick && mateCompatible(g, o.g)){
               mateD = d; mateRef = o; matex = dx; matey = dy;
@@ -247,12 +248,14 @@ export function step(){
     _in[12] = clamp(c.energy / P[cfg.reproE], 0, 1.5);
     _in[13] = seasonSig;
     _in[14] = c.mem[0]; _in[15] = c.mem[1];
-    _in[16] = cnt ? sumSig / cnt : 0;   // signal heard from same-type neighbours
-    _in[17] = 1;
-    if(cnt && sumSig / cnt < -0.4) c.alert = 30;   // an alarm call was heard -> become vigilant
+    const h0 = cnt ? sumS0 / cnt : 0;               // three "words" heard from same-type neighbours
+    _in[IN_HEARD] = h0; _in[IN_HEARD + 1] = cnt ? sumS1 / cnt : 0; _in[IN_HEARD + 2] = cnt ? sumS2 / cnt : 0;
+    _in[19] = 1;
+    if(cnt && h0 < -0.4) c.alert = 30;              // channel 0 keeps its innate alarm meaning
     c.groupSize = cnt;                              // remembered for cooperative defense
     brainForward(g.brain, _in, _out);
-    c.mem[0] = _out[2]; c.mem[1] = _out[3]; c.signal = _out[4];
+    c.mem[0] = _out[2]; c.mem[1] = _out[3];
+    c.sig[0] = _out[OUT_SIG]; c.sig[1] = _out[OUT_SIG + 1]; c.sig[2] = _out[OUT_SIG + 2];
     if(c === S.selected){ const gh = getHidden(); c.act = { inp: _in.slice(), hid: gh.h.slice(0, gh.nh), out: _out.slice() }; }
 
     // instinct prior
@@ -279,7 +282,7 @@ export function step(){
     if(P.pherOn && !thrHas){
       pherGradient(c);
       const gl = Math.hypot(_pg[0], _pg[1]);
-      if(gl > 1e-3){ const s = 0.55 * (cfg.social ? 0.4 + g.sociality * 0.8 : 0.5) / gl; ix += _pg[0] * s; iy += _pg[1] * s; }
+      if(gl > 1e-3){ const s = 0.4 * (cfg.social ? 0.4 + g.sociality * 0.8 : 0.5) / gl; ix += _pg[0] * s; iy += _pg[1] * s; }
     }
 
     // combine brain + instinct
@@ -300,7 +303,8 @@ export function step(){
     // lay a scent mark; the better fed, the stronger the trail it leaves behind
     if(P.pherOn) pherDeposit(c, c.energy > P[cfg.reproE] * 0.5 ? 0.6 : 0.2);
 
-    c.energy -= metabolism(c) * (P.seasonsOn && si.idx === 3 ? 1.15 : 1) + Math.abs(c.signal) * 0.02;   // honest signalling costs
+    const sigCost = (Math.abs(c.sig[0]) + Math.abs(c.sig[1]) + Math.abs(c.sig[2])) * 0.012;   // honest signalling costs
+    c.energy -= metabolism(c) * (P.seasonsOn && si.idx === 3 ? 1.15 : 1) + sigCost;
     if(c.sick > 0){ c.sick--; c.energy -= 0.14; }        // disease drains energy
 
     // interactions
@@ -358,8 +362,8 @@ export function step(){
   if(herbN === 0) for(let i = 0; i < 30; i++) creatures.push(founder('herb'));
   // gentle immigration keeps diet niches occupied against the herbivory-collapse
   if(S.tick % 25 === 0){
-    if(P.omnivoresOn && omniN < 6 && herbN > 40) creatures.push(founder('omni'), founder('omni'));
-    if(P.predatorsOn && carnN < 4 && herbN > 55) creatures.push(founder('carn'), founder('carn'));
+    if(P.omnivoresOn && omniN < 6 && herbN > 30) creatures.push(founder('omni'), founder('omni'));
+    if(P.predatorsOn && carnN < 4 && herbN > 38) creatures.push(founder('carn'), founder('carn'));
   }
 
   S.creatures = creatures;
@@ -385,7 +389,7 @@ export function step(){
 /* ---------- save / load ---------- */
 export function snapshot(){
   return {
-    v: 8, tick: S.tick, predations: S.predations, maxGen: S.maxGen, ID: S.ID,
+    v: 9, tick: S.tick, predations: S.predations, maxGen: S.maxGen, ID: S.ID,
     worldW: S.worldW, worldH: S.worldH,
     params: { foodRate: P.foodRate, mut: P.mut, predatorsOn: P.predatorsOn, omnivoresOn: P.omnivoresOn,
               flocksOn: P.flocksOn, terrOn: P.terrOn, mimicOn: P.mimicOn, seasonsOn: P.seasonsOn },
@@ -406,19 +410,20 @@ export function snapshot(){
 }
 
 export function restore(s){
-  if(!s || s.v !== 8) return false;
+  if(!s || (s.v !== 8 && s.v !== 9)) return false;
   if(s.worldW){ S.worldW = s.worldW; S.worldH = s.worldH; }
   S.creatures = s.creatures.map(o => ({
     id: o.id, x: o.x, y: o.y, vx: 0, vy: 0, type: (o.t === 'carn' || o.t === 'omni' || o.t === 'herb') ? o.t : 'herb',
     energy: o.e, age: o.a, gen: o.gn, dead: false, homeX: (o.hx || o.x), homeY: (o.hy || o.y),
-    mem: [0, 0], matedTick: -1, lineage: o.id, kids: 0, act: null, sick: 0, parent: 0, anc: [], signal: 0, rad: o.g[2], alert: 0, groupSize: 0,
+    mem: [0, 0], matedTick: -1, lineage: o.id, kids: 0, act: null, sick: 0, parent: 0, anc: [], sig: [0, 0, 0], rad: o.g[2], alert: 0, groupSize: 0,
     g: { speed: o.g[0], sense: o.g[1], size: o.g[2], hue: o.g[3], sociality: o.g[4], camo: o.g[5],
          territoriality: o.g[6], territoryR: o.g[7], acuity: o.g[8],
          sexual: o.g[9] !== undefined ? o.g[9] : 0.5,
          diet: o.g[10] !== undefined ? o.g[10] : (o.t === 'carn' ? 0.85 : o.t === 'omni' ? 0.5 : 0.15),
          shape: o.g[11] !== undefined ? o.g[11] : 0.3, pattern: o.g[12] !== undefined ? o.g[12] : 0.5,
          altruism: o.g[13] !== undefined ? o.g[13] : 0.2,
-         brain: { nh: o.b.nh, w: o.b.w.slice() } }
+         // migrate single-channel (v8) brains up to the three-channel layout
+         brain: o.b.w.length === brainLenOld(o.b.nh) ? migrateBrain(o.b.nh, o.b.w) : { nh: o.b.nh, w: o.b.w.slice() } }
   }));
   S.food = s.food.map(a => ({ x: a[0], y: a[1] }));
   S.rocks = (s.rocks || []).map(a => ({ x: a[0], y: a[1], r: a[2] }));
