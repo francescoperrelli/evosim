@@ -73,6 +73,11 @@ can reopen it any time from the menu (📖 Tutorial).
 - **A world that matters** — biomes (fertile/barren), water and rocks, seasons and
   a day/night cycle.
 - **Play-god events** — meteors, droughts, epidemics.
+- **Co-evolving disease** — a pathogen strain carries *evolvable* virulence and
+  transmissibility and mutates as it jumps hosts, while hosts carry a heritable
+  *resistance* gene: virulence settles at an intermediate level, resistance rises
+  to meet it, and infection waxes and wanes — a Red Queen arms race. Unleash a
+  one-off epidemic from Events, or switch on endemic plagues in Options.
 - **Deep observability** — inspector with genome, live neural network, current
   "thought" and a navigable genealogy; an Evolution panel with average generation,
   brain size, diet distribution, dominant lineages, live **species count**,

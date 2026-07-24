@@ -1,6 +1,6 @@
 // Simulation engine: seasons, spatial-grid perception (egocentric vision,
 // prey/threat channels, memory), brain + instinct steering, interactions, save/load.
-import { rnd, clamp, rand, setSeed } from './utils.js';
+import { rnd, clamp, rand, gauss, setSeed } from './utils.js';
 import { P, S, TYPES, PREDATORS, BRAIN_W, INNATE_W, NEIGH_R2, SEP_R2, CELL, SAVE_KEY, seasonInfo, dayInfo, newLex } from './state.js';
 import { randomGenome, mutateGenome, crossover, makeCreature, metabolism } from './genome.js';
 import { brainForward, getHidden, learn, NIN, NOUT, NCHAN, IN_HEARD, OUT_SIG, migrateBrain, brainLenOld, blendToward } from './nn.js';
@@ -91,6 +91,13 @@ function pherUpdate(){
   S.pher = pher;
 }
 
+// ---- co-evolving disease ----
+// A pathogen strain carries evolvable virulence (harm) and transmissibility.
+// It mutates as it jumps hosts, so — traded off against the host's evolving
+// resistance gene — virulence finds its own level (a Red Queen arms race).
+function randomPathogen(){ return { vir: rnd(0.3, 0.7), trans: rnd(0.4, 0.8) }; }
+function mutatePathogen(p){ return { vir: clamp(p.vir + gauss() * 0.08, 0.02, 1), trans: clamp(p.trans + gauss() * 0.08, 0.05, 1) }; }
+
 // terrain: biome fertility field and water slowdown
 export function fertilityAt(x, y){
   let f = 1;
@@ -124,9 +131,10 @@ export function logEvent(key, n, loc){
   if(S.chronicle.length > 80) S.chronicle.pop();
 }
 function checkChronicle(){
-  let herb = 0, omni = 0, carn = 0, maxBrain = 0, maxBrainC = null, hOrn = 0, oOrn = 0, cOrn = 0;
+  let herb = 0, omni = 0, carn = 0, maxBrain = 0, maxBrainC = null, hOrn = 0, oOrn = 0, cOrn = 0, infected = 0, virSum = 0;
   for(const c of S.creatures){ const orn = c.g.ornament || 0;
     if(c.type === 'carn'){ carn++; cOrn += orn; } else if(c.type === 'omni'){ omni++; oOrn += orn; } else { herb++; hOrn += orn; }
+    if(c.sick > 0){ infected++; if(c.pathogen) virSum += c.pathogen.vir; }
     if(c.g.brain.nh > maxBrain){ maxBrain = c.g.brain.nh; maxBrainC = c; } }
   const avgOrn = omni ? oOrn / omni : 0;                 // omnivores are the sexual species
   const carnOrn = carn ? cOrn / carn : 0, herbOrn = herb ? hOrn / herb : 0;
@@ -154,7 +162,12 @@ function checkChronicle(){
   if(carnTier > (pv.carnTier || 0) && carnOrn >= 0.45 && carn >= 3) logEvent('armament', Math.round(carnOrn * 100));   // carnivore contest
   const herbTier = Math.floor(herbOrn / 0.15);
   if(herbTier > (pv.herbTier || 0) && herbOrn >= 0.35 && herb >= 8) logEvent('herbshow', Math.round(herbOrn * 100));   // herbivore social display
-  S.chronPrev = { herb, omni, carn, total, genTier: Math.max(genTier, pv.genTier), maxBrain: Math.max(maxBrain, pv.maxBrain), speciesMax: Math.max(sp, pv.speciesMax), dialTier: Math.max(dvTier, pv.dialTier || 0), ornTier: Math.max(ornTier, pv.ornTier || 0), carnTier: Math.max(carnTier, pv.carnTier || 0), herbTier: Math.max(herbTier, pv.herbTier || 0) };
+  // disease: announce a pandemic once per outbreak (latched, resets when it subsides)
+  const infFrac = total ? infected / total : 0;
+  let pandemic = pv.pandemic || false;
+  if(infFrac > 0.35 && total > 50 && !pandemic){ logEvent('pandemic', Math.round(infFrac * 100)); pandemic = true; }
+  else if(infFrac < 0.1) pandemic = false;
+  S.chronPrev = { herb, omni, carn, total, genTier: Math.max(genTier, pv.genTier), maxBrain: Math.max(maxBrain, pv.maxBrain), speciesMax: Math.max(sp, pv.speciesMax), dialTier: Math.max(dvTier, pv.dialTier || 0), ornTier: Math.max(ornTier, pv.ornTier || 0), carnTier: Math.max(carnTier, pv.carnTier || 0), herbTier: Math.max(herbTier, pv.herbTier || 0), pandemic };
 }
 export { checkChronicle };
 
@@ -292,7 +305,10 @@ export function step(){
           const o = cb[bi];
           if(o === c || o.dead) continue;
           const dx = o.x - c.x, dy = o.y - c.y, d = dx * dx + dy * dy;
-          if(c.sick > 0 && o.sick === 0 && d < 700 && rand() < 0.04) o.sick = 500;   // contagion
+          // contagion: transmission scales with the strain's transmissibility and the target's resistance
+          if(c.sick > 0 && c.pathogen && o.sick === 0 && o.immune <= 0 && d < 700){
+            if(rand() < c.pathogen.trans * (1 - (o.g.resist || 0)) * 0.11){ o.sick = 480; o.pathogen = mutatePathogen(c.pathogen); }
+          }
           if(o.type === c.type){
             if(d < NEIGH_R2){ cnt++; sumx += o.x; sumy += o.y; sumvx += o.vx; sumvy += o.vy;
               sumS0 += o.sig[0]; sumS1 += o.sig[1]; sumS2 += o.sig[2];
@@ -430,7 +446,10 @@ export function step(){
     // carnivore contest: yielding to a showier rival costs energy, so intimidation
     // displays escalate (armament selection), bounded by the ornament's metabolic cost
     if(cfg.terr && ornRival > (g.ornament || 0) + 0.08) c.energy -= 0.05;
-    if(c.sick > 0){ c.sick--; c.energy -= 0.14; }        // disease drains energy
+    if(c.sick > 0){ c.sick--;                             // disease drains energy by its virulence, softened by resistance
+      c.energy -= c.pathogen ? (0.05 + c.pathogen.vir * (1 - (c.g.resist || 0)) * 0.5) : 0.14;
+      if(c.sick === 0){ c.pathogen = null; c.immune = 700; }   // recover -> temporary immunity
+    } else if(c.immune > 0) c.immune--;
 
     // interactions
     if(cfg.eatsPlants && bfRef){
@@ -535,6 +554,11 @@ export function step(){
   }
   if(S.challenge && S.tick % 15 === 0) evalChallenge();
   if(P.nestsOn && S.tick % 150 === 0) updateNests(); else if(!P.nestsOn && S.nests.length) S.nests.length = 0;
+  // endemic disease: keep a faint level of infection alive so pathogens persist and co-evolve
+  if(P.plaguesOn && S.tick % 40 === 0 && S.creatures.length > 30){
+    let infected = 0; for(const c of S.creatures) if(c.sick > 0){ infected++; if(infected >= 3) break; }
+    if(infected < 3 && rand() < 0.5){ const c = S.creatures[(rand() * S.creatures.length) | 0]; if(c.immune <= 0 && c.sick === 0){ c.sick = 500; c.pathogen = randomPathogen(); } }
+  }
   if(S.tick % 60 === 0) checkChronicle();
   // fade the lexicon meter so it tracks the living population, not all history
   if(S.lex && S.tick % 300 === 0){
@@ -553,7 +577,7 @@ export function snapshot(){
     worldW: S.worldW, worldH: S.worldH,
     params: { foodRate: P.foodRate, mut: P.mut, predatorsOn: P.predatorsOn, omnivoresOn: P.omnivoresOn,
               flocksOn: P.flocksOn, terrOn: P.terrOn, mimicOn: P.mimicOn, seasonsOn: P.seasonsOn,
-              pherOn: P.pherOn, cultureOn: P.cultureOn, learnOn: P.learnOn, nestsOn: P.nestsOn },
+              pherOn: P.pherOn, cultureOn: P.cultureOn, learnOn: P.learnOn, nestsOn: P.nestsOn, plaguesOn: P.plaguesOn },
     creatures: S.creatures.map(c => ({
       x: +c.x.toFixed(1), y: +c.y.toFixed(1), t: c.type,
       e: +c.energy.toFixed(1), a: c.age, gn: c.gen, id: c.id, hx: +c.homeX.toFixed(1), hy: +c.homeY.toFixed(1),
@@ -561,7 +585,7 @@ export function snapshot(){
           +c.g.sociality.toFixed(2), +c.g.camo.toFixed(2), +c.g.territoriality.toFixed(2),
           +c.g.territoryR.toFixed(1), +c.g.acuity.toFixed(2), +c.g.sexual.toFixed(2), +c.g.diet.toFixed(3),
           +c.g.shape.toFixed(2), +c.g.pattern.toFixed(2), +c.g.altruism.toFixed(2),
-          +(c.g.ornament || 0).toFixed(2), +(c.g.preference || 0).toFixed(2)],
+          +(c.g.ornament || 0).toFixed(2), +(c.g.preference || 0).toFixed(2), +(c.g.resist || 0).toFixed(2)],
       b: { nh: c.g.brain.nh, w: c.g.brain.w.map(x => +x.toFixed(3)) }
     })),
     food: S.food.map(f => [+f.x.toFixed(1), +f.y.toFixed(1)]),
@@ -577,7 +601,7 @@ export function restore(s){
   S.creatures = s.creatures.map(o => ({
     id: o.id, x: o.x, y: o.y, vx: 0, vy: 0, type: (o.t === 'carn' || o.t === 'omni' || o.t === 'herb') ? o.t : 'herb',
     energy: o.e, age: o.a, gen: o.gn, dead: false, homeX: (o.hx || o.x), homeY: (o.hy || o.y),
-    mem: [0, 0], matedTick: -1, lineage: o.id, kids: 0, act: null, sick: 0, parent: 0, anc: [], sig: [0, 0, 0], rad: o.g[2], alert: 0, groupSize: 0,
+    mem: [0, 0], matedTick: -1, lineage: o.id, kids: 0, act: null, sick: 0, pathogen: null, immune: 0, parent: 0, anc: [], sig: [0, 0, 0], rad: o.g[2], alert: 0, groupSize: 0,
     g: { speed: o.g[0], sense: o.g[1], size: o.g[2], hue: o.g[3], sociality: o.g[4], camo: o.g[5],
          territoriality: o.g[6], territoryR: o.g[7], acuity: o.g[8],
          sexual: o.g[9] !== undefined ? o.g[9] : 0.5,
@@ -585,6 +609,7 @@ export function restore(s){
          shape: o.g[11] !== undefined ? o.g[11] : 0.3, pattern: o.g[12] !== undefined ? o.g[12] : 0.5,
          altruism: o.g[13] !== undefined ? o.g[13] : 0.2,
          ornament: o.g[14] !== undefined ? o.g[14] : 0.1, preference: o.g[15] !== undefined ? o.g[15] : 0.15,
+         resist: o.g[16] !== undefined ? o.g[16] : 0.05,
          // migrate single-channel (v8) brains up to the three-channel layout
          brain: o.b.w.length === brainLenOld(o.b.nh) ? migrateBrain(o.b.nh, o.b.w) : { nh: o.b.nh, w: o.b.w.slice() } }
   }));
@@ -616,9 +641,9 @@ export function meteor(x, y){
 }
 export function startDrought(){ S.drought = 2200; }
 export function startEpidemic(){
-  let n = 0;
-  for(const c of S.creatures){ if(rand() < 0.06){ c.sick = 600; n++; } }
-  if(n === 0 && S.creatures.length) S.creatures[(rand() * S.creatures.length) | 0].sick = 600;
+  const strain = randomPathogen(); let n = 0;   // one outbreak = one founding strain that then evolves as it spreads
+  for(const c of S.creatures){ if(rand() < 0.06){ c.sick = 600; c.pathogen = { vir: strain.vir, trans: strain.trans }; n++; } }
+  if(n === 0 && S.creatures.length){ const c = S.creatures[(rand() * S.creatures.length) | 0]; c.sick = 600; c.pathogen = { vir: strain.vir, trans: strain.trans }; }
 }
 export function addRock(x, y){ S.rocks.push({ x, y, r: rnd(16, 30) }); if(S.rocks.length > 140) S.rocks.shift(); }
 export function addWater(x, y){ S.water.push({ x, y, r: rnd(28, 46) }); if(S.water.length > 140) S.water.shift(); }

@@ -35,7 +35,7 @@ export function refreshMenu(){
 function syncControls(){
   const set = (id, val) => { const e = el(id); if(e){ e.value = val; e.dispatchEvent(new Event('input')); } };
   set('rFood', P.foodRate); set('rMut', Math.round(P.mut * 100));
-  [['tPred','predatorsOn'],['tOmni','omnivoresOn'],['tFlock','flocksOn'],['tTerr','terrOn'],['tMimic','mimicOn'],['tSeason','seasonsOn'],['tDay','dayNightOn'],['tBubbles','bubblesOn'],['tPher','pherOn'],['tCulture','cultureOn'],['tLearn','learnOn'],['tNests','nestsOn']]
+  [['tPred','predatorsOn'],['tOmni','omnivoresOn'],['tFlock','flocksOn'],['tTerr','terrOn'],['tMimic','mimicOn'],['tSeason','seasonsOn'],['tDay','dayNightOn'],['tBubbles','bubblesOn'],['tPher','pherOn'],['tCulture','cultureOn'],['tLearn','learnOn'],['tNests','nestsOn'],['tPlagues','plaguesOn']]
     .forEach(([id, k]) => { const e = el(id); if(e) e.checked = P[k]; });
 }
 
@@ -75,7 +75,7 @@ const ensureSpecies = (type, count, min) => {
 };
 bindToggle('tPred', 'predatorsOn', on => { if(!on) S.creatures = S.creatures.filter(c => c.type !== 'carn'); else ensureSpecies('carn', P.carnStart, 25); });
 bindToggle('tOmni', 'omnivoresOn', on => { if(!on) S.creatures = S.creatures.filter(c => c.type !== 'omni'); else ensureSpecies('omni', P.omniStart, 20); });
-bindToggle('tFlock', 'flocksOn'); bindToggle('tTerr', 'terrOn'); bindToggle('tMimic', 'mimicOn'); bindToggle('tSeason', 'seasonsOn'); bindToggle('tDay', 'dayNightOn'); bindToggle('tBubbles', 'bubblesOn'); bindToggle('tPher', 'pherOn'); bindToggle('tCulture', 'cultureOn'); bindToggle('tLearn', 'learnOn'); bindToggle('tNests', 'nestsOn');
+bindToggle('tFlock', 'flocksOn'); bindToggle('tTerr', 'terrOn'); bindToggle('tMimic', 'mimicOn'); bindToggle('tSeason', 'seasonsOn'); bindToggle('tDay', 'dayNightOn'); bindToggle('tBubbles', 'bubblesOn'); bindToggle('tPher', 'pherOn'); bindToggle('tCulture', 'cultureOn'); bindToggle('tLearn', 'learnOn'); bindToggle('tNests', 'nestsOn'); bindToggle('tPlagues', 'plaguesOn');
 
 el('btnSave').onclick = () => toast(saveLocal() ? t('saved') : t('noStore'));
 el('btnOpt').onclick = () => { updateSeedUI(); show('options'); };
@@ -352,6 +352,7 @@ export function refreshInspector(){
   el('bgAltruism').style.width = ((g.altruism || 0) * 100) + '%';
   el('bgOrnament').style.width = ((g.ornament || 0) * 100) + '%';
   el('bgPreference').style.width = ((g.preference || 0) * 100) + '%';
+  el('bgResist').style.width = ((g.resist || 0) * 100) + '%';
   // live "voice": each channel's current output as a centre-anchored bar
   const CHCOL = ['#e6a578', '#78c8e6', '#aa8ce6'], sg = c.sig || [0, 0, 0];
   for(let k = 0; k < 3; k++){
