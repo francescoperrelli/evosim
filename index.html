@@ -14,6 +14,7 @@
       <span class="brand">Evo<em>Sim</em></span>
       <span id="season"></span>
       <span class="rgroup" style="margin-left:auto; display:flex; gap:8px; pointer-events:auto">
+        <button id="btnAudio" class="ctlbtn" title="Audio">🔊</button>
         <button id="btnZoomOut" class="ctlbtn" title="Zoom -">−</button>
         <button id="btnZoomIn" class="ctlbtn" title="Zoom +">+</button>
         <button id="btnMode" data-i18n="modeFood">🌱 Semina</button>
@@ -87,6 +88,7 @@
         <button class="btn" id="mTut" data-i18n="tutorial">📖 Tutorial</button>
         <button class="btn" id="mLoad" data-i18n="load">📂 Carica</button>
         <button class="btn" id="mSave" data-i18n="save">💾 Salva</button>
+        <button class="btn" id="mSlots" data-i18n="slotsBtn">📁 Slot di salvataggio</button>
         <button class="btn" id="mOpt" data-i18n="options">⚙ Opzioni</button>
         <button class="btn" id="mEvo" data-i18n="evoBtn">📊 Evoluzione</button>
         <button class="btn" id="mEvents" data-i18n="eventsBtn">⚡ Eventi</button>
@@ -132,6 +134,8 @@
         <div class="toggle"><span data-i18n="optMimic">Mimetismo</span><label class="switch"><input type="checkbox" id="tMimic" checked><span class="slider"></span></label></div>
         <div class="toggle"><span data-i18n="optSeasons">Stagioni</span><label class="switch"><input type="checkbox" id="tSeason" checked><span class="slider"></span></label></div>
         <div class="toggle"><span data-i18n="optDayNight">Ciclo giorno/notte</span><label class="switch"><input type="checkbox" id="tDay" checked><span class="slider"></span></label></div>
+        <div class="toggle"><span data-i18n="optMusic">Musica ambientale</span><label class="switch"><input type="checkbox" id="tMusic" checked><span class="slider"></span></label></div>
+        <div class="toggle"><span data-i18n="optSfx">Effetti sonori</span><label class="switch"><input type="checkbox" id="tSfx" checked><span class="slider"></span></label></div>
       </div>
       <div class="row" style="margin-top:20px">
         <button class="btn ghost" id="oExport" data-i18n="exportWorld">⬇ Esporta</button>
@@ -223,6 +227,20 @@
         <button class="btn ghost" id="btnClearTerrain" data-i18n="evClear">🧹 Pulisci terreno</button>
       </div>
       <div class="row"><button class="btn primary" id="evtClose" data-i18n="close">Chiudi</button></div>
+    </div>
+  </div>
+
+  <!-- SAVE SLOTS -->
+  <div class="overlay" id="slots">
+    <div class="card">
+      <p class="eyebrow" data-i18n="slotsEyebrow">Mondi salvati</p>
+      <h3 data-i18n="slotsTitle">Slot di salvataggio</h3>
+      <div class="slot-newrow">
+        <input id="slotName" type="text" maxlength="40" placeholder="Nome del mondo" data-i18n-ph="slotPlaceholder">
+        <button class="btn primary" id="slotSave" data-i18n="slotSave">Salva</button>
+      </div>
+      <div id="slotList"></div>
+      <div class="row"><button class="btn primary" id="slotsClose" data-i18n="close">Chiudi</button></div>
     </div>
   </div>
 

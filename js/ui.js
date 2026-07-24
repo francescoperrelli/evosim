@@ -5,12 +5,14 @@ import { seed, saveLocal, hasSave, loadLocal, clearLocal, snapshot, restore, met
 import { makeCreature, randomGenome } from './genome.js';
 import { drawNetwork, drawEvolution } from './render.js';
 import { CHALLENGES, startChallenge, stopChallenge } from './challenges.js';
+import { initAudio, setMusic, setSfx, musicOn, sfxMeteor, sfxWin, sfxLose } from './audio.js';
+import { listSlots, saveSlot, loadSlot, deleteSlot } from './saves.js';
 import { I18N, t, setLang, getLang } from './i18n.js';
 
 /* ---------- overlays ---------- */
 function show(id){ el(id).classList.add('show'); }
 function hide(id){ el(id).classList.remove('show'); }
-function hideAll(){ ['menu','tutorial','options','inspector','evolution','events','genealogy','challenges'].forEach(hide); }
+function hideAll(){ ['menu','tutorial','options','inspector','evolution','events','genealogy','challenges','slots'].forEach(hide); }
 export { show };
 
 let toastT = null;
@@ -49,6 +51,8 @@ export function applyLang(){
   el('rMut').dispatchEvent(new Event('input'));
   el('rSpeed').dispatchEvent(new Event('input'));
   el('btnMode').innerHTML = S.tool === 'inspect' ? t('modeInspect') : t('modeFood');
+  document.querySelectorAll('[data-i18n-ph]').forEach(n => { const k = n.getAttribute('data-i18n-ph'); if(I18N[lang][k] !== undefined) n.placeholder = I18N[lang][k]; });
+  el('btnAudio').textContent = musicOn() ? '🔊' : '🔇';
   syncPlayBtn();
   document.querySelectorAll('.lang button').forEach(b => b.classList.toggle('on', b.getAttribute('data-lang') === lang));
   try{ localStorage.setItem(LANG_KEY, lang); }catch(e){}
@@ -107,6 +111,36 @@ el('chClose').onclick = () => hide('challenges');
 el('chAbandon').onclick = () => { stopChallenge(); hide('challenges'); };
 el('chDismiss').onclick = () => stopChallenge();
 
+/* ---------- audio ---------- */
+window.addEventListener('pointerdown', initAudio);   // browsers require a gesture to start audio
+el('btnAudio').onclick = () => { const on = !musicOn(); setMusic(on); el('btnAudio').textContent = on ? '🔊' : '🔇'; const t2 = el('tMusic'); if(t2) t2.checked = on; };
+el('tMusic').onchange = function(){ setMusic(this.checked); el('btnAudio').textContent = this.checked ? '🔊' : '🔇'; };
+el('tSfx').onchange = function(){ setSfx(this.checked); };
+
+/* ---------- save slots ---------- */
+function buildSlotList(){
+  const list = el('slotList'); list.innerHTML = '';
+  const slots = listSlots();
+  if(!slots.length){ list.innerHTML = `<div class="slot-empty">${t('slotEmpty')}</div>`; return; }
+  for(const s of slots){
+    const item = document.createElement('div'); item.className = 'slot-item';
+    const info = document.createElement('div'); info.className = 'info';
+    const b = document.createElement('b'); b.textContent = s.name;
+    const d = new Date(s.at), meta = document.createElement('span');
+    meta.textContent = `${s.pop} · t${s.tick} · ${d.toLocaleDateString()} ${d.toLocaleTimeString().slice(0, 5)}`;
+    info.appendChild(b); info.appendChild(meta);
+    const load = document.createElement('button'); load.className = 'btn'; load.textContent = t('slotLoad');
+    load.onclick = () => { if(loadSlot(s.name)){ syncControls(); clampCam(); saveLocal(); toast(t('slotLoaded')); hideAll(); S.running = true; syncPlayBtn(); } };
+    const del = document.createElement('button'); del.className = 'btn ghost'; del.textContent = t('slotDelete');
+    del.onclick = () => { deleteSlot(s.name); buildSlotList(); toast(t('slotDeleted')); };
+    item.appendChild(info); item.appendChild(load); item.appendChild(del); list.appendChild(item);
+  }
+}
+function openSlots(){ buildSlotList(); show('slots'); }
+el('mSlots').onclick = openSlots;
+el('slotsClose').onclick = () => hide('slots');
+el('slotSave').onclick = () => { if(saveSlot(el('slotName').value)){ el('slotName').value = ''; buildSlotList(); toast(t('slotSaved')); } };
+
 export function refreshChallenge(){
   const bar = el('challengeBar'), ch = S.challenge;
   if(!ch){ bar.classList.remove('show', 'won', 'lost'); return; }
@@ -117,7 +151,7 @@ export function refreshChallenge(){
   bar.classList.toggle('won', ch.status === 'won');
   bar.classList.toggle('lost', ch.status === 'lost');
   el('chStatus').textContent = ch.status === 'won' ? t('chWon') : ch.status === 'lost' ? t('chLost') : Math.round(ch.progress * 100) + '%';
-  if(ch.status !== 'active' && !ch._notified){ ch._notified = true; toast((ch.status === 'won' ? t('chWon') : t('chLost')) + ' — ' + t('ch' + cap + 'Name')); }
+  if(ch.status !== 'active' && !ch._notified){ ch._notified = true; (ch.status === 'won' ? sfxWin : sfxLose)(); toast((ch.status === 'won' ? t('chWon') : t('chLost')) + ' — ' + t('ch' + cap + 'Name')); }
 }
 function updateModeBtn(){
   const on = S.tool === 'inspect';
@@ -277,7 +311,7 @@ function endPointer(e){
     const r = world.getBoundingClientRect(), w = screenToWorld(downX - r.left, downY - r.top);
     const tool = S.tool;
     if(tool === 'inspect') selectAt(w.x, w.y);
-    else if(tool === 'meteor'){ meteor(w.x, w.y); S.tool = 'plant'; updateModeBtn(); }
+    else if(tool === 'meteor'){ meteor(w.x, w.y); sfxMeteor(); S.tool = 'plant'; updateModeBtn(); }
     else if(tool === 'rock') addRock(w.x, w.y);
     else if(tool === 'water') addWater(w.x, w.y);
     else placeFood(w.x, w.y);

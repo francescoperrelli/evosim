@@ -55,7 +55,11 @@ export const I18N = {
     chBalanceName:"Equilibrio", chBalanceDesc:"Tieni erbivori, onnivori e carnivori tutti ≥15 per 1500 tempi.",
     chPredatorsName:"L'ascesa dei predatori", chPredatorsDesc:"Fai in modo che i carnivori superino gli erbivori.",
     chSurvivorsName:"Sopravvissuti", chSurvivorsDesc:"Mantieni la popolazione ≥80 per 2500 tempi (perdi se crolla sotto 25).",
-    chGiantName:"Il gigante", chGiantDesc:"Fai evolvere una creatura di dimensione ≥8.5." },
+    chGiantName:"Il gigante", chGiantDesc:"Fai evolvere una creatura di dimensione ≥8.5.",
+    slotsBtn:"📁 Slot di salvataggio", slotsEyebrow:"Mondi salvati", slotsTitle:"Slot di salvataggio",
+    slotPlaceholder:"Nome del mondo", slotSave:"Salva", slotLoad:"Carica", slotDelete:"Elimina",
+    slotEmpty:"Nessun mondo salvato. Dai un nome e premi Salva.", slotSaved:"💾 Slot salvato", slotLoaded:"📂 Slot caricato", slotDeleted:"🗑 Slot eliminato",
+    optMusic:"Musica ambientale", optSfx:"Effetti sonori" },
   en:{ menu:"☰ Menu", hint:"Drag to explore · wheel/pinch to zoom · tap to plant",
     numbers:"The ecosystem in numbers", herbivores:"Herbivores", carnivores:"Carnivores", omnivores:"Omnivores", plants:"Plants",
     time:"Time", generation:"Generation", kills:"Kills",
@@ -111,7 +115,11 @@ export const I18N = {
     chBalanceName:"Balance", chBalanceDesc:"Keep herbivores, omnivores and carnivores all ≥15 for 1500 ticks.",
     chPredatorsName:"Rise of the predators", chPredatorsDesc:"Make carnivores outnumber herbivores.",
     chSurvivorsName:"Survivors", chSurvivorsDesc:"Keep the population ≥80 for 2500 ticks (lose if it crashes below 25).",
-    chGiantName:"The giant", chGiantDesc:"Evolve a creature of size ≥8.5." }
+    chGiantName:"The giant", chGiantDesc:"Evolve a creature of size ≥8.5.",
+    slotsBtn:"📁 Save slots", slotsEyebrow:"Saved worlds", slotsTitle:"Save slots",
+    slotPlaceholder:"World name", slotSave:"Save", slotLoad:"Load", slotDelete:"Delete",
+    slotEmpty:"No saved worlds yet. Give one a name and press Save.", slotSaved:"💾 Slot saved", slotLoaded:"📂 Slot loaded", slotDeleted:"🗑 Slot deleted",
+    optMusic:"Ambient music", optSfx:"Sound effects" }
 };
 
 let lang = 'it';
