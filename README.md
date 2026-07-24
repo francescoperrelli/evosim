@@ -10,9 +10,14 @@ it all emerges.
 ## What's inside
 
 - **Evolving neural brains** — each creature is steered by a small recurrent
-  network with directional vision, memory and a signalling channel. Its **hidden
+  network with directional vision, memory and signalling channels. Its **hidden
   layer can grow or shrink by mutation** (with a metabolic cost), so intelligence
   itself evolves where it pays.
+- **Lifetime learning** — on top of evolution, each creature carries a small
+  plastic overlay that is reinforced (reward-modulated Hebbian learning) whenever
+  it feeds or hunts, so it *adapts within its own life*. The overlay isn't
+  inherited — offspring start blank and relearn — so genes that make learning
+  pay get selected (the Baldwin effect).
 - **An evolving diet** — diet is a continuous gene (herbivore → omnivore →
   carnivore); a lineage can shift its whole feeding strategy over generations.
 - **Bodies that evolve** — creatures are drawn from their genome: eyes scale with
@@ -30,6 +35,14 @@ it all emerges.
   meter** measures, live across the population, how each channel correlates with
   context (threat / prey / food / crowd) — so you can read what each evolved "word"
   has come to mean.
+- **Regional dialects** — each dominant lineage develops its own "accent": the
+  average signal it emits in a shared, relaxed reference context. The evolution
+  panel shows the dominant lineages' accent swatches and a live divergence score,
+  so you can watch linguistic diversity split lineage from lineage.
+- **Sexual selection** — the sexual species carries heritable *ornament* and
+  *preference* genes; choosy partners favour showier mates (Fisherian dynamics)
+  while the ornament costs energy to carry. Ornaments render as an evolving
+  display-fan — appearance shaped by courtship, not just survival.
 - **Cooperation** — an altruism gene lets the well-fed share energy with starving
   kin; carnivores hunting near allies get a pack bonus; alarm calls warn the herd.
 - **Cultural transmission** — a newborn can imitate the brain of the most thriving
@@ -38,6 +51,10 @@ it all emerges.
 - **Pheromone trails (stigmergy)** — each species lays a faint scent field as it
   moves; others drift up the gradient of their own kind, so paths and gathering
   points form on their own. Shown as soft coloured trails.
+- **Emergent nests** — where a kind repeatedly gathers, a persistent home site
+  crystallises out of the scent field (up to five per species). The young keep
+  close to a home of their kind and are harder for predators to pick off while
+  they shelter there.
 - **Flocks, territories, mimicry** — herding, patrolled dens, and a camouflage vs.
   acuity arms race.
 - **A world that matters** — biomes (fertile/barren), water and rocks, seasons and
