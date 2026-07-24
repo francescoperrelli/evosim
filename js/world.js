@@ -301,6 +301,7 @@ export function step(){
             let er = senseSq;
             if(P.mimicOn){ const f = 1 - o.g.camo * (1 - g.acuity) * 0.7; er = senseSq * f * f; }
             if(o.alert > 0) er *= 0.55;                    // an alert (warned) prey is harder to spot
+            if(o.g.ornament) er *= (1 + o.g.ornament * 0.5);   // a showy display is easier to spot (cost of the ornament)
             if(d < er && d < preyD){ preyD = d; preyRef = o; preyx = dx; preyy = dy; }
           }
           if(preds.length && preds.indexOf(o.type) >= 0){
@@ -365,6 +366,9 @@ export function step(){
       ix += (sumx / cnt - c.x) * 0.010 * s; iy += (sumy / cnt - c.y) * 0.010 * s;
       ix += (sumvx / cnt) * 0.10 * s;        iy += (sumvy / cnt) * 0.10 * s;
       ix += sepx * 0.05;                     iy += sepy * 0.05;
+      // social display: flockmates are drawn extra to showier kin, so a showy
+      // individual gathers a crowd around itself (and its safety-in-numbers)
+      if(attW > 0){ ix += (attrx / attW - c.x) * 0.016 * s; iy += (attry / attW - c.y) * 0.016 * s; }
     }
     if(cfg.terr && P.terrOn && !preyRef){
       const hxx = c.homeX - c.x, hyy = c.homeY - c.y, hd = Math.hypot(hxx, hyy);

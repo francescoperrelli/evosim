@@ -39,11 +39,17 @@ it all emerges.
   average signal it emits in a shared, relaxed reference context. The evolution
   panel shows the dominant lineages' accent swatches and a live divergence score,
   so you can watch linguistic diversity split lineage from lineage.
-- **Sexual selection** — the sexual species carries heritable *ornament* and
-  *preference* genes; choosy partners favour showier mates (Fisherian dynamics)
-  while the ornament costs energy to carry. As it evolves it reshapes the whole
-  look — a more vivid coat, a head-crown and a tail-fan — so appearance is shaped
-  by courtship, not just survival. When ornaments run away, the chronicle says so.
+- **Ornaments & selection on looks** — every creature carries heritable *ornament*
+  and *preference* genes, expressed as a vivid coat, a head-crown and a tail-fan
+  that all grow with the ornament (and cost energy to carry). Each kind is under a
+  different pressure: the sexual species runs **sexual selection** (choosy partners
+  favour showier mates — Fisherian runaway, with ornament and preference inherited
+  as a linked pair so the correlation can build); **carnivores** run **contest
+  selection** (yielding to a showier rival costs energy, so intimidation armaments
+  escalate); **herbivores** run **social selection** (showier individuals gather a
+  flock around them — safety in numbers — but are easier for predators to spot, so
+  the display settles at a balance). When sexual ornaments run away, the chronicle
+  says so.
 - **Cooperation** — an altruism gene lets the well-fed share energy with starving
   kin; carnivores hunting near allies get a pack bonus; alarm calls warn the herd.
 - **Cultural transmission** — a newborn can imitate the brain of the most thriving
