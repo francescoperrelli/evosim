@@ -11,6 +11,8 @@ it all emerges.
 A guided tour greets first-time visitors and reveals the layers step by step; you
 can reopen it any time from the menu (📖 Tutorial).
 
+![EvoSim in motion](assets/showcase.gif)
+
 ## What's inside
 
 - **Evolving neural brains** — each creature is steered by a small recurrent
