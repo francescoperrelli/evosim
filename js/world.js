@@ -42,7 +42,7 @@ export function seed(){
   S.creatures = []; S.food = []; S.tick = 0; S.predations = 0; S.maxGen = 0;
   S.popHist.length = 0; S.traitHist.length = 0; S.evoHist.length = 0; S.ID = 1; S.selected = null;
   S.records = { oldestAge: 0, maxKids: 0, maxGen: 0 };
-  S.rocks = []; S.water = []; S.drought = 0; S.effects = []; S.challenge = null; generateBiomes();
+  S.rocks = []; S.water = []; S.drought = 0; S.effects = []; S.challenge = null; S.shares = 0; S.packKills = 0; generateBiomes();
   for(let i = 0; i < P.herbStart; i++) S.creatures.push(founder('herb'));
   if(P.omnivoresOn) for(let i = 0; i < P.omniStart; i++) S.creatures.push(founder('omni'));
   if(P.predatorsOn) for(let i = 0; i < P.carnStart; i++) S.creatures.push(founder('carn'));
@@ -118,6 +118,10 @@ export function step(){
               if(d < SEP_R2){ sepx += (c.x - o.x); sepy += (c.y - o.y); } }
             if(d < mateD && o.g.sexual > 0.5 && o.energy >= mateReadyE && o.matedTick !== S.tick){
               mateD = d; mateRef = o; matex = dx; matey = dy;
+            }
+            // kin food-sharing: a well-fed altruist gives energy to a starving relative nearby
+            if(d < 900 && o.lineage === c.lineage && c.energy > P[cfg.reproE] * 0.7 && o.energy < P[cfg.reproE] * 0.35 && Math.random() < g.altruism * 0.08){
+              c.energy -= 8; o.energy += 6; S.shares++;
             }
             continue;
           }
@@ -283,7 +287,7 @@ export function snapshot(){
       g: [+c.g.speed.toFixed(3), +c.g.sense.toFixed(1), +c.g.size.toFixed(2), +c.g.hue.toFixed(1),
           +c.g.sociality.toFixed(2), +c.g.camo.toFixed(2), +c.g.territoriality.toFixed(2),
           +c.g.territoryR.toFixed(1), +c.g.acuity.toFixed(2), +c.g.sexual.toFixed(2), +c.g.diet.toFixed(3),
-          +c.g.shape.toFixed(2), +c.g.pattern.toFixed(2)],
+          +c.g.shape.toFixed(2), +c.g.pattern.toFixed(2), +c.g.altruism.toFixed(2)],
       b: { nh: c.g.brain.nh, w: c.g.brain.w.map(x => +x.toFixed(3)) }
     })),
     food: S.food.map(f => [+f.x.toFixed(1), +f.y.toFixed(1)]),
@@ -305,6 +309,7 @@ export function restore(s){
          sexual: o.g[9] !== undefined ? o.g[9] : 0.5,
          diet: o.g[10] !== undefined ? o.g[10] : (o.t === 'carn' ? 0.85 : o.t === 'omni' ? 0.5 : 0.15),
          shape: o.g[11] !== undefined ? o.g[11] : 0.3, pattern: o.g[12] !== undefined ? o.g[12] : 0.5,
+         altruism: o.g[13] !== undefined ? o.g[13] : 0.2,
          brain: { nh: o.b.nh, w: o.b.w.slice() } }
   }));
   S.food = s.food.map(a => ({ x: a[0], y: a[1] }));
