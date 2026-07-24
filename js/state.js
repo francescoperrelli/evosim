@@ -8,7 +8,7 @@ export const P = {
   omniReproE:150, omniStartE:90, omniMaxAge:2800,
   carnReproE:255, carnStartE:150, carnMaxAge:3200,
   seasonLength:3600, dayLength:1400,
-  predatorsOn:true, omnivoresOn:true, flocksOn:true, terrOn:true, mimicOn:true, seasonsOn:true, dayNightOn:true
+  predatorsOn:true, omnivoresOn:true, flocksOn:true, terrOn:true, mimicOn:true, seasonsOn:true, dayNightOn:true, bubblesOn:true
 };
 
 // Per-species configuration. `hunts` = types this species preys on.

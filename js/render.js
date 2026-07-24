@@ -107,6 +107,45 @@ function sickRing(c, g, z){
   wctx.beginPath(); wctx.arc(c.x, c.y, g.size + 3.5, 0, TAU); wctx.stroke();
 }
 
+/* ---------- thought bubbles: translate a creature's real state into words ---------- */
+// short ambient line from cheap state (no perception needed)
+function ambientText(c){
+  if(c.sick > 0) return t('thSick');
+  if(Math.abs(c.signal || 0) > 0.6) return (c.g.diet || 0) > 0.6 ? t('thGrowl') : t('thCall');
+  if(c.energy < 26) return t('thHungry');
+  return null;
+}
+// rich line for the selected creature, read from its sensory inputs + outputs
+export function selectedThought(c){
+  const a = c.act;
+  if(!a) return t('thWander');
+  const inp = a.inp;
+  if(inp[8] > 0.3) return t('thFlee');                          // a threat is near
+  if(inp[5] > 0.3 && (c.g.diet || 0) > 0.5) return t('thHunt'); // prey in sight
+  if(inp[12] < 0.4 && inp[2] > 0.2) return t('thFood');         // hungry with food near
+  if(inp[12] < 0.4) return t('thHungry');
+  if(Math.abs(inp[16]) > 0.4) return t('thHeard');             // hears a call
+  if(Math.abs(a.out[4]) > 0.5) return t('thCall');             // broadcasting
+  if(inp[11] > 0.4) return t('thFlock');                        // among the herd
+  if(inp[12] > 1.0) return t('thCalm');
+  return t('thWander');
+}
+function roundRect(x, y, w, h, r){
+  wctx.beginPath();
+  wctx.moveTo(x + r, y); wctx.arcTo(x + w, y, x + w, y + h, r); wctx.arcTo(x + w, y + h, x, y + h, r);
+  wctx.arcTo(x, y + h, x, y, r); wctx.arcTo(x, y, x + w, y, r); wctx.closePath();
+}
+function drawBubble(sx, sy, text, small){
+  wctx.font = (small ? 11 : 13) + 'px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+  const padX = 7, h = small ? 18 : 22, w = wctx.measureText(text).width + padX * 2;
+  const x = sx - w / 2, y = sy - h - 6;
+  wctx.fillStyle = 'rgba(18,24,18,.9)'; wctx.strokeStyle = 'rgba(150,190,120,.5)'; wctx.lineWidth = 1;
+  roundRect(x, y, w, h, 7); wctx.fill(); wctx.stroke();
+  wctx.beginPath(); wctx.moveTo(sx - 4, y + h - 0.5); wctx.lineTo(sx + 4, y + h - 0.5); wctx.lineTo(sx, y + h + 5); wctx.closePath(); wctx.fill();
+  wctx.fillStyle = '#e8eddc'; wctx.textAlign = 'center'; wctx.textBaseline = 'middle';
+  wctx.fillText(text, sx, y + h / 2);
+}
+
 export function draw(){
   const W = S.W, H = S.H, z = S.cam.zoom;
   // clear + seasonal wash in screen space
@@ -157,9 +196,13 @@ export function draw(){
   wctx.fillStyle = '#3a6b2e';
   for(const f of S.food){ if(!vis(f.x, f.y, 3)) continue; wctx.beginPath(); wctx.arc(f.x, f.y, 2.1, 0, TAU); wctx.fill(); }
   // creatures (evolved morphology, level-of-detail by apparent size)
+  const bubbles = [];
   for(const c of S.creatures){
     if(!vis(c.x, c.y, c.g.size + 6)) continue;
     drawCreature(c, z);
+    if(P.bubblesOn && bubbles.length < 16 && c.g.size * z >= 8 && c !== S.selected){
+      const txt = ambientText(c); if(txt) bubbles.push({ x: c.x, y: c.y, r: c.g.size, txt, small: true });
+    }
   }
   // meteor shockwaves
   for(const e of S.effects){
@@ -175,6 +218,11 @@ export function draw(){
     const c = S.selected;
     wctx.strokeStyle = '#ece7d7'; wctx.lineWidth = 2;
     wctx.beginPath(); wctx.arc(c.x, c.y, c.g.size + 6, 0, TAU); wctx.stroke();
+  }
+  // thought bubbles (screen space, so text stays readable at any zoom)
+  if(bubbles.length){
+    wctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    for(const bb of bubbles){ drawBubble((bb.x - S.cam.x) * z, (bb.y - S.cam.y) * z - bb.r * z, bb.txt, bb.small); }
   }
 }
 

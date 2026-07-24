@@ -59,7 +59,9 @@ export const I18N = {
     slotsBtn:"📁 Slot di salvataggio", slotsEyebrow:"Mondi salvati", slotsTitle:"Slot di salvataggio",
     slotPlaceholder:"Nome del mondo", slotSave:"Salva", slotLoad:"Carica", slotDelete:"Elimina",
     slotEmpty:"Nessun mondo salvato. Dai un nome e premi Salva.", slotSaved:"💾 Slot salvato", slotLoaded:"📂 Slot caricato", slotDeleted:"🗑 Slot eliminato",
-    optMusic:"Musica ambientale", optSfx:"Effetti sonori" },
+    optMusic:"Musica ambientale", optSfx:"Effetti sonori", optBubbles:"Nuvolette dei pensieri",
+    thFlee:"Un predatore!", thHunt:"Una preda...", thFood:"Cibo!", thHungry:"Ho fame...", thHeard:"Chi mi chiama?",
+    thCall:"Ehi!", thFlock:"Il branco!", thCalm:"Che pace...", thWander:"Mah...", thSick:"Non sto bene...", thGrowl:"Grr!" },
   en:{ menu:"☰ Menu", hint:"Drag to explore · wheel/pinch to zoom · tap to plant",
     numbers:"The ecosystem in numbers", herbivores:"Herbivores", carnivores:"Carnivores", omnivores:"Omnivores", plants:"Plants",
     time:"Time", generation:"Generation", kills:"Kills",
@@ -119,7 +121,9 @@ export const I18N = {
     slotsBtn:"📁 Save slots", slotsEyebrow:"Saved worlds", slotsTitle:"Save slots",
     slotPlaceholder:"World name", slotSave:"Save", slotLoad:"Load", slotDelete:"Delete",
     slotEmpty:"No saved worlds yet. Give one a name and press Save.", slotSaved:"💾 Slot saved", slotLoaded:"📂 Slot loaded", slotDeleted:"🗑 Slot deleted",
-    optMusic:"Ambient music", optSfx:"Sound effects" }
+    optMusic:"Ambient music", optSfx:"Sound effects", optBubbles:"Thought bubbles",
+    thFlee:"A predator!", thHunt:"Prey...", thFood:"Food!", thHungry:"So hungry...", thHeard:"Who's calling?",
+    thCall:"Hey!", thFlock:"The herd!", thCalm:"So peaceful...", thWander:"Hmm...", thSick:"I feel ill...", thGrowl:"Grr!" }
 };
 
 let lang = 'it';

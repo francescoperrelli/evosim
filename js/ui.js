@@ -3,7 +3,7 @@ import { el, rnd, clamp } from './utils.js';
 import { P, S, LANG_KEY, screenToWorld, zoomAt, clampCam } from './state.js';
 import { seed, saveLocal, hasSave, loadLocal, clearLocal, snapshot, restore, meteor, startDrought, startEpidemic, addRock, addWater, clearTerrain } from './world.js';
 import { makeCreature, randomGenome } from './genome.js';
-import { drawNetwork, drawEvolution } from './render.js';
+import { drawNetwork, drawEvolution, selectedThought } from './render.js';
 import { CHALLENGES, startChallenge, stopChallenge } from './challenges.js';
 import { initAudio, setMusic, setSfx, musicOn, sfxMeteor, sfxWin, sfxLose } from './audio.js';
 import { listSlots, saveSlot, loadSlot, deleteSlot } from './saves.js';
@@ -35,7 +35,7 @@ export function refreshMenu(){
 function syncControls(){
   const set = (id, val) => { const e = el(id); if(e){ e.value = val; e.dispatchEvent(new Event('input')); } };
   set('rFood', P.foodRate); set('rMut', Math.round(P.mut * 100));
-  [['tPred','predatorsOn'],['tOmni','omnivoresOn'],['tFlock','flocksOn'],['tTerr','terrOn'],['tMimic','mimicOn'],['tSeason','seasonsOn'],['tDay','dayNightOn']]
+  [['tPred','predatorsOn'],['tOmni','omnivoresOn'],['tFlock','flocksOn'],['tTerr','terrOn'],['tMimic','mimicOn'],['tSeason','seasonsOn'],['tDay','dayNightOn'],['tBubbles','bubblesOn']]
     .forEach(([id, k]) => { const e = el(id); if(e) e.checked = P[k]; });
 }
 
@@ -74,7 +74,7 @@ const ensureSpecies = (type, count, min) => {
 };
 bindToggle('tPred', 'predatorsOn', on => { if(!on) S.creatures = S.creatures.filter(c => c.type !== 'carn'); else ensureSpecies('carn', P.carnStart, 25); });
 bindToggle('tOmni', 'omnivoresOn', on => { if(!on) S.creatures = S.creatures.filter(c => c.type !== 'omni'); else ensureSpecies('omni', P.omniStart, 20); });
-bindToggle('tFlock', 'flocksOn'); bindToggle('tTerr', 'terrOn'); bindToggle('tMimic', 'mimicOn'); bindToggle('tSeason', 'seasonsOn'); bindToggle('tDay', 'dayNightOn');
+bindToggle('tFlock', 'flocksOn'); bindToggle('tTerr', 'terrOn'); bindToggle('tMimic', 'mimicOn'); bindToggle('tSeason', 'seasonsOn'); bindToggle('tDay', 'dayNightOn'); bindToggle('tBubbles', 'bubblesOn');
 
 el('btnSave').onclick = () => toast(saveLocal() ? t('saved') : t('noStore'));
 el('btnOpt').onclick = () => show('options');
@@ -247,6 +247,7 @@ export function refreshInspector(){
   el('inspDot').style.background = `hsl(${g.hue | 0} 60% 55%)`;
   el('inspType').textContent = t(TYPE_KEY[c.type]);
   el('inspMeta').textContent = `${t('lblEnergy')} ${c.energy | 0} · ${t('lblAge')} ${c.age} · ${t('lblGen')} ${c.gen} · ${g.sexual > 0.5 ? t('reproSex') : t('reproAsex')} · 🧠 ${g.brain.nh}`;
+  el('inspThought').textContent = '💭 « ' + selectedThought(c) + ' »';
   el('bgSpeed').style.width = barPct(g.speed, 0.4, 3.4) + '%';
   el('bgVision').style.width = barPct(g.sense, 20, 165) + '%';
   el('bgSize').style.width = barPct(g.size, 2.5, 9) + '%';
