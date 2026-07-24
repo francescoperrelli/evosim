@@ -30,7 +30,7 @@ function bodyColor(c){
 // draw one creature from its genome: eyes scale with vision, legs with speed,
 // body segments/elongation with the shape gene, markings with the pattern gene.
 function drawCreature(c, z){
-  const g = c.g, col = bodyColor(c), appR = g.size * z;
+  const g = c.g, col = bodyColor(c), size = c.rad || g.size, appR = size * z;
   const fill = `hsl(${col.hue} ${col.sat}% ${col.light}%)`;
   const dark = `hsl(${col.hue} ${col.sat}% ${clamp(col.light - 20, 8, 60)}%)`;
   const sp = Math.hypot(c.vx, c.vy) || 1, cos = c.vx / sp, sin = c.vy / sp;
@@ -40,14 +40,14 @@ function drawCreature(c, z){
   if(Math.abs(sig) > 0.35 && appR >= 2){
     const a = clamp((Math.abs(sig) - 0.35) / 0.65, 0, 1);
     wctx.strokeStyle = sig >= 0 ? `rgba(120,200,230,${0.5 * a})` : `rgba(230,165,120,${0.5 * a})`;
-    wctx.lineWidth = Math.max(0.8, g.size * 0.16);
-    wctx.beginPath(); wctx.arc(c.x, c.y, g.size + 3 + a * 7, 0, TAU); wctx.stroke();
+    wctx.lineWidth = Math.max(0.8, size * 0.16);
+    wctx.beginPath(); wctx.arc(c.x, c.y, size + 3 + a * 7, 0, TAU); wctx.stroke();
   }
 
   // tier 0: far away — a simple dot
   if(appR < 3){
-    wctx.fillStyle = fill; wctx.beginPath(); wctx.arc(c.x, c.y, g.size, 0, TAU); wctx.fill();
-    if(c.sick > 0) sickRing(c, g, z);
+    wctx.fillStyle = fill; wctx.beginPath(); wctx.arc(c.x, c.y, size, 0, TAU); wctx.fill();
+    if(c.sick > 0) sickRing(c, size, z);
     return;
   }
 
@@ -56,11 +56,11 @@ function drawCreature(c, z){
 
   // legs (only when reasonably large): pairs increase with speed
   if(appR >= 6){
-    const pairs = 2 + Math.round(speedN * 3), legLen = g.size * (0.55 + speedN * 0.9);
-    wctx.strokeStyle = dark; wctx.lineWidth = Math.max(0.7, g.size * 0.13);
+    const pairs = 2 + Math.round(speedN * 3), legLen = size * (0.55 + speedN * 0.9);
+    wctx.strokeStyle = dark; wctx.lineWidth = Math.max(0.7, size * 0.13);
     for(let i = 0; i < pairs; i++){
       const tt = pairs > 1 ? (i / (pairs - 1) - 0.5) : 0;
-      const bx = c.x - cos * tt * g.size * 1.2, by = c.y - sin * tt * g.size * 1.2;
+      const bx = c.x - cos * tt * size * 1.2, by = c.y - sin * tt * size * 1.2;
       wctx.beginPath(); wctx.moveTo(bx, by); wctx.lineTo(bx - sin * legLen, by + cos * legLen); wctx.stroke();
       wctx.beginPath(); wctx.moveTo(bx, by); wctx.lineTo(bx + sin * legLen, by - cos * legLen); wctx.stroke();
     }
@@ -70,7 +70,7 @@ function drawCreature(c, z){
   const segs = shape > 0.66 ? 3 : shape > 0.33 ? 2 : 1;
   wctx.fillStyle = fill;
   for(let s = 0; s < segs; s++){
-    const off = -s * g.size * 0.85, r = g.size * (1 - s * 0.16);
+    const off = -s * size * 0.85, r = size * (1 - s * 0.16);
     wctx.beginPath(); wctx.arc(c.x + cos * off, c.y + sin * off, r, 0, TAU); wctx.fill();
   }
 
@@ -78,17 +78,17 @@ function drawCreature(c, z){
   if(appR >= 6){
     if(pattern > 0.66){
       wctx.fillStyle = dark;
-      for(let i = 0; i < 3; i++){ const a = i * 2.1; wctx.beginPath(); wctx.arc(c.x + Math.cos(a) * g.size * 0.4, c.y + Math.sin(a) * g.size * 0.4, g.size * 0.19, 0, TAU); wctx.fill(); }
+      for(let i = 0; i < 3; i++){ const a = i * 2.1; wctx.beginPath(); wctx.arc(c.x + Math.cos(a) * size * 0.4, c.y + Math.sin(a) * size * 0.4, size * 0.19, 0, TAU); wctx.fill(); }
     } else if(pattern < 0.33){
-      wctx.strokeStyle = dark; wctx.lineWidth = g.size * 0.24;
-      wctx.beginPath(); wctx.moveTo(c.x - sin * g.size * 0.7, c.y + cos * g.size * 0.7); wctx.lineTo(c.x + sin * g.size * 0.7, c.y - cos * g.size * 0.7); wctx.stroke();
+      wctx.strokeStyle = dark; wctx.lineWidth = size * 0.24;
+      wctx.beginPath(); wctx.moveTo(c.x - sin * size * 0.7, c.y + cos * size * 0.7); wctx.lineTo(c.x + sin * size * 0.7, c.y - cos * size * 0.7); wctx.stroke();
     }
   }
 
   // eyes at the front, sized by vision
-  const eyeR = g.size * (0.15 + senseN * 0.22), fx = c.x + cos * g.size * 0.6, fy = c.y + sin * g.size * 0.6;
+  const eyeR = size * (0.15 + senseN * 0.22), fx = c.x + cos * size * 0.6, fy = c.y + sin * size * 0.6;
   for(const side of [1, -1]){
-    const ex = fx - sin * side * g.size * 0.34, ey = fy + cos * side * g.size * 0.34;
+    const ex = fx - sin * side * size * 0.34, ey = fy + cos * side * size * 0.34;
     wctx.fillStyle = '#f2efe6'; wctx.beginPath(); wctx.arc(ex, ey, eyeR, 0, TAU); wctx.fill();
     wctx.fillStyle = '#15130e'; wctx.beginPath(); wctx.arc(ex + cos * eyeR * 0.3, ey + sin * eyeR * 0.3, eyeR * 0.55, 0, TAU); wctx.fill();
   }
@@ -96,15 +96,15 @@ function drawCreature(c, z){
   // carnivore mouth
   if((g.diet || 0) > 0.6 && appR >= 5){
     const ang = Math.atan2(sin, cos);
-    wctx.strokeStyle = '#2a0d09'; wctx.lineWidth = Math.max(0.8, g.size * 0.16);
-    wctx.beginPath(); wctx.arc(fx, fy, g.size * 0.42, ang - 0.6, ang + 0.6); wctx.stroke();
+    wctx.strokeStyle = '#2a0d09'; wctx.lineWidth = Math.max(0.8, size * 0.16);
+    wctx.beginPath(); wctx.arc(fx, fy, size * 0.42, ang - 0.6, ang + 0.6); wctx.stroke();
   }
 
-  if(c.sick > 0) sickRing(c, g, z);
+  if(c.sick > 0) sickRing(c, size, z);
 }
-function sickRing(c, g, z){
+function sickRing(c, size, z){
   wctx.strokeStyle = 'rgba(232,240,120,.85)'; wctx.lineWidth = 1.4 / z;
-  wctx.beginPath(); wctx.arc(c.x, c.y, g.size + 3.5, 0, TAU); wctx.stroke();
+  wctx.beginPath(); wctx.arc(c.x, c.y, size + 3.5, 0, TAU); wctx.stroke();
 }
 
 /* ---------- thought bubbles: translate a creature's real state into words ---------- */
@@ -200,8 +200,8 @@ export function draw(){
   for(const c of S.creatures){
     if(!vis(c.x, c.y, c.g.size + 6)) continue;
     drawCreature(c, z);
-    if(P.bubblesOn && bubbles.length < 16 && c.g.size * z >= 8 && c !== S.selected){
-      const txt = ambientText(c); if(txt) bubbles.push({ x: c.x, y: c.y, r: c.g.size, txt, small: true });
+    if(P.bubblesOn && bubbles.length < 16 && (c.rad || c.g.size) * z >= 8 && c !== S.selected){
+      const txt = ambientText(c); if(txt) bubbles.push({ x: c.x, y: c.y, r: c.rad || c.g.size, txt, small: true });
     }
   }
   // meteor shockwaves
@@ -217,7 +217,7 @@ export function draw(){
   if(S.selected && !S.selected.dead){
     const c = S.selected;
     wctx.strokeStyle = '#ece7d7'; wctx.lineWidth = 2;
-    wctx.beginPath(); wctx.arc(c.x, c.y, c.g.size + 6, 0, TAU); wctx.stroke();
+    wctx.beginPath(); wctx.arc(c.x, c.y, (c.rad || c.g.size) + 6, 0, TAU); wctx.stroke();
   }
   // thought bubbles (screen space, so text stays readable at any zoom)
   if(bubbles.length){

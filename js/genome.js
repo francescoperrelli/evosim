@@ -61,13 +61,14 @@ export function makeCreature(x, y, type, genome, gen){
     id: S.ID++, x, y, vx: rnd(-1, 1), vy: rnd(-1, 1), type: t, g: genome,
     energy: startE, age: 0, gen: gen || 0, dead: false, homeX: x, homeY: y,
     mem: new Array(NMEM).fill(0), matedTick: -1,
-    lineage: 0, kids: 0, act: null, sick: 0, parent: 0, anc: [], signal: 0
+    lineage: 0, kids: 0, act: null, sick: 0, parent: 0, anc: [], signal: 0,
+    rad: genome.size * 0.45, alert: 0
   };
 }
 
 export function metabolism(c){
   const g = c.g, cfg = TYPES[c.type];
-  let m = cfg.baseMeta + (g.speed * g.speed) * 0.05 + (g.size * 0.012) + (g.sense * 0.0016);
+  let m = cfg.baseMeta + (g.speed * g.speed) * 0.05 + ((c.rad || g.size) * 0.012) + (g.sense * 0.0016);
   if(cfg.hunts.length && P.mimicOn) m += g.acuity * 0.03;   // cost of acuity for predators
   m += g.brain.nh * 0.0016;                                  // a bigger brain costs energy (modest, so complexity can accrue)
   return m;

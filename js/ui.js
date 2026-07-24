@@ -232,7 +232,7 @@ function selectAt(mx, my){
   let best = null, bestD = 1e9;
   for(const c of S.creatures){
     const d = (c.x - mx) ** 2 + (c.y - my) ** 2;
-    const r = c.g.size + 10;
+    const r = (c.rad || c.g.size) + 10;
     if(d < r * r && d < bestD){ bestD = d; best = c; }
   }
   if(best){ S.selected = best; show('inspector'); refreshInspector(); }

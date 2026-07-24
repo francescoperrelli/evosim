@@ -85,6 +85,9 @@ export function step(){
     c.age++;
     const g = c.g, cfg = TYPES[c.type], senseSq = g.sense * g.sense;
     const preds = PREDATORS[c.type], hunts = cfg.hunts;
+    const matAge = P[cfg.maxAge] * 0.16;                                  // grow to adult size over the first ~16% of life
+    c.rad = g.size * clamp(0.45 + 0.55 * (c.age / matAge), 0.45, 1);
+    if(c.alert > 0) c.alert--;
     const gcx = clamp(Math.floor(c.x / CELL), 0, cols - 1), gcy = clamp(Math.floor(c.y / CELL), 0, rows - 1);
 
     const sp = Math.hypot(c.vx, c.vy);
@@ -185,7 +188,7 @@ export function step(){
     if(c.y < 4){ c.y = 4; c.vy = Math.abs(c.vy); } if(c.y > HH - 4){ c.y = HH - 4; c.vy = -Math.abs(c.vy); }
     // push out of rocks (terrain)
     for(let ri = 0; ri < rocks.length; ri++){
-      const rk = rocks[ri], rdx = c.x - rk.x, rdy = c.y - rk.y, rr = rk.r + g.size;
+      const rk = rocks[ri], rdx = c.x - rk.x, rdy = c.y - rk.y, rr = rk.r + c.rad;
       if(rdx * rdx + rdy * rdy < rr * rr){ const rd = Math.hypot(rdx, rdy) || 1; c.x = rk.x + rdx / rd * rr; c.y = rk.y + rdy / rd * rr; c.vx *= 0.4; c.vy *= 0.4; }
     }
 
@@ -194,20 +197,20 @@ export function step(){
 
     // interactions
     if(cfg.eatsPlants && bfRef){
-      const er = g.size + 4;
+      const er = c.rad + 4;
       if((bfRef.x - c.x) ** 2 + (bfRef.y - c.y) ** 2 < er * er){
         c.energy += P.foodEnergy * cfg.plantEff;
         const fi = food.indexOf(bfRef); if(fi >= 0){ food[fi] = food[food.length - 1]; food.pop(); }
       }
     }
     if(preyRef && !preyRef.dead){
-      const er = g.size + preyRef.g.size + 2;
+      const er = c.rad + (preyRef.rad || preyRef.g.size) + 2;
       if((preyRef.x - c.x) ** 2 + (preyRef.y - c.y) ** 2 < er * er){
         preyRef.dead = true; S.predations++; c.energy += P.preyEnergy * cfg.preyEff;
         if(S.selected === preyRef) S.selected = null;
       }
     }
-    if(c.energy >= P[cfg.reproE] && creatures.length + newborns.length < P.maxPop){
+    if(c.age > matAge && c.energy >= P[cfg.reproE] && creatures.length + newborns.length < P.maxPop){
       if(g.sexual > 0.5){
         // sexual: needs a ready mate in contact; offspring recombines both parents
         if(mateRef && !mateRef.dead && mateRef.matedTick !== S.tick){
@@ -296,7 +299,7 @@ export function restore(s){
   S.creatures = s.creatures.map(o => ({
     id: o.id, x: o.x, y: o.y, vx: 0, vy: 0, type: (o.t === 'carn' || o.t === 'omni' || o.t === 'herb') ? o.t : 'herb',
     energy: o.e, age: o.a, gen: o.gn, dead: false, homeX: (o.hx || o.x), homeY: (o.hy || o.y),
-    mem: [0, 0], matedTick: -1, lineage: o.id, kids: 0, act: null, sick: 0, parent: 0, anc: [], signal: 0,
+    mem: [0, 0], matedTick: -1, lineage: o.id, kids: 0, act: null, sick: 0, parent: 0, anc: [], signal: 0, rad: o.g[2], alert: 0,
     g: { speed: o.g[0], sense: o.g[1], size: o.g[2], hue: o.g[3], sociality: o.g[4], camo: o.g[5],
          territoriality: o.g[6], territoryR: o.g[7], acuity: o.g[8],
          sexual: o.g[9] !== undefined ? o.g[9] : 0.5,
