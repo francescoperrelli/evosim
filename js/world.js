@@ -34,6 +34,45 @@ function pherGradient(c){
   const u = arr[Math.max(0, cy - 1) * cols + cx], d = arr[Math.min(rows - 1, cy + 1) * cols + cx];
   _pg[0] = r - l; _pg[1] = d - u; _pg[2] = arr[cy * cols + cx];
 }
+// nests emerge as persistent home sites at strong, stable peaks of a species'
+// scent field: where a kind repeatedly gathers, a home crystallises. Nests
+// decay unless refreshed, and shelter the young from predators.
+function updateNests(){
+  const nests = S.nests;
+  for(const nz of nests) nz.str *= 0.82;
+  if(pher){
+    const cols = pher.cols, rows = pher.rows;
+    for(const tk of ['herb', 'omni', 'carn']){
+      const a = pher.f[tk];
+      for(let y = 1; y < rows - 1; y++) for(let x = 1; x < cols - 1; x++){
+        const i = y * cols + x, v = a[i];
+        if(v < 3.2) continue;                                        // only strong, well-used spots
+        if(v < a[i - 1] || v < a[i + 1] || v < a[i - cols] || v < a[i + cols]) continue;   // local peak
+        const wx = (x + 0.5) * PCELL, wy = (y + 0.5) * PCELL;
+        let best = null, bd = 130 * 130;
+        for(const nz of nests){ if(nz.type !== tk) continue; const dd = (nz.x - wx) ** 2 + (nz.y - wy) ** 2; if(dd < bd){ bd = dd; best = nz; } }
+        if(best){ best.str += v * 0.4; best.x += (wx - best.x) * 0.08; best.y += (wy - best.y) * 0.08; }
+        else {
+          let sameType = 0; for(const nz of nests) if(nz.type === tk) sameType++;
+          if(sameType < 5) nests.push({ x: wx, y: wy, type: tk, str: v * 0.5, r: 44 });   // up to 5 homes per species
+        }
+      }
+    }
+  }
+  for(let i = nests.length - 1; i >= 0; i--){
+    const nz = nests[i]; nz.str = Math.min(nz.str, 12);
+    if(nz.str < 0.7){ nests.splice(i, 1); continue; }
+    nz.r = 40 + nz.str * 6;
+  }
+}
+// is a creature within the shelter of a nest of its own kind?
+function nestShelter(cr){
+  const nests = S.nests;
+  for(let i = 0; i < nests.length; i++){ const nz = nests[i]; if(nz.type !== cr.type) continue;
+    if((nz.x - cr.x) ** 2 + (nz.y - cr.y) ** 2 < nz.r * nz.r) return true; }
+  return false;
+}
+
 function pherUpdate(){
   const cols = pher.cols, rows = pher.rows;
   for(const tk of ['herb', 'omni', 'carn']){
@@ -144,7 +183,7 @@ export function seed(){
   S.popHist.length = 0; S.traitHist.length = 0; S.evoHist.length = 0; S.ID = 1; S.selected = null;
   S.records = { oldestAge: 0, maxKids: 0, maxGen: 0 };
   S.chronicle = []; S.chronPrev = null; S.lex = newLex(); S.dialect = {};
-  S.rocks = []; S.water = []; S.drought = 0; S.effects = []; S.challenge = null; S.shares = 0; S.packKills = 0; generateBiomes();
+  S.rocks = []; S.water = []; S.drought = 0; S.effects = []; S.challenge = null; S.shares = 0; S.packKills = 0; S.nests = []; generateBiomes();
   pherInit();
   for(let i = 0; i < P.herbStart; i++) S.creatures.push(founder('herb'));
   if(P.omnivoresOn) for(let i = 0; i < P.omniStart; i++) S.creatures.push(founder('omni'));
@@ -332,6 +371,13 @@ export function step(){
       const gl = Math.hypot(_pg[0], _pg[1]);
       if(gl > 1e-3){ const s = 0.4 * (cfg.social ? 0.4 + g.sociality * 0.8 : 0.5) / gl; ix += _pg[0] * s; iy += _pg[1] * s; }
     }
+    // the young keep close to a home site of their own kind
+    if(P.nestsOn && c.age < matAge && S.nests.length && !thrHas){
+      let bn = null, bd = 1e9;
+      for(let ni = 0; ni < S.nests.length; ni++){ const nz = S.nests[ni]; if(nz.type !== c.type) continue;
+        const dd = (nz.x - c.x) ** 2 + (nz.y - c.y) ** 2; if(dd < bd){ bd = dd; bn = nz; } }
+      if(bn){ const dd = Math.sqrt(bd) || 1; if(dd > bn.r * 0.6){ ix += (bn.x - c.x) / dd * 0.5; iy += (bn.y - c.y) / dd * 0.5; } }
+    }
 
     // combine brain + instinct
     let dx = _out[0] * BRAIN_W + ix * INNATE_W, dy = _out[1] * BRAIN_W + iy * INNATE_W;
@@ -366,7 +412,11 @@ export function step(){
     }
     if(preyRef && !preyRef.dead){
       const er = c.rad + (preyRef.rad || preyRef.g.size) + 2;
-      if((preyRef.x - c.x) ** 2 + (preyRef.y - c.y) ** 2 < er * er && Math.random() < 1 / (1 + 0.12 * (preyRef.groupSize || 0))){
+      let killP = 1 / (1 + 0.12 * (preyRef.groupSize || 0));
+      // a juvenile sheltering at a nest of its kind is harder to pick off
+      const preyMat = P[TYPES[preyRef.type].maxAge] * 0.16;
+      if(P.nestsOn && preyRef.age < preyMat && nestShelter(preyRef)) killP *= 0.45;
+      if((preyRef.x - c.x) ** 2 + (preyRef.y - c.y) ** 2 < er * er && Math.random() < killP){
         preyRef.dead = true; S.predations++;
         const packBonus = 1 + 0.25 * Math.min(cnt, 3);     // hunting near allies pays off
         c.energy += P.preyEnergy * cfg.preyEff * packBonus;
@@ -436,6 +486,7 @@ export function step(){
     if(S.maxGen > S.records.maxGen) S.records.maxGen = S.maxGen;
   }
   if(S.challenge && S.tick % 15 === 0) evalChallenge();
+  if(P.nestsOn && S.tick % 150 === 0) updateNests(); else if(!P.nestsOn && S.nests.length) S.nests.length = 0;
   if(S.tick % 60 === 0) checkChronicle();
   // fade the lexicon meter so it tracks the living population, not all history
   if(S.lex && S.tick % 300 === 0){
@@ -454,7 +505,7 @@ export function snapshot(){
     worldW: S.worldW, worldH: S.worldH,
     params: { foodRate: P.foodRate, mut: P.mut, predatorsOn: P.predatorsOn, omnivoresOn: P.omnivoresOn,
               flocksOn: P.flocksOn, terrOn: P.terrOn, mimicOn: P.mimicOn, seasonsOn: P.seasonsOn,
-              pherOn: P.pherOn, cultureOn: P.cultureOn, learnOn: P.learnOn },
+              pherOn: P.pherOn, cultureOn: P.cultureOn, learnOn: P.learnOn, nestsOn: P.nestsOn },
     creatures: S.creatures.map(c => ({
       x: +c.x.toFixed(1), y: +c.y.toFixed(1), t: c.type,
       e: +c.energy.toFixed(1), a: c.age, gn: c.gen, id: c.id, hx: +c.homeX.toFixed(1), hy: +c.homeY.toFixed(1),
@@ -491,7 +542,7 @@ export function restore(s){
   S.rocks = (s.rocks || []).map(a => ({ x: a[0], y: a[1], r: a[2] }));
   S.water = (s.water || []).map(a => ({ x: a[0], y: a[1], r: a[2] }));
   S.biomes = (s.biomes || []).map(a => ({ x: a[0], y: a[1], r: a[2], fert: a[3] }));
-  S.drought = 0; S.effects = []; pherInit();
+  S.drought = 0; S.effects = []; S.nests = []; pherInit();
   S.tick = s.tick || 0; S.predations = s.predations || 0; S.maxGen = s.maxGen || 0; S.ID = s.ID || S.creatures.length + 1;
   S.selected = null;
   if(s.params) Object.assign(P, s.params);

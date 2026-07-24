@@ -215,6 +215,19 @@ export function draw(){
       }
     }
   }
+  // nests — persistent home sites (soft mound + rim, coloured by species)
+  if(P.nestsOn && S.nests.length){
+    const NC = { herb: '143,196,74', omni: '169,127,224', carn: '221,111,87' };
+    for(const nz of S.nests){
+      if(!vis(nz.x, nz.y, nz.r)) continue;
+      const rgb = NC[nz.type] || '160,160,160', a = clamp(nz.str / 12, 0.1, 0.6);
+      const grd = wctx.createRadialGradient(nz.x, nz.y, 0, nz.x, nz.y, nz.r);
+      grd.addColorStop(0, `rgba(${rgb},${0.16 * a + 0.05})`); grd.addColorStop(1, `rgba(${rgb},0)`);
+      wctx.fillStyle = grd; wctx.beginPath(); wctx.arc(nz.x, nz.y, nz.r, 0, TAU); wctx.fill();
+      wctx.strokeStyle = `rgba(${rgb},${0.25 + 0.4 * a})`; wctx.lineWidth = 1.4 / z;
+      wctx.setLineDash([5 / z, 5 / z]); wctx.beginPath(); wctx.arc(nz.x, nz.y, nz.r, 0, TAU); wctx.stroke(); wctx.setLineDash([]);
+    }
+  }
   // plants
   wctx.fillStyle = '#3a6b2e';
   for(const f of S.food){ if(!vis(f.x, f.y, 3)) continue; wctx.beginPath(); wctx.arc(f.x, f.y, 2.1, 0, TAU); wctx.fill(); }
