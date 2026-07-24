@@ -1,7 +1,7 @@
 // World drawing, seasonal tint, charts, HUD and the inspector network viz
 import { clamp, TAU, el } from './utils.js';
 import { P, S, seasonInfo, dayInfo, clampCam } from './state.js';
-import { NIN, NH, NOUT } from './nn.js';
+import { NIN, NOUT, MAX_NH } from './nn.js';
 import { t } from './i18n.js';
 
 const world = el('world'), wctx = world.getContext('2d');
@@ -226,6 +226,7 @@ export function drawEvolution(){
   ctx.clearRect(0, 0, d.w, d.h); ctx.fillStyle = '#0c120c'; ctx.fillRect(0, 0, d.w, d.h);
   let mg = 1; for(const e of H) if(e.gen > mg) mg = e.gen;
   line(ctx, H, e => d.h - pad - (d.h - 2 * pad) * (e.gen / mg), '#74bccb', d.w, d.h, pad);
+  line(ctx, H, e => d.h - pad - (d.h - 2 * pad) * ((e.nh || 0) / MAX_NH), '#e0a458', d.w, d.h, pad);   // avg brain size
   // sexual %
   cv = el('evSex'); ctx = cv.getContext('2d'); d = fitChart(cv, ctx);
   ctx.clearRect(0, 0, d.w, d.h); ctx.fillStyle = '#0c120c'; ctx.fillRect(0, 0, d.w, d.h);
@@ -254,8 +255,7 @@ export function drawEvolution(){
   }
 }
 
-/* ---------- inspector: neural network drawing ---------- */
-const OFF_B1 = NIN * NH, OFF_W2 = OFF_B1 + NH, OFF_B2 = OFF_W2 + NH * NOUT;
+/* ---------- inspector: neural network drawing (variable hidden size) ---------- */
 export function drawNetwork(cv, c){
   const ctx = cv.getContext('2d');
   const r = cv.getBoundingClientRect();
@@ -264,36 +264,37 @@ export function drawNetwork(cv, c){
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.clearRect(0, 0, w, h);
   if(!c){ return; }
-  const b = c.g.brain;
+  const nh = c.g.brain.nh, W = c.g.brain.w;
+  const w2off = nh * NIN + nh;
   const colX = [24, w / 2, w - 24];
-  const yOf = (i, count) => 14 + (h - 28) * (count === 1 ? 0.5 : i / (count - 1));
-  // edges input -> hidden
-  for(let i = 0; i < NIN; i++){
-    const x1 = colX[0], y1 = yOf(i, NIN);
-    for(let j = 0; j < NH; j++){
-      const wgt = b[i * NH + j]; const a = clamp(Math.abs(wgt) / 3, 0, 1) * 0.5;
-      if(a < 0.03) continue;
+  const yOf = (i, count) => 14 + (h - 28) * (count <= 1 ? 0.5 : i / (count - 1));
+  // input -> hidden edges (hidden-major: weight (i,j) at j*NIN + i)
+  for(let j = 0; j < nh; j++){
+    const y2 = yOf(j, nh);
+    for(let i = 0; i < NIN; i++){
+      const wgt = W[j * NIN + i], a = clamp(Math.abs(wgt) / 3, 0, 1) * 0.5;
+      if(a < 0.04) continue;
       ctx.strokeStyle = wgt >= 0 ? `rgba(143,196,74,${a})` : `rgba(221,111,87,${a})`;
       ctx.lineWidth = clamp(Math.abs(wgt) / 2, 0.3, 2);
-      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(colX[1], yOf(j, NH)); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(colX[0], yOf(i, NIN)); ctx.lineTo(colX[1], y2); ctx.stroke();
     }
   }
-  // edges hidden -> output
-  for(let j = 0; j < NH; j++){
-    const x1 = colX[1], y1 = yOf(j, NH);
+  // hidden -> output edges (weight (j,k) at w2off + j*NOUT + k)
+  for(let j = 0; j < nh; j++){
+    const y1 = yOf(j, nh);
     for(let k = 0; k < NOUT; k++){
-      const wgt = b[OFF_W2 + j * NOUT + k]; const a = clamp(Math.abs(wgt) / 3, 0, 1) * 0.6;
-      if(a < 0.03) continue;
+      const wgt = W[w2off + j * NOUT + k], a = clamp(Math.abs(wgt) / 3, 0, 1) * 0.6;
+      if(a < 0.04) continue;
       ctx.strokeStyle = wgt >= 0 ? `rgba(143,196,74,${a})` : `rgba(221,111,87,${a})`;
       ctx.lineWidth = clamp(Math.abs(wgt) / 2, 0.3, 2);
-      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(colX[2], yOf(k, NOUT)); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(colX[1], y1); ctx.lineTo(colX[2], yOf(k, NOUT)); ctx.stroke();
     }
   }
   // nodes (coloured by live activation when available)
-  const act = c.act;
+  const act = c.act && c.act.hid.length === nh ? c.act : null;
   const actCol = v => { const a = clamp(Math.abs(v), 0, 1); return v >= 0 ? `rgba(143,196,74,${0.2 + 0.8 * a})` : `rgba(221,111,87,${0.2 + 0.8 * a})`; };
-  const node = (x, y, col, r) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, r || 3.2, 0, TAU); ctx.fill(); };
-  for(let i = 0; i < NIN; i++) node(colX[0], yOf(i, NIN), act ? actCol(act.inp[i]) : '#74bccb', act ? 2.5 + 2 * clamp(Math.abs(act.inp[i]), 0, 1) : 3.2);
-  for(let j = 0; j < NH; j++) node(colX[1], yOf(j, NH), act ? actCol(act.hid[j]) : '#ece7d7', act ? 2.5 + 2 * clamp(Math.abs(act.hid[j]), 0, 1) : 3.2);
-  for(let k = 0; k < NOUT; k++) node(colX[2], yOf(k, NOUT), act ? actCol(act.out[k]) : '#e0a458', act ? 2.5 + 2 * clamp(Math.abs(act.out[k]), 0, 1) : 3.2);
+  const node = (x, y, col, rr) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, rr || 3.2, 0, TAU); ctx.fill(); };
+  for(let i = 0; i < NIN; i++) node(colX[0], yOf(i, NIN), act ? actCol(act.inp[i]) : '#74bccb', act ? 2.4 + 2 * clamp(Math.abs(act.inp[i]), 0, 1) : 3);
+  for(let j = 0; j < nh; j++) node(colX[1], yOf(j, nh), act ? actCol(act.hid[j]) : '#ece7d7', act ? 2.4 + 2 * clamp(Math.abs(act.hid[j]), 0, 1) : 3);
+  for(let k = 0; k < NOUT; k++) node(colX[2], yOf(k, NOUT), act ? actCol(act.out[k]) : '#e0a458', act ? 2.4 + 2 * clamp(Math.abs(act.out[k]), 0, 1) : 3);
 }

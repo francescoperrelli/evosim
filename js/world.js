@@ -151,7 +151,7 @@ export function step(){
     _in[16] = 1;
     brainForward(g.brain, _in, _out);
     c.mem[0] = _out[2]; c.mem[1] = _out[3];
-    if(c === S.selected){ c.act = { inp: _in.slice(), hid: getHidden().slice(), out: _out.slice() }; }
+    if(c === S.selected){ const gh = getHidden(); c.act = { inp: _in.slice(), hid: gh.h.slice(0, gh.nh), out: _out.slice() }; }
 
     // instinct prior
     let ix = 0, iy = 0;
@@ -250,15 +250,15 @@ export function step(){
   S.creatures = creatures;
 
   if(S.tick % 6 === 0){
-    let hn = 0, cn = 0, on = 0, camo = 0, acu = 0, sx = 0, tot = 0, genSum = 0;
+    let hn = 0, cn = 0, on = 0, camo = 0, acu = 0, sx = 0, tot = 0, genSum = 0, brainSum = 0;
     const lin = new Set();
     for(const c of creatures){
-      tot++; if(c.g.sexual > 0.5) sx++; genSum += c.gen; lin.add(c.lineage);
+      tot++; if(c.g.sexual > 0.5) sx++; genSum += c.gen; lin.add(c.lineage); brainSum += c.g.brain.nh;
       if(c.type === 'carn'){ cn++; acu += c.g.acuity; } else if(c.type === 'omni'){ on++; camo += c.g.camo; } else { hn++; camo += c.g.camo; }
     }
     S.popHist.push({ h: hn, c: cn, o: on, f: food.length });
     S.traitHist.push({ camo: (hn + on) ? camo / (hn + on) : 0, acu: cn ? acu / cn : 0, sex: tot ? sx / tot : 0 });
-    S.evoHist.push({ gen: tot ? genSum / tot : 0, sex: tot ? sx / tot : 0, lin: lin.size });
+    S.evoHist.push({ gen: tot ? genSum / tot : 0, sex: tot ? sx / tot : 0, lin: lin.size, nh: tot ? brainSum / tot : 0 });
     if(S.popHist.length > 240){ S.popHist.shift(); S.traitHist.shift(); }
     if(S.evoHist.length > 240){ S.evoHist.shift(); }
     if(S.maxGen > S.records.maxGen) S.records.maxGen = S.maxGen;
@@ -269,7 +269,7 @@ export function step(){
 /* ---------- save / load ---------- */
 export function snapshot(){
   return {
-    v: 6, tick: S.tick, predations: S.predations, maxGen: S.maxGen, ID: S.ID,
+    v: 7, tick: S.tick, predations: S.predations, maxGen: S.maxGen, ID: S.ID,
     worldW: S.worldW, worldH: S.worldH,
     params: { foodRate: P.foodRate, mut: P.mut, predatorsOn: P.predatorsOn, omnivoresOn: P.omnivoresOn,
               flocksOn: P.flocksOn, terrOn: P.terrOn, mimicOn: P.mimicOn, seasonsOn: P.seasonsOn },
@@ -280,7 +280,7 @@ export function snapshot(){
           +c.g.sociality.toFixed(2), +c.g.camo.toFixed(2), +c.g.territoriality.toFixed(2),
           +c.g.territoryR.toFixed(1), +c.g.acuity.toFixed(2), +c.g.sexual.toFixed(2), +c.g.diet.toFixed(3),
           +c.g.shape.toFixed(2), +c.g.pattern.toFixed(2)],
-      b: c.g.brain.map(x => +x.toFixed(3))
+      b: { nh: c.g.brain.nh, w: c.g.brain.w.map(x => +x.toFixed(3)) }
     })),
     food: S.food.map(f => [+f.x.toFixed(1), +f.y.toFixed(1)]),
     rocks: S.rocks.map(r => [+r.x.toFixed(1), +r.y.toFixed(1), +r.r.toFixed(1)]),
@@ -290,7 +290,7 @@ export function snapshot(){
 }
 
 export function restore(s){
-  if(!s || s.v !== 6) return false;
+  if(!s || s.v !== 7) return false;
   if(s.worldW){ S.worldW = s.worldW; S.worldH = s.worldH; }
   S.creatures = s.creatures.map(o => ({
     id: o.id, x: o.x, y: o.y, vx: 0, vy: 0, type: (o.t === 'carn' || o.t === 'omni' || o.t === 'herb') ? o.t : 'herb',
@@ -301,7 +301,7 @@ export function restore(s){
          sexual: o.g[9] !== undefined ? o.g[9] : 0.5,
          diet: o.g[10] !== undefined ? o.g[10] : (o.t === 'carn' ? 0.85 : o.t === 'omni' ? 0.5 : 0.15),
          shape: o.g[11] !== undefined ? o.g[11] : 0.3, pattern: o.g[12] !== undefined ? o.g[12] : 0.5,
-         brain: o.b.slice() }
+         brain: { nh: o.b.nh, w: o.b.w.slice() } }
   }));
   S.food = s.food.map(a => ({ x: a[0], y: a[1] }));
   S.rocks = (s.rocks || []).map(a => ({ x: a[0], y: a[1], r: a[2] }));

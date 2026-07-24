@@ -3,7 +3,7 @@
 // is derived from it, so a lineage's diet can evolve over generations.
 import { rnd, clamp, gauss } from './utils.js';
 import { P, S, TYPES, typeOf } from './state.js';
-import { randomBrain, mutateBrain, NMEM, BRAINLEN } from './nn.js';
+import { randomBrain, mutateBrain, crossBrain, NMEM } from './nn.js';
 
 export function randomGenome(type){
   const cfg = TYPES[type];
@@ -42,11 +42,6 @@ export function mutateGenome(g){
 }
 
 // Sexual reproduction: recombine two parents' genomes and brains, then mutate
-function crossBrain(a, b){
-  const out = new Array(BRAINLEN);
-  for(let i = 0; i < BRAINLEN; i++) out[i] = Math.random() < 0.5 ? a[i] : b[i];
-  return out;
-}
 export function crossover(ga, gb){
   const pk = (x, y) => Math.random() < 0.5 ? x : y;
   const base = {
@@ -74,5 +69,6 @@ export function metabolism(c){
   const g = c.g, cfg = TYPES[c.type];
   let m = cfg.baseMeta + (g.speed * g.speed) * 0.05 + (g.size * 0.012) + (g.sense * 0.0016);
   if(cfg.hunts.length && P.mimicOn) m += g.acuity * 0.03;   // cost of acuity for predators
+  m += g.brain.nh * 0.0016;                                  // a bigger brain costs energy (modest, so complexity can accrue)
   return m;
 }
