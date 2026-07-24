@@ -4,12 +4,13 @@ import { P, S, LANG_KEY, screenToWorld, zoomAt, clampCam } from './state.js';
 import { seed, saveLocal, hasSave, loadLocal, clearLocal, snapshot, restore, meteor, startDrought, startEpidemic, addRock, addWater, clearTerrain } from './world.js';
 import { makeCreature, randomGenome } from './genome.js';
 import { drawNetwork, drawEvolution } from './render.js';
+import { CHALLENGES, startChallenge, stopChallenge } from './challenges.js';
 import { I18N, t, setLang, getLang } from './i18n.js';
 
 /* ---------- overlays ---------- */
 function show(id){ el(id).classList.add('show'); }
 function hide(id){ el(id).classList.remove('show'); }
-function hideAll(){ ['menu','tutorial','options','inspector','evolution','events','genealogy'].forEach(hide); }
+function hideAll(){ ['menu','tutorial','options','inspector','evolution','events','genealogy','challenges'].forEach(hide); }
 export { show };
 
 let toastT = null;
@@ -85,6 +86,39 @@ el('btnWater').onclick = () => { S.tool = 'water'; updateModeBtn(); hide('events
 el('btnDrought').onclick = () => { startDrought(); hide('events'); toast(t('evDroughtOn')); };
 el('btnEpidemic').onclick = () => { startEpidemic(); hide('events'); toast(t('evEpidemicOn')); };
 el('btnClearTerrain').onclick = () => { clearTerrain(); toast(t('evCleared')); };
+
+/* ---------- challenges ---------- */
+const chCap = k => k.charAt(0).toUpperCase() + k.slice(1);
+function openChallenges(){
+  const list = el('chList'); list.innerHTML = '';
+  for(const c of CHALLENGES){
+    const cap = chCap(c.key), btn = document.createElement('button');
+    btn.className = 'btn ch-item';
+    btn.innerHTML = `<b>${t('ch' + cap + 'Name')}</b><span>${t('ch' + cap + 'Desc')}</span>`;
+    btn.onclick = () => { startChallenge(c.key); hide('challenges'); toast('🎯 ' + t('ch' + cap + 'Name')); };
+    list.appendChild(btn);
+  }
+  el('chAbandon').style.display = S.challenge ? '' : 'none';
+  show('challenges');
+}
+el('btnChallenge').onclick = openChallenges;
+el('mChallenge').onclick = openChallenges;
+el('chClose').onclick = () => hide('challenges');
+el('chAbandon').onclick = () => { stopChallenge(); hide('challenges'); };
+el('chDismiss').onclick = () => stopChallenge();
+
+export function refreshChallenge(){
+  const bar = el('challengeBar'), ch = S.challenge;
+  if(!ch){ bar.classList.remove('show', 'won', 'lost'); return; }
+  bar.classList.add('show');
+  const cap = chCap(ch.key);
+  el('chName').textContent = t('ch' + cap + 'Name');
+  el('chFill').style.width = Math.round(ch.progress * 100) + '%';
+  bar.classList.toggle('won', ch.status === 'won');
+  bar.classList.toggle('lost', ch.status === 'lost');
+  el('chStatus').textContent = ch.status === 'won' ? t('chWon') : ch.status === 'lost' ? t('chLost') : Math.round(ch.progress * 100) + '%';
+  if(ch.status !== 'active' && !ch._notified){ ch._notified = true; toast((ch.status === 'won' ? t('chWon') : t('chLost')) + ' — ' + t('ch' + cap + 'Name')); }
+}
 function updateModeBtn(){
   const on = S.tool === 'inspect';
   el('btnMode').innerHTML = on ? t('modeInspect') : t('modeFood');

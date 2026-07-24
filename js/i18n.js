@@ -47,7 +47,15 @@ export const I18N = {
     evMeteor:"☄️ Meteora", evDrought:"🏜️ Siccità", evEpidemic:"🦠 Epidemia", evRock:"🪨 Posiziona rocce", evWater:"💧 Posiziona acqua", evClear:"🧹 Pulisci terreno",
     optDayNight:"Ciclo giorno/notte",
     evMeteorHint:"Tocca dove far cadere la meteora", evRockHint:"Tocca o trascina per posare rocce", evWaterHint:"Tocca o trascina per creare acqua",
-    evDroughtOn:"🏜️ Siccità in arrivo", evEpidemicOn:"🦠 Epidemia scatenata", evCleared:"🧹 Terreno ripulito" },
+    evDroughtOn:"🏜️ Siccità in arrivo", evEpidemicOn:"🦠 Epidemia scatenata", evCleared:"🧹 Terreno ripulito",
+    chBtn:"🎯 Sfide", chEyebrow:"Metti alla prova l'evoluzione", chTitle:"Sfide",
+    chLead:"Scegli un obiettivo: verrà monitorato dal vivo.", chAbandon:"Abbandona sfida",
+    chWon:"🏆 Vinta!", chLost:"💀 Fallita",
+    chDynastyName:"Dinastia", chDynastyDesc:"Raggiungi la 30ª generazione.",
+    chBalanceName:"Equilibrio", chBalanceDesc:"Tieni erbivori, onnivori e carnivori tutti ≥15 per 1500 tempi.",
+    chPredatorsName:"L'ascesa dei predatori", chPredatorsDesc:"Fai in modo che i carnivori superino gli erbivori.",
+    chSurvivorsName:"Sopravvissuti", chSurvivorsDesc:"Mantieni la popolazione ≥80 per 2500 tempi (perdi se crolla sotto 25).",
+    chGiantName:"Il gigante", chGiantDesc:"Fai evolvere una creatura di dimensione ≥8.5." },
   en:{ menu:"☰ Menu", hint:"Drag to explore · wheel/pinch to zoom · tap to plant",
     numbers:"The ecosystem in numbers", herbivores:"Herbivores", carnivores:"Carnivores", omnivores:"Omnivores", plants:"Plants",
     time:"Time", generation:"Generation", kills:"Kills",
@@ -95,7 +103,15 @@ export const I18N = {
     evMeteor:"☄️ Meteor", evDrought:"🏜️ Drought", evEpidemic:"🦠 Epidemic", evRock:"🪨 Place rocks", evWater:"💧 Place water", evClear:"🧹 Clear terrain",
     optDayNight:"Day/night cycle",
     evMeteorHint:"Tap where the meteor should strike", evRockHint:"Tap or drag to place rocks", evWaterHint:"Tap or drag to place water",
-    evDroughtOn:"🏜️ Drought incoming", evEpidemicOn:"🦠 Epidemic unleashed", evCleared:"🧹 Terrain cleared" }
+    evDroughtOn:"🏜️ Drought incoming", evEpidemicOn:"🦠 Epidemic unleashed", evCleared:"🧹 Terrain cleared",
+    chBtn:"🎯 Challenges", chEyebrow:"Put evolution to the test", chTitle:"Challenges",
+    chLead:"Pick an objective: it's tracked live.", chAbandon:"Abandon challenge",
+    chWon:"🏆 Won!", chLost:"💀 Failed",
+    chDynastyName:"Dynasty", chDynastyDesc:"Reach the 30th generation.",
+    chBalanceName:"Balance", chBalanceDesc:"Keep herbivores, omnivores and carnivores all ≥15 for 1500 ticks.",
+    chPredatorsName:"Rise of the predators", chPredatorsDesc:"Make carnivores outnumber herbivores.",
+    chSurvivorsName:"Survivors", chSurvivorsDesc:"Keep the population ≥80 for 2500 ticks (lose if it crashes below 25).",
+    chGiantName:"The giant", chGiantDesc:"Evolve a creature of size ≥8.5." }
 };
 
 let lang = 'it';

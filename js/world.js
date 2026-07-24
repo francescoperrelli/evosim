@@ -4,6 +4,7 @@ import { rnd, clamp } from './utils.js';
 import { P, S, TYPES, PREDATORS, BRAIN_W, INNATE_W, NEIGH_R2, SEP_R2, CELL, SAVE_KEY, seasonInfo, dayInfo } from './state.js';
 import { randomGenome, mutateGenome, crossover, makeCreature, metabolism } from './genome.js';
 import { brainForward, getHidden, NIN, NOUT } from './nn.js';
+import { evalChallenge } from './challenges.js';
 
 const _in = new Array(NIN), _out = new Array(NOUT);
 const TAU2 = Math.PI * 2;
@@ -41,7 +42,7 @@ export function seed(){
   S.creatures = []; S.food = []; S.tick = 0; S.predations = 0; S.maxGen = 0;
   S.popHist.length = 0; S.traitHist.length = 0; S.evoHist.length = 0; S.ID = 1; S.selected = null;
   S.records = { oldestAge: 0, maxKids: 0, maxGen: 0 };
-  S.rocks = []; S.water = []; S.drought = 0; S.effects = []; generateBiomes();
+  S.rocks = []; S.water = []; S.drought = 0; S.effects = []; S.challenge = null; generateBiomes();
   for(let i = 0; i < P.herbStart; i++) S.creatures.push(founder('herb'));
   if(P.omnivoresOn) for(let i = 0; i < P.omniStart; i++) S.creatures.push(founder('omni'));
   if(P.predatorsOn) for(let i = 0; i < P.carnStart; i++) S.creatures.push(founder('carn'));
@@ -262,6 +263,7 @@ export function step(){
     if(S.evoHist.length > 240){ S.evoHist.shift(); }
     if(S.maxGen > S.records.maxGen) S.records.maxGen = S.maxGen;
   }
+  if(S.challenge && S.tick % 15 === 0) evalChallenge();
 }
 
 /* ---------- save / load ---------- */
