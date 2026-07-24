@@ -265,6 +265,20 @@ export function draw(){
       wctx.setLineDash([5 / z, 5 / z]); wctx.beginPath(); wctx.arc(nz.x, nz.y, nz.r, 0, TAU); wctx.stroke(); wctx.setLineDash([]);
     }
   }
+  // shelters — built thicket refuges (a leafy dome that snags predators)
+  if(P.buildOn && S.shelters.length){
+    for(const sh of S.shelters){
+      if(!vis(sh.x, sh.y, sh.r + 4)) continue;
+      const a = clamp(sh.str / 14, 0.2, 0.7);
+      wctx.fillStyle = `rgba(70,110,50,${0.14 * a + 0.04})`; wctx.beginPath(); wctx.arc(sh.x, sh.y, sh.r, 0, TAU); wctx.fill();
+      wctx.strokeStyle = `rgba(96,150,70,${0.4 + 0.4 * a})`; wctx.lineWidth = 2.2 / z;
+      wctx.beginPath(); wctx.arc(sh.x, sh.y, sh.r, 0, TAU); wctx.stroke();
+      // little leafy tufts around the rim
+      const tufts = 7; wctx.fillStyle = `rgba(80,130,55,${0.5 * a + 0.2})`;
+      for(let g = 0; g < tufts; g++){ const ang = g / tufts * TAU, tx = sh.x + Math.cos(ang) * sh.r, ty = sh.y + Math.sin(ang) * sh.r;
+        wctx.beginPath(); wctx.arc(tx, ty, sh.r * 0.16, 0, TAU); wctx.fill(); }
+    }
+  }
   // caches — stored-food piles built by hoarders (size grows with the stock)
   if(P.hoardOn && S.caches.length){
     for(const ca of S.caches){

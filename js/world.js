@@ -67,6 +67,13 @@ function updateNests(){
     if(!nz.announced && nz.str >= 6){ nz.announced = true; logEvent('nest_' + nz.type, null, { x: nz.x, y: nz.y }); }
   }
 }
+// is a creature inside a built shelter of its own lineage? (a family refuge)
+function shelterProtect(cr){
+  const sh2 = S.shelters;
+  for(let i = 0; i < sh2.length; i++){ const sh = sh2[i]; if(sh.lineage !== cr.lineage) continue;
+    if((sh.x - cr.x) ** 2 + (sh.y - cr.y) ** 2 < sh.r * sh.r) return true; }
+  return false;
+}
 // is a creature within the shelter of a nest of its own kind?
 function nestShelter(cr){
   const nests = S.nests;
@@ -242,7 +249,7 @@ export function seed(seedVal){
   S.popHist.length = 0; S.traitHist.length = 0; S.evoHist.length = 0; S.ornHist.length = 0; S.dataLog.length = 0; S.ID = 1; S.selected = null;
   S.records = { oldestAge: 0, maxKids: 0, maxGen: 0 };
   S.chronicle = []; S.chronPrev = null; S.lex = newLex(); S.dialect = {};
-  S.rocks = []; S.water = []; S.drought = 0; S.effects = []; S.challenge = null; S.shares = 0; S.packKills = 0; S.nests = []; S.caches = []; generateBiomes();
+  S.rocks = []; S.water = []; S.drought = 0; S.effects = []; S.challenge = null; S.shares = 0; S.packKills = 0; S.nests = []; S.caches = []; S.shelters = []; generateBiomes();
   pherInit();
   for(let i = 0; i < P.herbStart; i++) S.creatures.push(founder('herb'));
   if(P.omnivoresOn) for(let i = 0; i < P.omniStart; i++) S.creatures.push(founder('omni'));
@@ -485,6 +492,11 @@ export function step(){
       const rk = rocks[ri], rdx = c.x - rk.x, rdy = c.y - rk.y, rr = rk.r + c.rad;
       if(rdx * rdx + rdy * rdy < rr * rr){ const rd = Math.hypot(rdx, rdy) || 1; c.x = rk.x + rdx / rd * rr; c.y = rk.y + rdy / rd * rr; c.vx *= 0.4; c.vy *= 0.4; }
     }
+    // a shelter's thicket snags predators that push into it (the barrier at work)
+    if(P.buildOn && cfg.terr && S.shelters.length){
+      for(let si2 = 0; si2 < S.shelters.length; si2++){ const sh = S.shelters[si2];
+        if((sh.x - c.x) ** 2 + (sh.y - c.y) ** 2 < sh.r * sh.r){ c.x -= c.vx * 0.5; c.y -= c.vy * 0.5; c.vx *= 0.45; c.vy *= 0.45; break; } }
+    }
 
     // lay a scent mark; the better fed, the stronger the trail it leaves behind
     if(P.pherOn) pherDeposit(c, c.energy > P[cfg.reproE] * 0.5 ? 0.6 : 0.2);
@@ -527,12 +539,22 @@ export function step(){
           if((ca.x - c.x) ** 2 + (ca.y - c.y) ** 2 < 52 * 52){ const take = Math.min(ca.amount, 16); ca.amount -= take; c.energy += take; break; } }
       }
     }
+    // niche construction II: prey build a shelter (a thicket refuge) of their lineage,
+    // spending energy; kin sheltering inside are much harder for predators to catch
+    if(P.buildOn && !cfg.terr && g.build > 0.1 && c.energy > P[cfg.reproE] * 0.6 && rand() < g.build * 0.006){
+      let best = null, bd = 90 * 90;
+      for(let si2 = 0; si2 < S.shelters.length; si2++){ const sh = S.shelters[si2]; if(sh.lineage !== c.lineage) continue;
+        const dd = (sh.x - c.x) ** 2 + (sh.y - c.y) ** 2; if(dd < bd){ bd = dd; best = sh; } }
+      if(best){ best.str = Math.min(best.str + 2, 14); best.r = 30 + best.str * 3; c.energy -= 8; }
+      else if(S.shelters.length < 30){ S.shelters.push({ x: c.x, y: c.y, lineage: c.lineage, type: c.type, str: 4, r: 42 }); c.energy -= 14; }
+    }
     if(preyRef && !preyRef.dead){
       const er = c.rad + (preyRef.rad || preyRef.g.size) + 2;
       let killP = 1 / (1 + 0.12 * (preyRef.groupSize || 0));
       // a juvenile sheltering at a nest of its kind is harder to pick off
       const preyMat = P[TYPES[preyRef.type].maxAge] * 0.16;
       if(P.nestsOn && preyRef.age < preyMat && nestShelter(preyRef)) killP *= 0.45;
+      if(P.buildOn && shelterProtect(preyRef)) killP *= 0.25;   // safe inside its family's built shelter
       if((preyRef.x - c.x) ** 2 + (preyRef.y - c.y) ** 2 < er * er && rand() < killP){
         preyRef.dead = true; S.predations++;
         const packBonus = 1 + 0.25 * Math.min(cnt, 3);     // hunting near allies pays off
@@ -624,6 +646,9 @@ export function step(){
   if(S.caches.length && S.tick % 120 === 0){   // stored food spoils slowly enough to last from summer into winter
     for(let i = S.caches.length - 1; i >= 0; i--){ const ca = S.caches[i]; ca.amount *= 0.985; if(ca.amount < 2) S.caches.splice(i, 1); }
   }
+  if(S.shelters.length && S.tick % 150 === 0){   // shelters weather away unless maintained
+    for(let i = S.shelters.length - 1; i >= 0; i--){ const sh = S.shelters[i]; sh.str *= 0.85; if(sh.str < 1.2){ S.shelters.splice(i, 1); continue; } sh.r = 30 + sh.str * 3; }
+  }
   // endemic disease: keep a faint level of infection alive so pathogens persist and co-evolve
   if(P.plaguesOn && S.tick % 40 === 0 && S.creatures.length > 30){
     let infected = 0; for(const c of S.creatures) if(c.sick > 0){ infected++; if(infected >= 3) break; }
@@ -647,7 +672,7 @@ export function snapshot(){
     worldW: S.worldW, worldH: S.worldH,
     params: { foodRate: P.foodRate, mut: P.mut, predatorsOn: P.predatorsOn, omnivoresOn: P.omnivoresOn,
               flocksOn: P.flocksOn, terrOn: P.terrOn, mimicOn: P.mimicOn, seasonsOn: P.seasonsOn,
-              pherOn: P.pherOn, cultureOn: P.cultureOn, learnOn: P.learnOn, nestsOn: P.nestsOn, plaguesOn: P.plaguesOn, migrateOn: P.migrateOn, hoardOn: P.hoardOn },
+              pherOn: P.pherOn, cultureOn: P.cultureOn, learnOn: P.learnOn, nestsOn: P.nestsOn, plaguesOn: P.plaguesOn, migrateOn: P.migrateOn, hoardOn: P.hoardOn, buildOn: P.buildOn },
     creatures: S.creatures.map(c => ({
       x: +c.x.toFixed(1), y: +c.y.toFixed(1), t: c.type,
       e: +c.energy.toFixed(1), a: c.age, gn: c.gen, id: c.id, hx: +c.homeX.toFixed(1), hy: +c.homeY.toFixed(1),
@@ -655,14 +680,15 @@ export function snapshot(){
           +c.g.sociality.toFixed(2), +c.g.camo.toFixed(2), +c.g.territoriality.toFixed(2),
           +c.g.territoryR.toFixed(1), +c.g.acuity.toFixed(2), +c.g.sexual.toFixed(2), +c.g.diet.toFixed(3),
           +c.g.shape.toFixed(2), +c.g.pattern.toFixed(2), +c.g.altruism.toFixed(2),
-          +(c.g.ornament || 0).toFixed(2), +(c.g.preference || 0).toFixed(2), +(c.g.resist || 0).toFixed(2), +(c.g.reciprocity || 0).toFixed(2), +(c.g.migrate || 0).toFixed(2), +(c.g.hoard || 0).toFixed(2)],
+          +(c.g.ornament || 0).toFixed(2), +(c.g.preference || 0).toFixed(2), +(c.g.resist || 0).toFixed(2), +(c.g.reciprocity || 0).toFixed(2), +(c.g.migrate || 0).toFixed(2), +(c.g.hoard || 0).toFixed(2), +(c.g.build || 0).toFixed(2)],
       b: { nh: c.g.brain.nh, w: c.g.brain.w.map(x => +x.toFixed(3)) }
     })),
     food: S.food.map(f => [+f.x.toFixed(1), +f.y.toFixed(1)]),
     rocks: S.rocks.map(r => [+r.x.toFixed(1), +r.y.toFixed(1), +r.r.toFixed(1)]),
     water: S.water.map(w => [+w.x.toFixed(1), +w.y.toFixed(1), +w.r.toFixed(1)]),
     biomes: S.biomes.map(bm => [+bm.x.toFixed(0), +bm.y.toFixed(0), +bm.r.toFixed(0), +bm.fert.toFixed(2)]),
-    caches: S.caches.map(ca => [+ca.x.toFixed(0), +ca.y.toFixed(0), ca.type, +ca.amount.toFixed(0), ca.lineage || 0])
+    caches: S.caches.map(ca => [+ca.x.toFixed(0), +ca.y.toFixed(0), ca.type, +ca.amount.toFixed(0), ca.lineage || 0]),
+    shelters: S.shelters.map(sh => [+sh.x.toFixed(0), +sh.y.toFixed(0), sh.lineage || 0, +sh.str.toFixed(1)])
   };
 }
 
@@ -682,6 +708,7 @@ export function restore(s){
          ornament: o.g[14] !== undefined ? o.g[14] : 0.1, preference: o.g[15] !== undefined ? o.g[15] : 0.15,
          resist: o.g[16] !== undefined ? o.g[16] : 0.05, reciprocity: o.g[17] !== undefined ? o.g[17] : 0.1,
          migrate: o.g[18] !== undefined ? o.g[18] : 0.1, hoard: o.g[19] !== undefined ? o.g[19] : 0.1,
+         build: o.g[20] !== undefined ? o.g[20] : 0.1,
          // migrate single-channel (v8) brains up to the three-channel layout
          brain: o.b.w.length === brainLenOld(o.b.nh) ? migrateBrain(o.b.nh, o.b.w) : { nh: o.b.nh, w: o.b.w.slice() } }
   }));
@@ -690,6 +717,7 @@ export function restore(s){
   S.water = (s.water || []).map(a => ({ x: a[0], y: a[1], r: a[2] }));
   S.biomes = (s.biomes || []).map(a => ({ x: a[0], y: a[1], r: a[2], fert: a[3] }));
   S.caches = (s.caches || []).map(a => ({ x: a[0], y: a[1], type: a[2], amount: a[3], lineage: a[4] || 0 }));
+  S.shelters = (s.shelters || []).map(a => ({ x: a[0], y: a[1], lineage: a[2] || 0, str: a[3], r: 30 + a[3] * 3 }));
   S.drought = 0; S.effects = []; S.nests = []; pherInit();
   S.tick = s.tick || 0; S.predations = s.predations || 0; S.maxGen = s.maxGen || 0; S.ID = s.ID || S.creatures.length + 1; S.seed = s.seed || 0;
   S.selected = null;

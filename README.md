@@ -63,9 +63,13 @@ can reopen it any time from the menu (📖 Tutorial).
 - **Niche construction — foraging & caching** — a **hoard** gene lets a well-fed
   creature pocket surplus food and deposit it into a **granary** (a built resource
   store); kin draw from the family granary through scarcity. Because only kin use
-  it, hoarding pays via kin selection and the gene evolves upward. Creatures that
-  interact with the environment, collect resources and build something — emergent,
-  not scripted.
+  it, hoarding pays via kin selection and the gene evolves upward.
+- **Niche construction — shelters** — a **build** gene lets prey spend energy to
+  raise a **thicket shelter** (a leafy dome): it snags pursuing predators, and kin
+  hiding inside their family's shelter are much harder to catch. A second kind of
+  built structure, again lineage-tagged so building pays for one's own kin.
+  Together with caching, creatures interact with the environment, collect resources
+  and build things — all emergent, not scripted.
 - **Cultural transmission** — a newborn can imitate the brain of the most thriving
   same-type neighbour of its parent (not just kin), so a successful behaviour can
   spread horizontally through a population faster than genes alone.
