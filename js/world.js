@@ -120,10 +120,12 @@ export function logEvent(key, n){
   if(S.chronicle.length > 80) S.chronicle.pop();
 }
 function checkChronicle(){
-  let herb = 0, omni = 0, carn = 0, maxBrain = 0, ornSum = 0, sexN = 0;
-  for(const c of S.creatures){ if(c.type === 'carn') carn++; else if(c.type === 'omni') omni++; else herb++; if(c.g.brain.nh > maxBrain) maxBrain = c.g.brain.nh;
-    if(c.g.sexual > 0.5){ sexN++; ornSum += c.g.ornament || 0; } }
-  const avgOrn = sexN ? ornSum / sexN : 0;
+  let herb = 0, omni = 0, carn = 0, maxBrain = 0, hOrn = 0, oOrn = 0, cOrn = 0;
+  for(const c of S.creatures){ const orn = c.g.ornament || 0;
+    if(c.type === 'carn'){ carn++; cOrn += orn; } else if(c.type === 'omni'){ omni++; oOrn += orn; } else { herb++; hOrn += orn; }
+    if(c.g.brain.nh > maxBrain) maxBrain = c.g.brain.nh; }
+  const avgOrn = omni ? oOrn / omni : 0;                 // omnivores are the sexual species
+  const carnOrn = carn ? cOrn / carn : 0, herbOrn = herb ? hOrn / herb : 0;
   const total = S.creatures.length;
   const pv = S.chronPrev || (S.chronPrev = { herb, omni, carn, total, genTier: 0, maxBrain: 0, speciesMax: 0 });
   const genTier = Math.floor(S.maxGen / 10);
@@ -141,9 +143,14 @@ function checkChronicle(){
   const dv = dialectStats().divergence;
   const dvTier = Math.floor(dv / 0.35);
   if(dvTier > (pv.dialTier || 0) && dv >= 0.5) logEvent('dialect', Math.round(dv * 100));
+  // ornament milestones, one per selection regime
   const ornTier = Math.floor(avgOrn / 0.2);
-  if(ornTier > (pv.ornTier || 0) && avgOrn >= 0.5) logEvent('ornament', Math.round(avgOrn * 100));
-  S.chronPrev = { herb, omni, carn, total, genTier: Math.max(genTier, pv.genTier), maxBrain: Math.max(maxBrain, pv.maxBrain), speciesMax: Math.max(sp, pv.speciesMax), dialTier: Math.max(dvTier, pv.dialTier || 0), ornTier: Math.max(ornTier, pv.ornTier || 0) };
+  if(ornTier > (pv.ornTier || 0) && avgOrn >= 0.5) logEvent('ornament', Math.round(avgOrn * 100));      // omnivore sexual runaway
+  const carnTier = Math.floor(carnOrn / 0.2);
+  if(carnTier > (pv.carnTier || 0) && carnOrn >= 0.45 && carn >= 3) logEvent('armament', Math.round(carnOrn * 100));   // carnivore contest
+  const herbTier = Math.floor(herbOrn / 0.15);
+  if(herbTier > (pv.herbTier || 0) && herbOrn >= 0.35 && herb >= 8) logEvent('herbshow', Math.round(herbOrn * 100));   // herbivore social display
+  S.chronPrev = { herb, omni, carn, total, genTier: Math.max(genTier, pv.genTier), maxBrain: Math.max(maxBrain, pv.maxBrain), speciesMax: Math.max(sp, pv.speciesMax), dialTier: Math.max(dvTier, pv.dialTier || 0), ornTier: Math.max(ornTier, pv.ornTier || 0), carnTier: Math.max(carnTier, pv.carnTier || 0), herbTier: Math.max(herbTier, pv.herbTier || 0) };
 }
 export { checkChronicle };
 

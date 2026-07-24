@@ -76,6 +76,8 @@ export const I18N = {
     chr_brain:"Nuovo record di cervello: {n} neuroni", chr_species:"Nuova diversità: {n} specie",
     chr_dialect:"È emerso un dialetto distinto (divergenza {n})",
     chr_ornament:"Ornamenti sempre più vistosi (selezione sessuale, {n})",
+    chr_armament:"I carnivori sfoggiano armi da intimidazione (contesa, {n})",
+    chr_herbshow:"Gli erbivori si fanno più appariscenti (selezione sociale, {n})",
     chr_challengeWon:"Sfida vinta: {n}", chr_challengeLost:"Sfida fallita: {n}" },
   en:{ menu:"☰ Menu", hint:"Drag to explore · wheel/pinch to zoom · tap to plant",
     numbers:"The ecosystem in numbers", herbivores:"Herbivores", carnivores:"Carnivores", omnivores:"Omnivores", plants:"Plants",
@@ -153,6 +155,8 @@ export const I18N = {
     chr_brain:"New brain record: {n} neurons", chr_species:"New diversity: {n} species",
     chr_dialect:"A distinct dialect has emerged (divergence {n})",
     chr_ornament:"Ornaments growing showier (sexual selection, {n})",
+    chr_armament:"Carnivores flaunt intimidation weapons (contest, {n})",
+    chr_herbshow:"Herbivores growing showier (social selection, {n})",
     chr_challengeWon:"Challenge won: {n}", chr_challengeLost:"Challenge failed: {n}" }
 };
 
