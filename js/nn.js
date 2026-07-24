@@ -2,7 +2,7 @@
 // A brain is { nh, w }: nh hidden neurons and a flat weight array `w`,
 // laid out hidden-major so neurons can be added/removed by mutation.
 // Two outputs feed back as memory, giving each creature short-term memory.
-import { clamp, gauss } from './utils.js';
+import { clamp, gauss, rand } from './utils.js';
 import { P } from './state.js';
 
 // Inputs (20): food fwd/lat/pres, prey fwd/lat/pres, threat fwd/lat/pres,
@@ -49,7 +49,7 @@ export function migrateBrain(nh, wOld){
 export const brainLen = nh => nh * NIN + nh + nh * NOUT + NOUT;
 
 export function randomBrain(){
-  const nh = 6 + (Math.random() * 5 | 0);   // 6..10 to start
+  const nh = 6 + (rand() * 5 | 0);   // 6..10 to start
   const len = brainLen(nh), w = new Array(len);
   for(let i = 0; i < len; i++) w[i] = gauss() * 0.45;
   return { nh, w };
@@ -78,7 +78,7 @@ function removeNeuron(b){
 
 export function mutateBrain(b){
   let nb;
-  const r = Math.random();
+  const r = rand();
   if(r < 0.05 && b.nh < MAX_NH) nb = addNeuron(b);
   else if(r < 0.09 && b.nh > MIN_NH) nb = removeNeuron(b);
   else nb = { nh: b.nh, w: b.w.slice() };
@@ -91,10 +91,10 @@ export function mutateBrain(b){
 export function crossBrain(ba, bb){
   if(ba.nh === bb.nh){
     const w = new Array(ba.w.length);
-    for(let i = 0; i < w.length; i++) w[i] = Math.random() < 0.5 ? ba.w[i] : bb.w[i];
+    for(let i = 0; i < w.length; i++) w[i] = rand() < 0.5 ? ba.w[i] : bb.w[i];
     return { nh: ba.nh, w };
   }
-  return Math.random() < 0.5 ? { nh: ba.nh, w: ba.w.slice() } : { nh: bb.nh, w: bb.w.slice() };
+  return rand() < 0.5 ? { nh: ba.nh, w: ba.w.slice() } : { nh: bb.nh, w: bb.w.slice() };
 }
 
 // cultural transmission: nudge a brain's weights toward a role model's

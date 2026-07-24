@@ -1,7 +1,7 @@
 // Genome (physical + behavioural traits + brain) and creature factory.
 // Diet is a continuous heritable gene; the feeding "band" (herb/omni/carn)
 // is derived from it, so a lineage's diet can evolve over generations.
-import { rnd, clamp, gauss } from './utils.js';
+import { rnd, clamp, gauss, rand } from './utils.js';
 import { P, S, TYPES, typeOf } from './state.js';
 import { randomBrain, mutateBrain, crossBrain, NMEM } from './nn.js';
 
@@ -47,12 +47,12 @@ export function mutateGenome(g){
 
 // Sexual reproduction: recombine two parents' genomes and brains, then mutate
 export function crossover(ga, gb){
-  const pk = (x, y) => Math.random() < 0.5 ? x : y;
+  const pk = (x, y) => rand() < 0.5 ? x : y;
   // Ornament and preference are inherited as a LINKED pair (both from the same
   // parent). Independent assortment would break the ornament–preference genetic
   // correlation every generation and kill any Fisherian runaway; linkage lets
   // the correlation — and thus runaway sexual selection — build up.
-  const sp = Math.random() < 0.5 ? ga : gb;
+  const sp = rand() < 0.5 ? ga : gb;
   const base = {
     speed: pk(ga.speed, gb.speed), sense: pk(ga.sense, gb.sense), size: pk(ga.size, gb.size),
     hue: pk(ga.hue, gb.hue), sociality: pk(ga.sociality, gb.sociality), camo: pk(ga.camo, gb.camo),

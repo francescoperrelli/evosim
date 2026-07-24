@@ -57,7 +57,7 @@ export function dayInfo(tick){
 // Mutable world state (single shared object)
 export const S = {
   creatures: [], food: [],
-  tick: 0, predations: 0, maxGen: 0,
+  tick: 0, predations: 0, maxGen: 0, seed: 0,
   running: true, stepsPerFrame: 1,
   W: 0, H: 0,                 // viewport (screen) size in CSS px
   worldW: 0, worldH: 0,       // logical world size (larger than viewport)

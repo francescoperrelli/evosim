@@ -22,7 +22,15 @@ resize();
 let firstVisit = false;
 try{ firstVisit = !localStorage.getItem('evosim_tut_seen'); }catch(e){}
 try{ const sl = localStorage.getItem(LANG_KEY); if(sl && I18N[sl]) setLang(sl); }catch(e){}
-if(loadLocal()){ if(!S.worldW) initWorldSize(); }
+// a shared "?seed=..." link opens that exact world; strip it afterwards so a
+// later refresh continues the player's own saved progress instead of resetting
+let urlSeed = null;
+try{ const q = new URLSearchParams(location.search).get('seed'); if(q !== null && q !== '' && isFinite(+q)) urlSeed = +q >>> 0; }catch(e){}
+if(urlSeed !== null){
+  initWorldSize(); seed(urlSeed); saveLocal();
+  try{ history.replaceState(null, '', location.pathname); }catch(e){}
+}
+else if(loadLocal()){ if(!S.worldW) initWorldSize(); }
 else { initWorldSize(); seed(); saveLocal(); }
 clampCam();
 S.running = true;

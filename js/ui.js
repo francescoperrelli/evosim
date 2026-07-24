@@ -78,7 +78,7 @@ bindToggle('tOmni', 'omnivoresOn', on => { if(!on) S.creatures = S.creatures.fil
 bindToggle('tFlock', 'flocksOn'); bindToggle('tTerr', 'terrOn'); bindToggle('tMimic', 'mimicOn'); bindToggle('tSeason', 'seasonsOn'); bindToggle('tDay', 'dayNightOn'); bindToggle('tBubbles', 'bubblesOn'); bindToggle('tPher', 'pherOn'); bindToggle('tCulture', 'cultureOn'); bindToggle('tLearn', 'learnOn'); bindToggle('tNests', 'nestsOn');
 
 el('btnSave').onclick = () => toast(saveLocal() ? t('saved') : t('noStore'));
-el('btnOpt').onclick = () => show('options');
+el('btnOpt').onclick = () => { updateSeedUI(); show('options'); };
 el('btnEvo').onclick = () => show('evolution');
 el('btnEvents').onclick = () => show('events');
 el('btnMenu').onclick = () => { refreshMenu(); show('menu'); };
@@ -216,7 +216,7 @@ el('mResume').onclick = () => { hideAll(); S.running = true; syncPlayBtn(); };
 el('mTut').onclick = () => showTour();
 el('mLoad').onclick = () => { if(loadLocal()){ syncControls(); clampCam(); toast(t('loaded')); hideAll(); S.running = true; syncPlayBtn(); } else toast(t('noSave')); };
 el('mSave').onclick = () => toast(saveLocal() ? t('saved') : t('noStore'));
-el('mOpt').onclick = () => show('options');
+el('mOpt').onclick = () => { updateSeedUI(); show('options'); };
 el('mEvo').onclick = () => show('evolution');
 el('mEvents').onclick = () => show('events');
 el('evClose').onclick = () => hide('evolution');
@@ -249,6 +249,21 @@ function endTour(){
 el('tourBack').onclick = () => { if(tourStep > 0){ tourStep--; renderTour(); } };
 el('tourNext').onclick = () => { if(tourStep < TOUR.length - 1){ tourStep++; renderTour(); } else endTour(); };
 el('tourSkip').onclick = endTour;
+
+/* ---------- world seed: reproduce & share ---------- */
+function updateSeedUI(){ const e = el('seedVal'); if(e) e.textContent = S.seed || '—'; }
+el('oRegen').onclick = () => {
+  const raw = el('seedInput').value.trim();
+  const sv = raw === '' ? undefined : (isFinite(+raw) ? (+raw >>> 0) : undefined);
+  clearLocal(); seed(sv); resetCam(); saveLocal(); syncControls(); updateSeedUI();
+  hideAll(); S.running = true; syncPlayBtn(); toast('🌱 ' + t('worldRegen') + ' ' + S.seed);
+};
+el('oShare').onclick = () => {
+  const url = location.origin + location.pathname + '?seed=' + (S.seed || 0);
+  const done = () => toast('🔗 ' + t('linkCopied'));
+  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(url).then(done, () => toast(url)); }
+  else toast(url);
+};
 
 /* ---------- options: export / import ---------- */
 el('oClose').onclick = () => hide('options');

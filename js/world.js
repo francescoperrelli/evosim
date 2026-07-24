@@ -1,6 +1,6 @@
 // Simulation engine: seasons, spatial-grid perception (egocentric vision,
 // prey/threat channels, memory), brain + instinct steering, interactions, save/load.
-import { rnd, clamp } from './utils.js';
+import { rnd, clamp, rand, setSeed } from './utils.js';
 import { P, S, TYPES, PREDATORS, BRAIN_W, INNATE_W, NEIGH_R2, SEP_R2, CELL, SAVE_KEY, seasonInfo, dayInfo, newLex } from './state.js';
 import { randomGenome, mutateGenome, crossover, makeCreature, metabolism } from './genome.js';
 import { brainForward, getHidden, learn, NIN, NOUT, NCHAN, IN_HEARD, OUT_SIG, migrateBrain, brainLenOld, blendToward } from './nn.js';
@@ -103,9 +103,9 @@ function waterFactor(x, y){
 }
 function generateBiomes(){
   S.biomes = [];
-  const n = 3 + (Math.random() * 3 | 0);
+  const n = 3 + (rand() * 3 | 0);
   for(let i = 0; i < n; i++)
-    S.biomes.push({ x: rnd(0, S.worldW), y: rnd(0, S.worldH), r: rnd(220, 420), fert: Math.random() < 0.6 ? rnd(0.4, 0.9) : rnd(-0.7, -0.3) });
+    S.biomes.push({ x: rnd(0, S.worldW), y: rnd(0, S.worldH), r: rnd(220, 420), fert: rand() < 0.6 ? rnd(0.4, 0.9) : rnd(-0.7, -0.3) });
 }
 
 // reproductive isolation: sexual partners must be genetically similar enough
@@ -182,7 +182,7 @@ export function speciesCount(){
 }
 
 export function spawnFood(n){
-  const k = Math.floor(n) + (Math.random() < (n % 1) ? 1 : 0);
+  const k = Math.floor(n) + (rand() < (n % 1) ? 1 : 0);
   for(let i = 0; i < k && S.food.length < P.maxFood; i++){
     let bx = 0, by = 0, bf = -1;
     for(let t = 0; t < 3; t++){ const x = rnd(6, S.worldW - 6), y = rnd(6, S.worldH - 6), f = fertilityAt(x, y); if(f > bf){ bf = f; bx = x; by = y; } }
@@ -193,7 +193,10 @@ export function spawnFood(n){
 function founder(type){ const c = makeCreature(rnd(0, S.worldW), rnd(0, S.worldH), type, randomGenome(type), 0); c.lineage = c.id; return c; }
 // compact ancestry chain (last 10 forebears) inherited from the primary parent
 function ancestryOf(pp){ return [...(pp.anc || []), { id: pp.id, gen: pp.gen, diet: pp.g.diet, type: pp.type, hue: pp.g.hue }].slice(-10); }
-export function seed(){
+export function seed(seedVal){
+  // a world is reproducible from its seed; omit for a fresh random one
+  const sd = (seedVal === undefined || seedVal === null || !isFinite(seedVal)) ? (Date.now() >>> 0) : (seedVal >>> 0);
+  setSeed(sd); S.seed = sd;
   S.creatures = []; S.food = []; S.tick = 0; S.predations = 0; S.maxGen = 0;
   S.popHist.length = 0; S.traitHist.length = 0; S.evoHist.length = 0; S.ornHist.length = 0; S.ID = 1; S.selected = null;
   S.records = { oldestAge: 0, maxKids: 0, maxGen: 0 };
@@ -244,7 +247,7 @@ export function step(){
   // same-type neighbour of its parent (not necessarily kin), so a successful
   // behaviour can spread through a population faster than genes alone.
   function imitateNearby(child, parent, pgx, pgy){
-    if(!P.cultureOn || Math.random() >= 0.35) return;
+    if(!P.cultureOn || rand() >= 0.35) return;
     let model = null, bestE = parent.energy * 1.05;
     for(let ox = -1; ox <= 1; ox++){ const nx = pgx + ox; if(nx < 0 || nx >= cols) continue;
       for(let oy = -1; oy <= 1; oy++){ const ny = pgy + oy; if(ny < 0 || ny >= rows) continue;
@@ -289,7 +292,7 @@ export function step(){
           const o = cb[bi];
           if(o === c || o.dead) continue;
           const dx = o.x - c.x, dy = o.y - c.y, d = dx * dx + dy * dy;
-          if(c.sick > 0 && o.sick === 0 && d < 700 && Math.random() < 0.04) o.sick = 500;   // contagion
+          if(c.sick > 0 && o.sick === 0 && d < 700 && rand() < 0.04) o.sick = 500;   // contagion
           if(o.type === c.type){
             if(d < NEIGH_R2){ cnt++; sumx += o.x; sumy += o.y; sumvx += o.vx; sumvy += o.vy;
               sumS0 += o.sig[0]; sumS1 += o.sig[1]; sumS2 += o.sig[2];
@@ -303,7 +306,7 @@ export function step(){
               if(desir < mateScore){ mateScore = desir; mateRef = o; matex = dx; matey = dy; }
             }
             // kin food-sharing: a well-fed altruist gives energy to a starving relative nearby
-            if(d < 900 && o.lineage === c.lineage && c.energy > P[cfg.reproE] * 0.7 && o.energy < P[cfg.reproE] * 0.35 && Math.random() < g.altruism * 0.08){
+            if(d < 900 && o.lineage === c.lineage && c.energy > P[cfg.reproE] * 0.7 && o.energy < P[cfg.reproE] * 0.35 && rand() < g.altruism * 0.08){
               c.energy -= 8; o.energy += 6; S.shares++;
             }
             continue;
@@ -444,7 +447,7 @@ export function step(){
       // a juvenile sheltering at a nest of its kind is harder to pick off
       const preyMat = P[TYPES[preyRef.type].maxAge] * 0.16;
       if(P.nestsOn && preyRef.age < preyMat && nestShelter(preyRef)) killP *= 0.45;
-      if((preyRef.x - c.x) ** 2 + (preyRef.y - c.y) ** 2 < er * er && Math.random() < killP){
+      if((preyRef.x - c.x) ** 2 + (preyRef.y - c.y) ** 2 < er * er && rand() < killP){
         preyRef.dead = true; S.predations++;
         const packBonus = 1 + 0.25 * Math.min(cnt, 3);     // hunting near allies pays off
         c.energy += P.preyEnergy * cfg.preyEff * packBonus;
@@ -495,14 +498,14 @@ export function step(){
     if(P.omnivoresOn && omniN < 12 && herbN > 28){
       // reinforce from survivors when possible, so evolved traits aren't diluted away
       for(let k = 0; k < 3; k++){
-        let src = null; for(const cc of creatures){ if(cc.type === 'omni'){ if(!src || Math.random() < 0.3) src = cc; } }
+        let src = null; for(const cc of creatures){ if(cc.type === 'omni'){ if(!src || rand() < 0.3) src = cc; } }
         if(src){ const ch = makeCreature(rnd(0, WW), rnd(0, HH), 'omni', mutateGenome(src.g), src.gen); ch.lineage = src.lineage; creatures.push(ch); }
         else creatures.push(founder('omni'));
       }
     }
     if(P.predatorsOn && carnN < 4 && herbN > 38){
       for(let k = 0; k < 2; k++){
-        let src = null; for(const cc of creatures){ if(cc.type === 'carn'){ if(!src || Math.random() < 0.4) src = cc; } }
+        let src = null; for(const cc of creatures){ if(cc.type === 'carn'){ if(!src || rand() < 0.4) src = cc; } }
         if(src){ const ch = makeCreature(rnd(0, WW), rnd(0, HH), 'carn', mutateGenome(src.g), src.gen); ch.lineage = src.lineage; ch.homeX = ch.x; ch.homeY = ch.y; creatures.push(ch); }
         else creatures.push(founder('carn'));
       }
@@ -546,7 +549,7 @@ export function step(){
 /* ---------- save / load ---------- */
 export function snapshot(){
   return {
-    v: 9, tick: S.tick, predations: S.predations, maxGen: S.maxGen, ID: S.ID,
+    v: 9, tick: S.tick, predations: S.predations, maxGen: S.maxGen, ID: S.ID, seed: S.seed,
     worldW: S.worldW, worldH: S.worldH,
     params: { foodRate: P.foodRate, mut: P.mut, predatorsOn: P.predatorsOn, omnivoresOn: P.omnivoresOn,
               flocksOn: P.flocksOn, terrOn: P.terrOn, mimicOn: P.mimicOn, seasonsOn: P.seasonsOn,
@@ -590,7 +593,7 @@ export function restore(s){
   S.water = (s.water || []).map(a => ({ x: a[0], y: a[1], r: a[2] }));
   S.biomes = (s.biomes || []).map(a => ({ x: a[0], y: a[1], r: a[2], fert: a[3] }));
   S.drought = 0; S.effects = []; S.nests = []; pherInit();
-  S.tick = s.tick || 0; S.predations = s.predations || 0; S.maxGen = s.maxGen || 0; S.ID = s.ID || S.creatures.length + 1;
+  S.tick = s.tick || 0; S.predations = s.predations || 0; S.maxGen = s.maxGen || 0; S.ID = s.ID || S.creatures.length + 1; S.seed = s.seed || 0;
   S.selected = null;
   if(s.params) Object.assign(P, s.params);
   S.popHist.length = 0; S.traitHist.length = 0; S.ornHist.length = 0;
@@ -614,8 +617,8 @@ export function meteor(x, y){
 export function startDrought(){ S.drought = 2200; }
 export function startEpidemic(){
   let n = 0;
-  for(const c of S.creatures){ if(Math.random() < 0.06){ c.sick = 600; n++; } }
-  if(n === 0 && S.creatures.length) S.creatures[(Math.random() * S.creatures.length) | 0].sick = 600;
+  for(const c of S.creatures){ if(rand() < 0.06){ c.sick = 600; n++; } }
+  if(n === 0 && S.creatures.length) S.creatures[(rand() * S.creatures.length) | 0].sick = 600;
 }
 export function addRock(x, y){ S.rocks.push({ x, y, r: rnd(16, 30) }); if(S.rocks.length > 140) S.rocks.shift(); }
 export function addWater(x, y){ S.water.push({ x, y, r: rnd(28, 46) }); if(S.water.length > 140) S.water.shift(); }

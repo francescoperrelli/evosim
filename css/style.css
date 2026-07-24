@@ -76,6 +76,12 @@ input[type=range]{width:100%; accent-color:var(--moss); margin-top:5px}
 .step .t{font-size:13.5px; line-height:1.5}
 .step .t b{color:var(--ink)}
 .opt-group{text-align:left; margin-bottom:6px}
+.world-group{margin-top:18px; padding-top:14px; border-top:1px solid var(--line)}
+.seed-line{font-size:13px; color:var(--muted); margin:2px 0 10px}
+.seed-line b{color:var(--moss); font-variant-numeric:tabular-nums}
+.seed-row{display:flex; gap:8px}
+.seed-row #seedInput{flex:1; background:#0c120c; border:1px solid var(--line); border-radius:8px; color:var(--ink); padding:9px 12px; font-size:13px; font-family:var(--sans)}
+.seed-row #seedInput:focus{outline:none; border-color:var(--moss)}
 /* guided tour */
 .tour-card{max-width:440px}
 .tour-icon{font-size:44px; line-height:1; margin:6px 0 14px}

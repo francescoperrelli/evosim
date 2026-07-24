@@ -145,7 +145,16 @@
         <div class="toggle"><span data-i18n="optLearn">Apprendimento in vita</span><label class="switch"><input type="checkbox" id="tLearn" checked><span class="slider"></span></label></div>
         <div class="toggle"><span data-i18n="optNests">Nidi / tane</span><label class="switch"><input type="checkbox" id="tNests" checked><span class="slider"></span></label></div>
       </div>
-      <div class="row" style="margin-top:20px">
+      <div class="opt-group world-group">
+        <p class="insp-sub" data-i18n="worldSeedTitle">Mondo · seme riproducibile</p>
+        <p class="seed-line"><span data-i18n="seedLabel">Seme attuale</span>: <b id="seedVal">—</b></p>
+        <div class="row seed-row">
+          <input type="text" id="seedInput" inputmode="numeric" placeholder="123456" data-i18n-ph="seedPh">
+          <button class="btn ghost" id="oRegen" data-i18n="regenWorld">🎲 Rigenera</button>
+        </div>
+        <button class="btn ghost" id="oShare" data-i18n="shareWorld" style="width:100%; margin-top:8px">🔗 Copia link del mondo</button>
+      </div>
+      <div class="row" style="margin-top:16px">
         <button class="btn ghost" id="oExport" data-i18n="exportWorld">⬇ Esporta</button>
         <button class="btn ghost" id="oImport" data-i18n="importWorld">⬆ Importa</button>
       </div>
