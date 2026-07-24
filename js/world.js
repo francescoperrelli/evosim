@@ -128,6 +128,7 @@ export function step(){
           if(hunts.length && hunts.indexOf(o.type) >= 0){
             let er = senseSq;
             if(P.mimicOn){ const f = 1 - o.g.camo * (1 - g.acuity) * 0.7; er = senseSq * f * f; }
+            if(o.alert > 0) er *= 0.55;                    // an alert (warned) prey is harder to spot
             if(d < er && d < preyD){ preyD = d; preyRef = o; preyx = dx; preyy = dy; }
           }
           if(preds.length && preds.indexOf(o.type) >= 0){
@@ -157,6 +158,7 @@ export function step(){
     _in[14] = c.mem[0]; _in[15] = c.mem[1];
     _in[16] = cnt ? sumSig / cnt : 0;   // signal heard from same-type neighbours
     _in[17] = 1;
+    if(cnt && sumSig / cnt < -0.4) c.alert = 30;   // an alarm call was heard -> become vigilant
     brainForward(g.brain, _in, _out);
     c.mem[0] = _out[2]; c.mem[1] = _out[3]; c.signal = _out[4];
     if(c === S.selected){ const gh = getHidden(); c.act = { inp: _in.slice(), hid: gh.h.slice(0, gh.nh), out: _out.slice() }; }
@@ -210,7 +212,10 @@ export function step(){
     if(preyRef && !preyRef.dead){
       const er = c.rad + (preyRef.rad || preyRef.g.size) + 2;
       if((preyRef.x - c.x) ** 2 + (preyRef.y - c.y) ** 2 < er * er){
-        preyRef.dead = true; S.predations++; c.energy += P.preyEnergy * cfg.preyEff;
+        preyRef.dead = true; S.predations++;
+        const packBonus = 1 + 0.25 * Math.min(cnt, 3);     // hunting near allies pays off
+        c.energy += P.preyEnergy * cfg.preyEff * packBonus;
+        if(cnt > 0) S.packKills++;
         if(S.selected === preyRef) S.selected = null;
       }
     }
