@@ -32,7 +32,7 @@ export const I18N = {
     inspGenome:"Genoma", inspBrain:"Cervello (rete neurale)", inspVoice:"Voce (3 canali di segnale)",
     typeHerb:"Erbivoro", typeOmni:"Onnivoro", typeCarn:"Carnivoro",
     tSpeed:"Velocità", tVision:"Vista", tSize:"Dimensione", tSocial:"Socialità",
-    tCamo:"Camuffamento", tTerr:"Territorialità", tAcuity:"Acutezza", tSexual:"Sessualità", tDiet:"Dieta", tAltruism:"Altruismo",
+    tCamo:"Camuffamento", tTerr:"Territorialità", tAcuity:"Acutezza", tSexual:"Sessualità", tDiet:"Dieta", tAltruism:"Altruismo", tOrnament:"Ornamento", tPreference:"Preferenza",
     evoDiet:"Distribuzione della dieta (erbivoro → carnivoro)",
     reproSex:"sessuato", reproAsex:"asessuato",
     lblEnergy:"Energia", lblAge:"Età", lblGen:"Generazione",
@@ -74,6 +74,7 @@ export const I18N = {
     chr_boom:"Boom demografico: {n} creature", chr_crash:"Crollo della popolazione: {n} rimaste",
     chr_brain:"Nuovo record di cervello: {n} neuroni", chr_species:"Nuova diversità: {n} specie",
     chr_dialect:"È emerso un dialetto distinto (divergenza {n})",
+    chr_ornament:"Ornamenti sempre più vistosi (selezione sessuale, {n})",
     chr_challengeWon:"Sfida vinta: {n}", chr_challengeLost:"Sfida fallita: {n}" },
   en:{ menu:"☰ Menu", hint:"Drag to explore · wheel/pinch to zoom · tap to plant",
     numbers:"The ecosystem in numbers", herbivores:"Herbivores", carnivores:"Carnivores", omnivores:"Omnivores", plants:"Plants",
@@ -107,7 +108,7 @@ export const I18N = {
     inspGenome:"Genome", inspBrain:"Brain (neural net)", inspVoice:"Voice (3 signal channels)",
     typeHerb:"Herbivore", typeOmni:"Omnivore", typeCarn:"Carnivore",
     tSpeed:"Speed", tVision:"Vision", tSize:"Size", tSocial:"Sociality",
-    tCamo:"Camouflage", tTerr:"Territoriality", tAcuity:"Acuity", tSexual:"Sexuality", tDiet:"Diet", tAltruism:"Altruism",
+    tCamo:"Camouflage", tTerr:"Territoriality", tAcuity:"Acuity", tSexual:"Sexuality", tDiet:"Diet", tAltruism:"Altruism", tOrnament:"Ornament", tPreference:"Preference",
     evoDiet:"Diet distribution (herbivore → carnivore)",
     reproSex:"sexual", reproAsex:"asexual",
     lblEnergy:"Energy", lblAge:"Age", lblGen:"Generation",
@@ -149,6 +150,7 @@ export const I18N = {
     chr_boom:"Population boom: {n} creatures", chr_crash:"Population crash: {n} left",
     chr_brain:"New brain record: {n} neurons", chr_species:"New diversity: {n} species",
     chr_dialect:"A distinct dialect has emerged (divergence {n})",
+    chr_ornament:"Ornaments growing showier (sexual selection, {n})",
     chr_challengeWon:"Challenge won: {n}", chr_challengeLost:"Challenge failed: {n}" }
 };
 

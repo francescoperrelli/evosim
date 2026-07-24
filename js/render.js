@@ -71,6 +71,20 @@ function drawCreature(c, z){
     }
   }
 
+  // sexual ornament: a colourful display fan at the rear, growing with the ornament gene
+  const orn = (g.sexual > 0.5) ? (g.ornament || 0) : 0;
+  if(orn > 0.08 && appR >= 5){
+    const rays = 3 + Math.round(orn * 5), len = size * (0.7 + orn * 2.2);
+    const bx = c.x - cos * size * 0.7, by = c.y - sin * size * 0.7;
+    wctx.strokeStyle = `hsl(${(col.hue + 40) % 360} 88% 62%)`;
+    wctx.lineWidth = Math.max(0.7, size * 0.13);
+    for(let i = 0; i < rays; i++){
+      const spr = (rays > 1 ? (i / (rays - 1) - 0.5) : 0) * (0.7 + orn * 0.8);
+      const rx = -cos * Math.cos(spr) + sin * Math.sin(spr), ry = -sin * Math.cos(spr) - cos * Math.sin(spr);
+      wctx.beginPath(); wctx.moveTo(bx, by); wctx.lineTo(bx + rx * len, by + ry * len); wctx.stroke();
+    }
+  }
+
   // body: 1-3 segments along the heading depending on the shape gene
   const segs = shape > 0.66 ? 3 : shape > 0.33 ? 2 : 1;
   wctx.fillStyle = fill;
@@ -290,6 +304,7 @@ export function drawCharts(){
   tctx.clearRect(0, 0, w, h); tctx.fillStyle = '#0c120c'; tctx.fillRect(0, 0, w, h);
   line(tctx, S.traitHist, v => h - pad - (h - 2 * pad) * v.camo, '#8fc44a', w, h, pad);
   line(tctx, S.traitHist, v => h - pad - (h - 2 * pad) * v.acu, '#dd6f57', w, h, pad);
+  line(tctx, S.traitHist, v => h - pad - (h - 2 * pad) * (v.orn || 0), '#e668c8', w, h, pad);   // avg sexual ornament
 }
 
 /* ---------- HUD ---------- */

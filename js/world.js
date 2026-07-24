@@ -120,8 +120,10 @@ export function logEvent(key, n){
   if(S.chronicle.length > 80) S.chronicle.pop();
 }
 function checkChronicle(){
-  let herb = 0, omni = 0, carn = 0, maxBrain = 0;
-  for(const c of S.creatures){ if(c.type === 'carn') carn++; else if(c.type === 'omni') omni++; else herb++; if(c.g.brain.nh > maxBrain) maxBrain = c.g.brain.nh; }
+  let herb = 0, omni = 0, carn = 0, maxBrain = 0, ornSum = 0, sexN = 0;
+  for(const c of S.creatures){ if(c.type === 'carn') carn++; else if(c.type === 'omni') omni++; else herb++; if(c.g.brain.nh > maxBrain) maxBrain = c.g.brain.nh;
+    if(c.g.sexual > 0.5){ sexN++; ornSum += c.g.ornament || 0; } }
+  const avgOrn = sexN ? ornSum / sexN : 0;
   const total = S.creatures.length;
   const pv = S.chronPrev || (S.chronPrev = { herb, omni, carn, total, genTier: 0, maxBrain: 0, speciesMax: 0 });
   const genTier = Math.floor(S.maxGen / 10);
@@ -139,7 +141,9 @@ function checkChronicle(){
   const dv = dialectStats().divergence;
   const dvTier = Math.floor(dv / 0.35);
   if(dvTier > (pv.dialTier || 0) && dv >= 0.5) logEvent('dialect', Math.round(dv * 100));
-  S.chronPrev = { herb, omni, carn, total, genTier: Math.max(genTier, pv.genTier), maxBrain: Math.max(maxBrain, pv.maxBrain), speciesMax: Math.max(sp, pv.speciesMax), dialTier: Math.max(dvTier, pv.dialTier || 0) };
+  const ornTier = Math.floor(avgOrn / 0.2);
+  if(ornTier > (pv.ornTier || 0) && avgOrn >= 0.5) logEvent('ornament', Math.round(avgOrn * 100));
+  S.chronPrev = { herb, omni, carn, total, genTier: Math.max(genTier, pv.genTier), maxBrain: Math.max(maxBrain, pv.maxBrain), speciesMax: Math.max(sp, pv.speciesMax), dialTier: Math.max(dvTier, pv.dialTier || 0), ornTier: Math.max(ornTier, pv.ornTier || 0) };
 }
 export { checkChronicle };
 
@@ -258,7 +262,7 @@ export function step(){
     let thrHas = false, thrD = senseSq, thrx = 0, thry = 0;
     let cnt = 0, sumx = 0, sumy = 0, sumvx = 0, sumvy = 0, sepx = 0, sepy = 0, sumS0 = 0, sumS1 = 0, sumS2 = 0;
     let bfx = 0, bfy = 0, bfD = senseSq, bfRef = null;
-    let mateRef = null, mateD = senseSq, matex = 0, matey = 0;
+    let mateRef = null, mateScore = Infinity, matex = 0, matey = 0;
     const mateReadyE = P[cfg.reproE] * 0.85;
     const fSense = (cfg.eatsPlants && P.mimicOn) ? senseSq * (1 - 0.3 * g.camo) * (1 - 0.3 * g.camo) : senseSq;
 
@@ -278,8 +282,10 @@ export function step(){
             if(d < NEIGH_R2){ cnt++; sumx += o.x; sumy += o.y; sumvx += o.vx; sumvy += o.vy;
               sumS0 += o.sig[0]; sumS1 += o.sig[1]; sumS2 += o.sig[2];
               if(d < SEP_R2){ sepx += (c.x - o.x); sepy += (c.y - o.y); } }
-            if(d < mateD && o.g.sexual > 0.5 && o.energy >= mateReadyE && o.matedTick !== S.tick && mateCompatible(g, o.g)){
-              mateD = d; mateRef = o; matex = dx; matey = dy;
+            if(d < senseSq && o.g.sexual > 0.5 && o.energy >= mateReadyE && o.matedTick !== S.tick && mateCompatible(g, o.g)){
+              // mate choice: a showy ornament looks "closer" to a choosy partner (sexual selection)
+              const desir = d - g.preference * (o.g.ornament || 0) * senseSq * 0.9;
+              if(desir < mateScore){ mateScore = desir; mateRef = o; matex = dx; matey = dy; }
             }
             // kin food-sharing: a well-fed altruist gives energy to a starving relative nearby
             if(d < 900 && o.lineage === c.lineage && c.energy > P[cfg.reproE] * 0.7 && o.energy < P[cfg.reproE] * 0.35 && Math.random() < g.altruism * 0.08){
@@ -362,7 +368,7 @@ export function step(){
     }
     // mate-seeking (sexual organisms ready to breed steer toward a mate)
     if(g.sexual > 0.5 && !thrHas && mateRef && c.energy >= P[cfg.reproE] * 0.9){
-      const d = Math.sqrt(mateD) || 1; ix += matex / d * 1.1; iy += matey / d * 1.1;
+      const d = Math.hypot(matex, matey) || 1; ix += matex / d * 1.1; iy += matey / d * 1.1;
     }
 
     // follow the scent trail of one's own kind (stigmergy: emergent paths & gathering)
@@ -464,22 +470,29 @@ export function step(){
   if(herbN === 0) for(let i = 0; i < 30; i++) creatures.push(founder('herb'));
   // gentle immigration keeps diet niches occupied against the herbivory-collapse
   if(S.tick % 25 === 0){
-    if(P.omnivoresOn && omniN < 6 && herbN > 30) creatures.push(founder('omni'), founder('omni'));
+    if(P.omnivoresOn && omniN < 12 && herbN > 28){
+      // reinforce from survivors when possible, so evolved traits aren't diluted away
+      for(let k = 0; k < 3; k++){
+        let src = null; for(const cc of creatures){ if(cc.type === 'omni'){ if(!src || Math.random() < 0.3) src = cc; } }
+        if(src){ const ch = makeCreature(rnd(0, WW), rnd(0, HH), 'omni', mutateGenome(src.g), src.gen); ch.lineage = src.lineage; creatures.push(ch); }
+        else creatures.push(founder('omni'));
+      }
+    }
     if(P.predatorsOn && carnN < 4 && herbN > 38) creatures.push(founder('carn'), founder('carn'));
   }
 
   S.creatures = creatures;
 
   if(S.tick % 6 === 0){
-    let hn = 0, cn = 0, on = 0, camo = 0, acu = 0, sx = 0, tot = 0, genSum = 0, brainSum = 0;
+    let hn = 0, cn = 0, on = 0, camo = 0, acu = 0, sx = 0, tot = 0, genSum = 0, brainSum = 0, ornSum = 0;
     const lin = new Set();
     for(const c of creatures){
-      tot++; if(c.g.sexual > 0.5) sx++; genSum += c.gen; lin.add(c.lineage); brainSum += c.g.brain.nh;
+      tot++; if(c.g.sexual > 0.5){ sx++; ornSum += c.g.ornament || 0; } genSum += c.gen; lin.add(c.lineage); brainSum += c.g.brain.nh;
       if(c.type === 'carn'){ cn++; acu += c.g.acuity; } else if(c.type === 'omni'){ on++; camo += c.g.camo; } else { hn++; camo += c.g.camo; }
       if(P.learnOn && c.plast){ const pl = c.plast; for(let i = 0; i < pl.length; i++) pl[i] *= 0.985; }   // slow forgetting
     }
     S.popHist.push({ h: hn, c: cn, o: on, f: food.length });
-    S.traitHist.push({ camo: (hn + on) ? camo / (hn + on) : 0, acu: cn ? acu / cn : 0, sex: tot ? sx / tot : 0 });
+    S.traitHist.push({ camo: (hn + on) ? camo / (hn + on) : 0, acu: cn ? acu / cn : 0, sex: tot ? sx / tot : 0, orn: sx ? ornSum / sx : 0 });
     S.evoHist.push({ gen: tot ? genSum / tot : 0, sex: tot ? sx / tot : 0, lin: lin.size, nh: tot ? brainSum / tot : 0 });
     if(S.popHist.length > 240){ S.popHist.shift(); S.traitHist.shift(); }
     if(S.evoHist.length > 240){ S.evoHist.shift(); }
@@ -512,7 +525,8 @@ export function snapshot(){
       g: [+c.g.speed.toFixed(3), +c.g.sense.toFixed(1), +c.g.size.toFixed(2), +c.g.hue.toFixed(1),
           +c.g.sociality.toFixed(2), +c.g.camo.toFixed(2), +c.g.territoriality.toFixed(2),
           +c.g.territoryR.toFixed(1), +c.g.acuity.toFixed(2), +c.g.sexual.toFixed(2), +c.g.diet.toFixed(3),
-          +c.g.shape.toFixed(2), +c.g.pattern.toFixed(2), +c.g.altruism.toFixed(2)],
+          +c.g.shape.toFixed(2), +c.g.pattern.toFixed(2), +c.g.altruism.toFixed(2),
+          +(c.g.ornament || 0).toFixed(2), +(c.g.preference || 0).toFixed(2)],
       b: { nh: c.g.brain.nh, w: c.g.brain.w.map(x => +x.toFixed(3)) }
     })),
     food: S.food.map(f => [+f.x.toFixed(1), +f.y.toFixed(1)]),
@@ -535,6 +549,7 @@ export function restore(s){
          diet: o.g[10] !== undefined ? o.g[10] : (o.t === 'carn' ? 0.85 : o.t === 'omni' ? 0.5 : 0.15),
          shape: o.g[11] !== undefined ? o.g[11] : 0.3, pattern: o.g[12] !== undefined ? o.g[12] : 0.5,
          altruism: o.g[13] !== undefined ? o.g[13] : 0.2,
+         ornament: o.g[14] !== undefined ? o.g[14] : 0.1, preference: o.g[15] !== undefined ? o.g[15] : 0.15,
          // migrate single-channel (v8) brains up to the three-channel layout
          brain: o.b.w.length === brainLenOld(o.b.nh) ? migrateBrain(o.b.nh, o.b.w) : { nh: o.b.nh, w: o.b.w.slice() } }
   }));

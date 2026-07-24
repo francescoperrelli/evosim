@@ -14,6 +14,7 @@ export function randomGenome(type){
     territoriality: rnd(0.2, 0.8), territoryR: rnd(55, 120),
     acuity: rnd(0.2, 0.5), diet: rnd(cfg.dietLo, cfg.dietHi),
     shape: rnd(0, 0.5), pattern: rnd(0, 1), altruism: rnd(0, 0.5),
+    ornament: rnd(0, 0.3), preference: rnd(0.1, 0.5),
     sexual: cfg.sexual ? 1 : 0, brain: randomBrain()
   };
 }
@@ -37,6 +38,8 @@ export function mutateGenome(g){
     shape: clamp((g.shape === undefined ? 0.3 : g.shape) + gauss() * m * 1.3, 0, 1),
     pattern: clamp((g.pattern === undefined ? 0.5 : g.pattern) + gauss() * m * 1.3, 0, 1),
     altruism: clamp((g.altruism === undefined ? 0.2 : g.altruism) + gauss() * m * 1.3, 0, 1),
+    ornament: clamp((g.ornament === undefined ? 0.1 : g.ornament) + gauss() * m * 1.3, 0, 1),
+    preference: clamp((g.preference === undefined ? 0.15 : g.preference) + gauss() * m * 1.3, 0, 1),
     sexual: cfg.sexual ? 1 : 0,
     brain: mutateBrain(g.brain)
   };
@@ -50,7 +53,8 @@ export function crossover(ga, gb){
     hue: pk(ga.hue, gb.hue), sociality: pk(ga.sociality, gb.sociality), camo: pk(ga.camo, gb.camo),
     territoriality: pk(ga.territoriality, gb.territoriality), territoryR: pk(ga.territoryR, gb.territoryR),
     acuity: pk(ga.acuity, gb.acuity), diet: pk(ga.diet, gb.diet),
-    shape: pk(ga.shape, gb.shape), pattern: pk(ga.pattern, gb.pattern), altruism: pk(ga.altruism, gb.altruism), brain: crossBrain(ga.brain, gb.brain)
+    shape: pk(ga.shape, gb.shape), pattern: pk(ga.pattern, gb.pattern), altruism: pk(ga.altruism, gb.altruism),
+    ornament: pk(ga.ornament, gb.ornament), preference: pk(ga.preference, gb.preference), brain: crossBrain(ga.brain, gb.brain)
   };
   return mutateGenome(base);
 }
@@ -72,5 +76,6 @@ export function metabolism(c){
   let m = cfg.baseMeta + (g.speed * g.speed) * 0.05 + ((c.rad || g.size) * 0.012) + (g.sense * 0.0016);
   if(cfg.hunts.length && P.mimicOn) m += g.acuity * 0.03;   // cost of acuity for predators
   m += g.brain.nh * 0.0016;                                  // a bigger brain costs energy (modest, so complexity can accrue)
+  if(g.sexual > 0.5 && g.ornament) m += g.ornament * 0.014;  // a showy ornament is costly to carry (survival vs. mating trade-off)
   return m;
 }

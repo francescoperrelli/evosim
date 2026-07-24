@@ -2,7 +2,7 @@
 
 // Tunable ecosystem parameters
 export const P = {
-  herbStart:200, carnStart:24, omniStart:34, maxPop:1400,
+  herbStart:200, carnStart:24, omniStart:44, maxPop:1400,
   maxFood:900, foodEnergy:24, foodRate:4, mut:0.08, preyEnergy:82,
   herbReproE:120, herbStartE:70, herbMaxAge:2600,
   omniReproE:150, omniStartE:90, omniMaxAge:2800,

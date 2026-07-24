@@ -277,6 +277,8 @@ export function refreshInspector(){
   el('bgSexual').style.width = (g.sexual * 100) + '%';
   el('bgDiet').style.width = ((g.diet || 0) * 100) + '%';
   el('bgAltruism').style.width = ((g.altruism || 0) * 100) + '%';
+  el('bgOrnament').style.width = ((g.ornament || 0) * 100) + '%';
+  el('bgPreference').style.width = ((g.preference || 0) * 100) + '%';
   // live "voice": each channel's current output as a centre-anchored bar
   const CHCOL = ['#e6a578', '#78c8e6', '#aa8ce6'], sg = c.sig || [0, 0, 0];
   for(let k = 0; k < 3; k++){
