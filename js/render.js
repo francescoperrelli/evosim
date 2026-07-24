@@ -332,6 +332,31 @@ export function drawEvolution(){
     ctx.fillStyle = `hsl(${(lid * 47) % 360} 55% 55%)`;
     ctx.fillRect(pad + i * bw + 1, d.h - pad - h, bw - 2, h);
   }
+  // emergent lexicon: a 4x3 heat grid of how each channel deviates in each context
+  cv = el('evLex'); if(cv){
+    ctx = cv.getContext('2d'); d = fitChart(cv, ctx);
+    ctx.clearRect(0, 0, d.w, d.h); ctx.fillStyle = '#0c120c'; ctx.fillRect(0, 0, d.w, d.h);
+    const L = S.lex, rows = [t('lexThreat'), t('lexPrey'), t('lexFood'), t('lexCrowd')];
+    const labW = 62, cols = 3, gx = (d.w - labW - 6) / cols, gy = (d.h - 16) / 4;
+    ctx.font = '10px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif'; ctx.textBaseline = 'middle';
+    // channel headers
+    ctx.fillStyle = '#8a978a'; ctx.textAlign = 'center';
+    for(let k = 0; k < 3; k++) ctx.fillText('CH' + k, labW + gx * (k + 0.5), 8);
+    const base = L && L.n > 4 ? [L.s[0] / L.n, L.s[1] / L.n, L.s[2] / L.n] : [0, 0, 0];
+    for(let f = 0; f < 4; f++){
+      const y = 16 + gy * f;
+      ctx.fillStyle = '#c7d0c2'; ctx.textAlign = 'left';
+      ctx.fillText(rows[f], 2, y + gy / 2);
+      const cc = L ? L.ctx[f] : null;
+      for(let k = 0; k < 3; k++){
+        const x = labW + gx * k;
+        let v = 0; if(cc && cc.n > 4) v = (cc.s[k] / cc.n) - base[k];   // deviation = "meaning"
+        const mag = clamp(Math.abs(v) / 0.6, 0, 1);
+        ctx.fillStyle = v >= 0 ? `rgba(143,196,74,${0.12 + 0.8 * mag})` : `rgba(221,111,87,${0.12 + 0.8 * mag})`;
+        ctx.fillRect(x + 1, y + 1, gx - 2, gy - 2);
+      }
+    }
+  }
 }
 
 /* ---------- inspector: neural network drawing (variable hidden size) ---------- */

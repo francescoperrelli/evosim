@@ -1,7 +1,7 @@
 // Simulation engine: seasons, spatial-grid perception (egocentric vision,
 // prey/threat channels, memory), brain + instinct steering, interactions, save/load.
 import { rnd, clamp } from './utils.js';
-import { P, S, TYPES, PREDATORS, BRAIN_W, INNATE_W, NEIGH_R2, SEP_R2, CELL, SAVE_KEY, seasonInfo, dayInfo } from './state.js';
+import { P, S, TYPES, PREDATORS, BRAIN_W, INNATE_W, NEIGH_R2, SEP_R2, CELL, SAVE_KEY, seasonInfo, dayInfo, newLex } from './state.js';
 import { randomGenome, mutateGenome, crossover, makeCreature, metabolism } from './genome.js';
 import { brainForward, getHidden, NIN, NOUT, NCHAN, IN_HEARD, OUT_SIG, migrateBrain, brainLenOld } from './nn.js';
 import { evalChallenge } from './challenges.js';
@@ -127,7 +127,7 @@ export function seed(){
   S.creatures = []; S.food = []; S.tick = 0; S.predations = 0; S.maxGen = 0;
   S.popHist.length = 0; S.traitHist.length = 0; S.evoHist.length = 0; S.ID = 1; S.selected = null;
   S.records = { oldestAge: 0, maxKids: 0, maxGen: 0 };
-  S.chronicle = []; S.chronPrev = null;
+  S.chronicle = []; S.chronPrev = null; S.lex = newLex();
   S.rocks = []; S.water = []; S.drought = 0; S.effects = []; S.challenge = null; S.shares = 0; S.packKills = 0; generateBiomes();
   pherInit();
   for(let i = 0; i < P.herbStart; i++) S.creatures.push(founder('herb'));
@@ -256,6 +256,14 @@ export function step(){
     brainForward(g.brain, _in, _out);
     c.mem[0] = _out[2]; c.mem[1] = _out[3];
     c.sig[0] = _out[OUT_SIG]; c.sig[1] = _out[OUT_SIG + 1]; c.sig[2] = _out[OUT_SIG + 2];
+    // sample this creature into the lexicon meter (context vs channel emitted)
+    if((ci & 7) === (S.tick & 7)){
+      if(!S.lex) S.lex = newLex();
+      const L = S.lex; L.n++;
+      L.s[0] += c.sig[0]; L.s[1] += c.sig[1]; L.s[2] += c.sig[2];
+      const present = [_in[8] > 0.25, _in[5] > 0.25, _in[2] > 0.25, _in[11] > 0.35];   // threat, prey, food, crowd
+      for(let f = 0; f < 4; f++) if(present[f]){ const cc = L.ctx[f]; cc.n++; cc.s[0] += c.sig[0]; cc.s[1] += c.sig[1]; cc.s[2] += c.sig[2]; }
+    }
     if(c === S.selected){ const gh = getHidden(); c.act = { inp: _in.slice(), hid: gh.h.slice(0, gh.nh), out: _out.slice() }; }
 
     // instinct prior
@@ -384,6 +392,11 @@ export function step(){
   }
   if(S.challenge && S.tick % 15 === 0) evalChallenge();
   if(S.tick % 60 === 0) checkChronicle();
+  // fade the lexicon meter so it tracks the living population, not all history
+  if(S.lex && S.tick % 300 === 0){
+    const L = S.lex; L.n *= 0.5; for(let k = 0; k < 3; k++) L.s[k] *= 0.5;
+    for(const cc of L.ctx){ cc.n *= 0.5; cc.s[0] *= 0.5; cc.s[1] *= 0.5; cc.s[2] *= 0.5; }
+  }
 }
 
 /* ---------- save / load ---------- */

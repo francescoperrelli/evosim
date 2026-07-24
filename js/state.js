@@ -68,8 +68,14 @@ export const S = {
   selected: null, tool: 'plant',        // 'plant' | 'inspect' | 'meteor' | 'rock' | 'water'
   drought: 0, effects: [], rocks: [], water: [], biomes: [],
   challenge: null, shares: 0, packKills: 0,
-  chronicle: [], chronPrev: null
+  chronicle: [], chronPrev: null,
+  // emergent-lexicon meter: how each of the 3 signal channels correlates with
+  // context (threat / prey / food / crowd), measured live from the population
+  lex: null
 };
+export function newLex(){
+  return { s: [0, 0, 0], n: 0, ctx: [ { s: [0, 0, 0], n: 0 }, { s: [0, 0, 0], n: 0 }, { s: [0, 0, 0], n: 0 }, { s: [0, 0, 0], n: 0 } ] };
+}
 
 // Camera helpers
 export function minZoom(){ return Math.max(S.W / (S.worldW || 1), S.H / (S.worldH || 1), 0.05); }
