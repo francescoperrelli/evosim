@@ -214,11 +214,19 @@ export function speciesCount(){
   return reps.length;
 }
 
+// the productive "sunlit" latitude drifts north/south across the year, so where
+// food is richest moves with the season — herds that follow it end up migrating
+export function solarPeakY(tick){ return S.worldH * (0.5 - 0.34 * Math.cos(seasonInfo(tick).phase * TAU2)); }
 export function spawnFood(n){
   const k = Math.floor(n) + (rand() < (n % 1) ? 1 : 0);
+  const mig = P.migrateOn && P.seasonsOn;
+  const yPeak = mig ? solarPeakY(S.tick) : 0, band2 = mig ? (S.worldH * 0.26) ** 2 : 1;
   for(let i = 0; i < k && S.food.length < P.maxFood; i++){
     let bx = 0, by = 0, bf = -1;
-    for(let t = 0; t < 3; t++){ const x = rnd(6, S.worldW - 6), y = rnd(6, S.worldH - 6), f = fertilityAt(x, y); if(f > bf){ bf = f; bx = x; by = y; } }
+    for(let t = 0; t < 3; t++){ const x = rnd(6, S.worldW - 6), y = rnd(6, S.worldH - 6);
+      let f = fertilityAt(x, y);
+      if(mig){ const dy = y - yPeak; f *= 1 + 1.3 * Math.exp(-(dy * dy) / band2); }   // richer near the sunlit band (total food unchanged)
+      if(f > bf){ bf = f; bx = x; by = y; } }
     S.food.push({ x: bx, y: by });
   }
 }
@@ -258,6 +266,7 @@ export function step(){
   S.tick++;
   const si = seasonInfo(S.tick);
   const seasonSig = Math.sin(si.phase * TAU2);
+  const migPeakY = (P.migrateOn && P.seasonsOn) ? S.worldH * (0.5 - 0.34 * Math.cos(si.phase * TAU2)) : -1;
   const dn = dayInfo(S.tick);
   let fm = si.foodMult;
   if(P.dayNightOn) fm *= (0.45 + 0.55 * dn.light);   // plants grow with daylight
@@ -450,6 +459,10 @@ export function step(){
         const dd = (nz.x - c.x) ** 2 + (nz.y - c.y) ** 2; if(dd < bd){ bd = dd; bn = nz; } }
       if(bn){ const dd = Math.sqrt(bd) || 1; if(dd > bn.r * 0.6){ ix += (bn.x - c.x) / dd * 0.5; iy += (bn.y - c.y) / dd * 0.5; } }
     }
+    // seasonal migration: an innate pull toward the drifting sunlit latitude (evolvable)
+    if(migPeakY >= 0 && g.migrate > 0.05 && !thrHas){
+      iy += clamp((migPeakY - c.y) / 300, -1, 1) * g.migrate * 0.5;
+    }
 
     // combine brain + instinct
     let dx = _out[0] * BRAIN_W + ix * INNATE_W, dy = _out[1] * BRAIN_W + iy * INNATE_W;
@@ -605,7 +618,7 @@ export function snapshot(){
     worldW: S.worldW, worldH: S.worldH,
     params: { foodRate: P.foodRate, mut: P.mut, predatorsOn: P.predatorsOn, omnivoresOn: P.omnivoresOn,
               flocksOn: P.flocksOn, terrOn: P.terrOn, mimicOn: P.mimicOn, seasonsOn: P.seasonsOn,
-              pherOn: P.pherOn, cultureOn: P.cultureOn, learnOn: P.learnOn, nestsOn: P.nestsOn, plaguesOn: P.plaguesOn },
+              pherOn: P.pherOn, cultureOn: P.cultureOn, learnOn: P.learnOn, nestsOn: P.nestsOn, plaguesOn: P.plaguesOn, migrateOn: P.migrateOn },
     creatures: S.creatures.map(c => ({
       x: +c.x.toFixed(1), y: +c.y.toFixed(1), t: c.type,
       e: +c.energy.toFixed(1), a: c.age, gn: c.gen, id: c.id, hx: +c.homeX.toFixed(1), hy: +c.homeY.toFixed(1),
@@ -613,7 +626,7 @@ export function snapshot(){
           +c.g.sociality.toFixed(2), +c.g.camo.toFixed(2), +c.g.territoriality.toFixed(2),
           +c.g.territoryR.toFixed(1), +c.g.acuity.toFixed(2), +c.g.sexual.toFixed(2), +c.g.diet.toFixed(3),
           +c.g.shape.toFixed(2), +c.g.pattern.toFixed(2), +c.g.altruism.toFixed(2),
-          +(c.g.ornament || 0).toFixed(2), +(c.g.preference || 0).toFixed(2), +(c.g.resist || 0).toFixed(2), +(c.g.reciprocity || 0).toFixed(2)],
+          +(c.g.ornament || 0).toFixed(2), +(c.g.preference || 0).toFixed(2), +(c.g.resist || 0).toFixed(2), +(c.g.reciprocity || 0).toFixed(2), +(c.g.migrate || 0).toFixed(2)],
       b: { nh: c.g.brain.nh, w: c.g.brain.w.map(x => +x.toFixed(3)) }
     })),
     food: S.food.map(f => [+f.x.toFixed(1), +f.y.toFixed(1)]),
@@ -638,6 +651,7 @@ export function restore(s){
          altruism: o.g[13] !== undefined ? o.g[13] : 0.2,
          ornament: o.g[14] !== undefined ? o.g[14] : 0.1, preference: o.g[15] !== undefined ? o.g[15] : 0.15,
          resist: o.g[16] !== undefined ? o.g[16] : 0.05, reciprocity: o.g[17] !== undefined ? o.g[17] : 0.1,
+         migrate: o.g[18] !== undefined ? o.g[18] : 0.1,
          // migrate single-channel (v8) brains up to the three-channel layout
          brain: o.b.w.length === brainLenOld(o.b.nh) ? migrateBrain(o.b.nh, o.b.w) : { nh: o.b.nh, w: o.b.w.slice() } }
   }));

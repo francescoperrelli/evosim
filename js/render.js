@@ -2,7 +2,7 @@
 import { clamp, TAU, el } from './utils.js';
 import { P, S, seasonInfo, dayInfo, clampCam } from './state.js';
 import { NIN, NOUT, MAX_NH } from './nn.js';
-import { dialectStats } from './world.js';
+import { dialectStats, solarPeakY } from './world.js';
 import { t } from './i18n.js';
 
 const world = el('world'), wctx = world.getContext('2d');
@@ -198,6 +198,13 @@ export function draw(){
   // world border
   wctx.strokeStyle = 'rgba(120,150,110,.18)'; wctx.lineWidth = 2 / z;
   wctx.strokeRect(0, 0, S.worldW, S.worldH);
+  // seasonal sunlit band — the productive latitude that drifts through the year
+  if(P.migrateOn && P.seasonsOn && S.worldH){
+    const yPeak = solarPeakY(S.tick), band = S.worldH * 0.26;
+    const grd = wctx.createLinearGradient(0, yPeak - band, 0, yPeak + band);
+    grd.addColorStop(0, 'rgba(255,214,120,0)'); grd.addColorStop(0.5, 'rgba(255,214,120,0.06)'); grd.addColorStop(1, 'rgba(255,214,120,0)');
+    wctx.fillStyle = grd; wctx.fillRect(0, Math.max(0, yPeak - band), S.worldW, band * 2);
+  }
   // biomes (fertility tint)
   for(const bm of S.biomes){
     if(!vis(bm.x, bm.y, bm.r)) continue;

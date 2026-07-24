@@ -72,6 +72,10 @@ can reopen it any time from the menu (📖 Tutorial).
   acuity arms race.
 - **A world that matters** — biomes (fertile/barren), water and rocks, seasons and
   a day/night cycle.
+- **Seasonal migrations** — the productive "sunlit" latitude drifts north and south
+  across the year, so where food is richest moves with the season; herds follow it
+  (a heritable migration gene makes the pull evolvable), and over a year the herd's
+  position tracks the sun (~0.85 correlation in testing).
 - **Play-god events** — meteors, droughts, epidemics.
 - **Co-evolving disease** — a pathogen strain carries *evolvable* virulence and
   transmissibility and mutates as it jumps hosts, while hosts carry a heritable
