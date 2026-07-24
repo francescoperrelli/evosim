@@ -84,7 +84,9 @@ can reopen it any time from the menu (📖 Tutorial).
   cooperation stats, the **emergent-lexicon** heat grid, per-lineage **dialects**,
   and **average ornament per species over time** (so you can watch the three
   selection regimes diverge: omnivore sexual runaway, carnivore contest, herbivore
-  social balance).
+  social balance). A **CSV export** (Options) dumps the whole run's timeline —
+  populations, generations, brain size, ornaments, resistance, infection, dialect
+  divergence — for analysis outside the browser.
 - **A chronicle** — a running 📜 diary that logs notable events (generation
   milestones, extinctions and returns, population booms and crashes, brain-size
   records, new species diversity, challenge outcomes) so you can read back the

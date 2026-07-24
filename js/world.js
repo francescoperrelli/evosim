@@ -132,9 +132,11 @@ export function logEvent(key, n, loc){
 }
 function checkChronicle(){
   let herb = 0, omni = 0, carn = 0, maxBrain = 0, maxBrainC = null, hOrn = 0, oOrn = 0, cOrn = 0, infected = 0, virSum = 0;
+  let brainSum = 0, resistSum = 0, sexN = 0;
   for(const c of S.creatures){ const orn = c.g.ornament || 0;
     if(c.type === 'carn'){ carn++; cOrn += orn; } else if(c.type === 'omni'){ omni++; oOrn += orn; } else { herb++; hOrn += orn; }
     if(c.sick > 0){ infected++; if(c.pathogen) virSum += c.pathogen.vir; }
+    brainSum += c.g.brain.nh; resistSum += c.g.resist || 0; if(c.g.sexual > 0.5) sexN++;
     if(c.g.brain.nh > maxBrain){ maxBrain = c.g.brain.nh; maxBrainC = c; } }
   const avgOrn = omni ? oOrn / omni : 0;                 // omnivores are the sexual species
   const carnOrn = carn ? cOrn / carn : 0, herbOrn = herb ? hOrn / herb : 0;
@@ -168,6 +170,12 @@ function checkChronicle(){
   if(infFrac > 0.35 && total > 50 && !pandemic){ logEvent('pandemic', Math.round(infFrac * 100)); pandemic = true; }
   else if(infFrac < 0.1) pandemic = false;
   S.chronPrev = { herb, omni, carn, total, genTier: Math.max(genTier, pv.genTier), maxBrain: Math.max(maxBrain, pv.maxBrain), speciesMax: Math.max(sp, pv.speciesMax), dialTier: Math.max(dvTier, pv.dialTier || 0), ornTier: Math.max(ornTier, pv.ornTier || 0), carnTier: Math.max(carnTier, pv.carnTier || 0), herbTier: Math.max(herbTier, pv.herbTier || 0), pandemic };
+  // record a data row for CSV export (a timeline of the whole run)
+  S.dataLog.push({ tick: S.tick, pop: total, herb, omni, carn, food: S.food.length, maxGen: S.maxGen,
+    species: sp, avgBrain: +(total ? brainSum / total : 0).toFixed(2), sexPct: +(total ? sexN / total : 0).toFixed(3),
+    ornH: +herbOrn.toFixed(3), ornO: +avgOrn.toFixed(3), ornC: +carnOrn.toFixed(3),
+    resist: +(total ? resistSum / total : 0).toFixed(3), infPct: +infFrac.toFixed(3), dialect: +dv.toFixed(2) });
+  if(S.dataLog.length > 3000) S.dataLog.shift();
 }
 export { checkChronicle };
 
@@ -211,7 +219,7 @@ export function seed(seedVal){
   const sd = (seedVal === undefined || seedVal === null || !isFinite(seedVal)) ? (Date.now() >>> 0) : (seedVal >>> 0);
   setSeed(sd); S.seed = sd;
   S.creatures = []; S.food = []; S.tick = 0; S.predations = 0; S.maxGen = 0;
-  S.popHist.length = 0; S.traitHist.length = 0; S.evoHist.length = 0; S.ornHist.length = 0; S.ID = 1; S.selected = null;
+  S.popHist.length = 0; S.traitHist.length = 0; S.evoHist.length = 0; S.ornHist.length = 0; S.dataLog.length = 0; S.ID = 1; S.selected = null;
   S.records = { oldestAge: 0, maxKids: 0, maxGen: 0 };
   S.chronicle = []; S.chronPrev = null; S.lex = newLex(); S.dialect = {};
   S.rocks = []; S.water = []; S.drought = 0; S.effects = []; S.challenge = null; S.shares = 0; S.packKills = 0; S.nests = []; generateBiomes();
@@ -621,7 +629,7 @@ export function restore(s){
   S.tick = s.tick || 0; S.predations = s.predations || 0; S.maxGen = s.maxGen || 0; S.ID = s.ID || S.creatures.length + 1; S.seed = s.seed || 0;
   S.selected = null;
   if(s.params) Object.assign(P, s.params);
-  S.popHist.length = 0; S.traitHist.length = 0; S.ornHist.length = 0;
+  S.popHist.length = 0; S.traitHist.length = 0; S.ornHist.length = 0; S.dataLog.length = 0;
   return true;
 }
 

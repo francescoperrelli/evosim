@@ -274,6 +274,16 @@ el('oExport').onclick = () => {
   setTimeout(() => URL.revokeObjectURL(url), 1000); toast(t('exported'));
 };
 el('oImport').onclick = () => el('fileImport').click();
+el('oData').onclick = () => {
+  const rows = S.dataLog;
+  if(!rows.length){ toast(t('noData')); return; }
+  const cols = ['tick', 'pop', 'herb', 'omni', 'carn', 'food', 'maxGen', 'species', 'avgBrain', 'sexPct', 'ornH', 'ornO', 'ornC', 'resist', 'infPct', 'dialect'];
+  const csv = [cols.join(',')].concat(rows.map(r => cols.map(c => r[c]).join(','))).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'evosim-dati-' + (S.seed || 0) + '.csv'; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000); toast('📊 ' + t('dataExported') + ' (' + rows.length + ')');
+};
 el('fileImport').onchange = function(){
   const f = this.files[0]; if(!f) return;
   const rd = new FileReader();
