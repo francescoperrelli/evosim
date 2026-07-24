@@ -98,24 +98,24 @@
         <button class="btn" id="mChallenge" data-i18n="chBtn">🎯 Sfide</button>
       </div>
       <p class="foot" data-i18n="footer">Pubblicato su GitHub Pages · si salva da solo nel browser</p>
+      <p class="foot"><a href="about.html" data-i18n="aboutLink">Scopri il progetto →</a></p>
       <div class="lang"><button data-lang="it">Italiano</button><button data-lang="en">English</button></div>
     </div>
   </div>
 
-  <!-- TUTORIAL -->
+  <!-- TUTORIAL (guided tour) -->
   <div class="overlay" id="tutorial">
-    <div class="card">
+    <div class="card tour-card">
       <p class="eyebrow" data-i18n="howItWorks">Come funziona</p>
-      <h3 data-i18n="tutTitle">La vita, spiegata in un minuto</h3>
-      <p class="lead" data-i18n="tutLead">Non programmi nessun comportamento: emerge tutto dalla selezione.</p>
-      <div class="steps">
-        <div class="step"><div class="n">1</div><div class="t" data-i18n="tut1"></div></div>
-        <div class="step"><div class="n">2</div><div class="t" data-i18n="tut2"></div></div>
-        <div class="step"><div class="n">3</div><div class="t" data-i18n="tut3"></div></div>
-        <div class="step"><div class="n">4</div><div class="t" data-i18n="tut4"></div></div>
-        <div class="step"><div class="n">5</div><div class="t" data-i18n="tut5"></div></div>
+      <div class="tour-icon" id="tourIcon">🌱</div>
+      <h3 id="tourTitle"></h3>
+      <p class="lead" id="tourBody"></p>
+      <div class="tour-dots" id="tourDots"></div>
+      <div class="row tour-nav">
+        <button class="btn ghost" id="tourBack" data-i18n="tourBack">Indietro</button>
+        <button class="btn primary" id="tourNext">Avanti</button>
       </div>
-      <button class="btn primary" id="tClose" data-i18n="tutClose">Ho capito, iniziamo</button>
+      <button class="tour-skip" id="tourSkip" data-i18n="tourSkip">Salta</button>
     </div>
   </div>
 

@@ -55,6 +55,7 @@ export function applyLang(){
   el('btnAudio').textContent = musicOn() ? '🔊' : '🔇';
   syncPlayBtn();
   document.querySelectorAll('.lang button').forEach(b => b.classList.toggle('on', b.getAttribute('data-lang') === lang));
+  if(el('tutorial').classList.contains('show')) renderTour();
   try{ localStorage.setItem(LANG_KEY, lang); }catch(e){}
 }
 
@@ -212,14 +213,42 @@ el('btnMode').onclick = function(){ S.tool = S.tool === 'inspect' ? 'plant' : 'i
 function resetCam(){ S.cam.x = 0; S.cam.y = 0; S.cam.zoom = 1; clampCam(); }
 el('mNew').onclick = () => { clearLocal(); seed(); resetCam(); saveLocal(); hideAll(); S.running = true; syncPlayBtn(); };
 el('mResume').onclick = () => { hideAll(); S.running = true; syncPlayBtn(); };
-el('mTut').onclick = () => show('tutorial');
+el('mTut').onclick = () => showTour();
 el('mLoad').onclick = () => { if(loadLocal()){ syncControls(); clampCam(); toast(t('loaded')); hideAll(); S.running = true; syncPlayBtn(); } else toast(t('noSave')); };
 el('mSave').onclick = () => toast(saveLocal() ? t('saved') : t('noStore'));
 el('mOpt').onclick = () => show('options');
 el('mEvo').onclick = () => show('evolution');
 el('mEvents').onclick = () => show('events');
 el('evClose').onclick = () => hide('evolution');
-el('tClose').onclick = () => { hide('tutorial'); if(!S.creatures.length){ seed(); saveLocal(); } hideAll(); S.running = true; syncPlayBtn(); };
+/* ---------- guided tour ---------- */
+const TOUR = [
+  { icon: '🌱', t: 'tour1t', b: 'tour1b' },
+  { icon: '🧭', t: 'tour2t', b: 'tour2b' },
+  { icon: '🔍', t: 'tour3t', b: 'tour3b' },
+  { icon: '🧬', t: 'tour4t', b: 'tour4b' },
+  { icon: '📜', t: 'tour5t', b: 'tour5b' }
+];
+let tourStep = 0;
+function renderTour(){
+  const s = TOUR[tourStep];
+  el('tourIcon').textContent = s.icon;
+  el('tourTitle').textContent = t(s.t);
+  el('tourBody').innerHTML = t(s.b);
+  el('tourBack').style.visibility = tourStep === 0 ? 'hidden' : 'visible';
+  el('tourNext').textContent = tourStep === TOUR.length - 1 ? t('tourStart') : t('tourNext');
+  const dots = el('tourDots'); dots.innerHTML = '';
+  for(let i = 0; i < TOUR.length; i++){ const dd = document.createElement('span'); dd.className = 'tour-dot' + (i === tourStep ? ' on' : ''); dots.appendChild(dd); }
+}
+export function showTour(){ tourStep = 0; renderTour(); show('tutorial'); }
+function endTour(){
+  hide('tutorial');
+  try{ localStorage.setItem('evosim_tut_seen', '1'); }catch(e){}
+  if(!S.creatures.length){ seed(); saveLocal(); }
+  hideAll(); S.running = true; syncPlayBtn();
+}
+el('tourBack').onclick = () => { if(tourStep > 0){ tourStep--; renderTour(); } };
+el('tourNext').onclick = () => { if(tourStep < TOUR.length - 1){ tourStep++; renderTour(); } else endTour(); };
+el('tourSkip').onclick = endTour;
 
 /* ---------- options: export / import ---------- */
 el('oClose').onclick = () => hide('options');

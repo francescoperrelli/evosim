@@ -6,6 +6,10 @@ born, grow, graze, hunt, flee, call to one another, cooperate, reproduce and
 it all emerges.
 
 **▶ Live:** https://francescoperrelli.github.io/evosim/
+**✨ Project page:** https://francescoperrelli.github.io/evosim/about.html
+
+A guided tour greets first-time visitors and reveals the layers step by step; you
+can reopen it any time from the menu (📖 Tutorial).
 
 ## What's inside
 

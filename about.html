@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EvoSim — Vita artificiale che evolve nel browser</title>
+<meta name="description" content="EvoSim è una simulazione di vita artificiale: creature con cervelli a rete neurale che evolvono, comunicano, cooperano e sviluppano ornamenti — nessun comportamento è scriptato.">
+<style>
+  :root{
+    --bg:#0a0f0a; --bg2:#070b07; --ink:#e8eddc; --muted:#93a091; --faint:#6c776b;
+    --moss:#8fc44a; --moss-d:#5a8a2e; --violet:#a97fe0; --rust:#dd6f57;
+    --panel:#111a12; --panel2:#0e150f; --line:#243024;
+    --serif:Georgia,'Times New Roman',serif;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0; background:var(--bg); color:var(--ink); font:16px/1.65 var(--sans); -webkit-font-smoothing:antialiased}
+  a{color:var(--moss); text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:1040px; margin:0 auto; padding:0 22px}
+  .btn{display:inline-block; padding:13px 26px; border-radius:30px; font-size:15px; font-weight:600; cursor:pointer; border:1px solid var(--line); transition:.2s}
+  .btn.primary{background:var(--moss); color:#0c140c; border-color:var(--moss)}
+  .btn.primary:hover{background:#a2d95c; text-decoration:none}
+  .btn.ghost{background:transparent; color:var(--ink)}
+  .btn.ghost:hover{border-color:var(--moss); text-decoration:none}
+
+  /* hero */
+  header.hero{position:relative; overflow:hidden; border-bottom:1px solid var(--line);
+    background:radial-gradient(120% 130% at 50% -10%, #16221580 0%, var(--bg) 60%);}
+  .hero-inner{padding:70px 22px 60px; text-align:center; position:relative; z-index:2}
+  .eyebrow{font-size:12px; letter-spacing:3px; text-transform:uppercase; color:var(--moss); margin:0 0 16px}
+  h1{font-family:var(--serif); font-weight:500; font-size:64px; line-height:1.02; margin:0 0 8px; letter-spacing:.5px}
+  h1 em{color:var(--moss); font-style:normal}
+  .tagline{font-family:var(--serif); font-style:italic; font-size:19px; color:var(--muted); max-width:560px; margin:0 auto 30px; line-height:1.55}
+  .cta{display:flex; gap:12px; justify-content:center; flex-wrap:wrap}
+  .hero-shot{max-width:900px; margin:44px auto 0; border-radius:14px; border:1px solid var(--line); overflow:hidden; box-shadow:0 30px 90px rgba(0,0,0,.6)}
+  .hero-shot img{width:100%; display:block}
+
+  /* stat strip */
+  .strip{display:flex; flex-wrap:wrap; gap:12px; justify-content:center; padding:34px 22px; border-bottom:1px solid var(--line)}
+  .stat{flex:1 1 200px; max-width:260px; text-align:center; background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:16px 14px}
+  .stat b{display:block; font-family:var(--serif); font-size:26px; color:var(--moss); line-height:1.1}
+  .stat span{font-size:13px; color:var(--muted)}
+
+  section{padding:56px 0}
+  .lead-block{max-width:680px; margin:0 auto; text-align:center}
+  h2{font-family:var(--serif); font-weight:500; font-size:32px; margin:0 0 14px}
+  .sub{color:var(--muted); font-size:15px}
+
+  /* feature rows */
+  .feat{display:grid; grid-template-columns:1fr 1fr; gap:40px; align-items:center; margin:52px 0}
+  .feat:nth-child(even) .feat-txt{order:2}
+  .feat-shot{border-radius:12px; border:1px solid var(--line); overflow:hidden; box-shadow:0 16px 50px rgba(0,0,0,.5)}
+  .feat-shot img{width:100%; display:block}
+  .feat-txt h3{font-family:var(--serif); font-weight:500; font-size:23px; margin:0 0 10px}
+  .feat-txt .kicker{font-size:12px; letter-spacing:2px; text-transform:uppercase; color:var(--moss); margin:0 0 8px}
+  .feat-txt p{color:var(--muted); margin:0 0 10px; font-size:15px}
+  .feat-txt .tags{display:flex; flex-wrap:wrap; gap:6px; margin-top:12px}
+  .tag{font-size:12px; color:var(--ink); background:var(--panel); border:1px solid var(--line); border-radius:20px; padding:3px 11px}
+
+  /* honesty callout */
+  .callout{background:linear-gradient(180deg,#121a12,#0d140d); border:1px solid var(--line); border-radius:16px; padding:34px; max-width:760px; margin:0 auto}
+  .callout h2{margin-top:0}
+  .callout p{color:var(--muted)}
+
+  /* tech grid */
+  .tech{display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-top:30px}
+  .tcard{background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:20px}
+  .tcard h4{margin:0 0 6px; font-size:15px}
+  .tcard p{margin:0; color:var(--muted); font-size:13.5px}
+
+  footer{border-top:1px solid var(--line); padding:44px 22px; text-align:center; color:var(--faint); font-size:13.5px}
+  footer .cta{margin-bottom:20px}
+
+  @media (max-width:760px){
+    h1{font-size:44px}
+    .feat{grid-template-columns:1fr; gap:20px; margin:38px 0}
+    .feat:nth-child(even) .feat-txt{order:0}
+    .tech{grid-template-columns:1fr}
+    section{padding:42px 0}
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <p class="eyebrow">Vita artificiale · nel browser</p>
+    <h1>Evo<em>Sim</em></h1>
+    <p class="tagline">In una radura digitale, la vita trova sempre una strada. Creature che nascono, cacciano, parlano, cooperano ed evolvono — nessuno le guida, se non la selezione naturale.</p>
+    <div class="cta">
+      <a class="btn primary" href="index.html">▶ Avvia la simulazione</a>
+      <a class="btn ghost" href="https://github.com/francescoperrelli/evosim" target="_blank" rel="noopener">Codice su GitHub</a>
+    </div>
+    <div class="hero-shot"><img src="assets/showcase-world.png" alt="Il mondo di EvoSim: creature che si muovono, si chiamano e lasciano scie odorose"></div>
+  </div>
+</header>
+
+<div class="strip wrap-full">
+  <div class="stat"><b>0</b><span>righe di comportamento scriptato</span></div>
+  <div class="stat"><b>3</b><span>specie in una catena alimentare viva</span></div>
+  <div class="stat"><b>∞</b><span>storie evolutive diverse a ogni partita</span></div>
+</div>
+
+<section>
+  <div class="wrap lead-block">
+    <h2>Non un gioco con regole di comportamento.<br>Un esperimento che si guarda accadere.</h2>
+    <p class="sub">Ogni creatura è guidata da una piccola rete neurale ricorrente: i suoi pesi <em>sono</em> il suo genoma, e cambiano per mutazione, ricombinazione e — a volte — apprendimento durante la vita. Tutto il resto (branchi, cacce, allarmi, linguaggi, ornamenti, società) non è programmato: <strong>emerge</strong> dalla selezione, generazione dopo generazione.</p>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+
+    <div class="feat">
+      <div class="feat-shot"><img src="assets/showcase-brain.png" alt="Ispettore di una creatura: rete neurale, geni, voce"></div>
+      <div class="feat-txt">
+        <p class="kicker">Cervelli che evolvono — e imparano</p>
+        <h3>Intelligenza che nasce dove conviene</h3>
+        <p>Ogni creatura ha vista direzionale, memoria e uno strato nascosto che può <strong>crescere o rimpicciolirsi per mutazione</strong>, con un costo metabolico: la complessità si accumula solo se ripaga. Oltre all'evoluzione, un sottile <strong>apprendimento durante la vita</strong> le fa adattare all'esperienza — l'effetto Baldwin in azione.</p>
+        <div class="tags"><span class="tag">rete neurale ricorrente</span><span class="tag">topologia evolvibile</span><span class="tag">apprendimento hebbiano</span></div>
+      </div>
+    </div>
+
+    <div class="feat">
+      <div class="feat-shot"><img src="assets/showcase-panel.png" alt="Pannello con lessico emergente e ornamenti nel tempo"></div>
+      <div class="feat-txt">
+        <p class="kicker">Un linguaggio che emerge</p>
+        <h3>Segnali che acquistano significato</h3>
+        <p>La comunicazione è a <strong>tre canali</strong> il cui senso è libero di evolvere. Un misuratore calcola dal vivo cosa ciascun segnale ha finito per <em>significare</em> (pericolo, preda, cibo, folla), e le singole stirpi sviluppano <strong>dialetti</strong> distinti — un "accento" proprio. La cultura si trasmette per imitazione, più veloce dei geni.</p>
+        <div class="tags"><span class="tag">lessico misurato</span><span class="tag">dialetti di stirpe</span><span class="tag">trasmissione culturale</span></div>
+      </div>
+    </div>
+
+    <div class="feat">
+      <div class="feat-shot"><img src="assets/showcase-ornaments.png" alt="Onnivori con ornamenti vistosi da selezione sessuale"></div>
+      <div class="feat-txt">
+        <p class="kicker">L'aspetto plasmato dalla scelta</p>
+        <h3>Tre modi di diventare vistosi</h3>
+        <p>L'aspetto non evolve solo per sopravvivere. Gli <strong>onnivori</strong> vivono la <strong>selezione sessuale</strong> (i partner scelgono i più appariscenti — il runaway di Fisher); i <strong>carnivori</strong> sviluppano <strong>armi da intimidazione</strong> per contesa; gli <strong>erbivori</strong> un ornamento <strong>sociale</strong> bilanciato. Manto, corona e coda a ventaglio crescono col gene.</p>
+        <div class="tags"><span class="tag">runaway di Fisher</span><span class="tag">selezione da contesa</span><span class="tag">selezione sociale</span></div>
+      </div>
+    </div>
+
+    <div class="feat">
+      <div class="feat-shot"><img src="assets/showcase-armaments.png" alt="Carnivori con creste e ventagli da intimidazione"></div>
+      <div class="feat-txt">
+        <p class="kicker">Una società che si forma</p>
+        <h3>Cooperazione, case, sentieri</h3>
+        <p>Gli individui condividono energia con i parenti affamati, cacciano in branco, lanciano allarmi che rendono il gruppo più difficile da predare. Lasciano <strong>scie odorose</strong> che altri seguono, e dove una specie si raduna spesso <strong>nasce un nido</strong> che protegge i piccoli. Struttura sociale, non scriptata.</p>
+        <div class="tags"><span class="tag">stigmergia</span><span class="tag">nidi emergenti</span><span class="tag">difesa cooperativa</span></div>
+      </div>
+    </div>
+
+    <div class="feat">
+      <div class="feat-shot"><img src="assets/showcase-tour.png" alt="Tour guidato di EvoSim"></div>
+      <div class="feat-txt">
+        <p class="kicker">Osservabilità profonda</p>
+        <h3>Leggi la storia del mondo</h3>
+        <p>Un <strong>Diario</strong> annota gli eventi notevoli — estinzioni e ritorni, nuovi linguaggi, nidi che nascono, ornamenti che esplodono — e ci clicchi sopra per saltare sul posto. Ispeziona un cervello, guarda il lessico e gli ornamenti nel tempo, naviga l'albero genealogico. Salvataggi automatici, italiano ed inglese, mobile incluso.</p>
+        <div class="tags"><span class="tag">diario navigabile</span><span class="tag">grafici in diretta</span><span class="tag">genealogia</span></div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="callout">
+      <h2>Un progetto onesto</h2>
+      <p>EvoSim non finge di creare coscienza. Ciò che vedi è <strong>emergenza reale</strong> — comportamenti che si diffondono, segnali che acquistano significato, tratti che vengono selezionati — non una mente. Il "linguaggio" è un piccolo vocabolario il cui senso emerge dall'uso; le "nuvolette dei pensieri" traducono lo stato interno reale di una creatura, non lo inventano. E fenomeni come il runaway degli ornamenti restano <strong>stocastici</strong>: a volte li vedi esplodere, a volte no — proprio come in natura.</p>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap lead-block">
+    <h2>Sotto il cofano</h2>
+    <p class="sub">Nessun framework, nessuna build. Una singola pagina che gira ovunque.</p>
+    <div class="tech">
+      <div class="tcard"><h4>Vanilla JS + Canvas</h4><p>Moduli ES nativi, rendering su HTML5 Canvas, griglia spaziale per la performance con centinaia di creature.</p></div>
+      <div class="tcard"><h4>Reti neurali evolutive</h4><p>Neuroevoluzione con topologia variabile, ricombinazione dei genomi, speciazione per isolamento riproduttivo.</p></div>
+      <div class="tcard"><h4>Zero dipendenze</h4><p>Audio sintetizzato senza file, salvataggi in localStorage, pubblicato su GitHub Pages. Apri e gira.</p></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="cta wrap-full">
+    <a class="btn primary" href="index.html">▶ Avvia la simulazione</a>
+    <a class="btn ghost" href="https://github.com/francescoperrelli/evosim" target="_blank" rel="noopener">Codice su GitHub</a>
+  </div>
+  <p>EvoSim — un esperimento di vita artificiale · algoritmi genetici, reti neurali evolutive, comunicazione e comportamento emergente.</p>
+</footer>
+
+</body>
+</html>
