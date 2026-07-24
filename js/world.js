@@ -3,7 +3,7 @@
 import { rnd, clamp } from './utils.js';
 import { P, S, TYPES, PREDATORS, BRAIN_W, INNATE_W, NEIGH_R2, SEP_R2, CELL, SAVE_KEY, seasonInfo, dayInfo, newLex } from './state.js';
 import { randomGenome, mutateGenome, crossover, makeCreature, metabolism } from './genome.js';
-import { brainForward, getHidden, NIN, NOUT, NCHAN, IN_HEARD, OUT_SIG, migrateBrain, brainLenOld, blendToward } from './nn.js';
+import { brainForward, getHidden, learn, NIN, NOUT, NCHAN, IN_HEARD, OUT_SIG, migrateBrain, brainLenOld, blendToward } from './nn.js';
 import { evalChallenge } from './challenges.js';
 
 const _in = new Array(NIN), _out = new Array(NOUT);
@@ -268,7 +268,8 @@ export function step(){
     _in[19] = 1;
     if(cnt && h0 < -0.4) c.alert = 30;              // channel 0 keeps its innate alarm meaning
     c.groupSize = cnt;                              // remembered for cooperative defense
-    brainForward(g.brain, _in, _out);
+    if(P.learnOn && !c.plast) c.plast = new Float32Array(g.brain.nh * NOUT);
+    brainForward(g.brain, _in, _out, P.learnOn ? c.plast : null);
     c.mem[0] = _out[2]; c.mem[1] = _out[3];
     c.sig[0] = _out[OUT_SIG]; c.sig[1] = _out[OUT_SIG + 1]; c.sig[2] = _out[OUT_SIG + 2];
     // sample this creature into the lexicon meter (context vs channel emitted)
@@ -335,6 +336,7 @@ export function step(){
       const er = c.rad + 4;
       if((bfRef.x - c.x) ** 2 + (bfRef.y - c.y) ** 2 < er * er){
         c.energy += P.foodEnergy * cfg.plantEff;
+        if(P.learnOn && c.plast) learn(g.brain, c.plast, _out, 0.12);   // reinforce the foraging that just fed it
         const fi = food.indexOf(bfRef); if(fi >= 0){ food[fi] = food[food.length - 1]; food.pop(); }
       }
     }
@@ -344,6 +346,7 @@ export function step(){
         preyRef.dead = true; S.predations++;
         const packBonus = 1 + 0.25 * Math.min(cnt, 3);     // hunting near allies pays off
         c.energy += P.preyEnergy * cfg.preyEff * packBonus;
+        if(P.learnOn && c.plast) learn(g.brain, c.plast, _out, 0.2);    // reinforce a successful hunt
         if(cnt > 0) S.packKills++;
         if(S.selected === preyRef) S.selected = null;
       }
@@ -399,6 +402,7 @@ export function step(){
     for(const c of creatures){
       tot++; if(c.g.sexual > 0.5) sx++; genSum += c.gen; lin.add(c.lineage); brainSum += c.g.brain.nh;
       if(c.type === 'carn'){ cn++; acu += c.g.acuity; } else if(c.type === 'omni'){ on++; camo += c.g.camo; } else { hn++; camo += c.g.camo; }
+      if(P.learnOn && c.plast){ const pl = c.plast; for(let i = 0; i < pl.length; i++) pl[i] *= 0.985; }   // slow forgetting
     }
     S.popHist.push({ h: hn, c: cn, o: on, f: food.length });
     S.traitHist.push({ camo: (hn + on) ? camo / (hn + on) : 0, acu: cn ? acu / cn : 0, sex: tot ? sx / tot : 0 });
@@ -423,7 +427,7 @@ export function snapshot(){
     worldW: S.worldW, worldH: S.worldH,
     params: { foodRate: P.foodRate, mut: P.mut, predatorsOn: P.predatorsOn, omnivoresOn: P.omnivoresOn,
               flocksOn: P.flocksOn, terrOn: P.terrOn, mimicOn: P.mimicOn, seasonsOn: P.seasonsOn,
-              pherOn: P.pherOn, cultureOn: P.cultureOn },
+              pherOn: P.pherOn, cultureOn: P.cultureOn, learnOn: P.learnOn },
     creatures: S.creatures.map(c => ({
       x: +c.x.toFixed(1), y: +c.y.toFixed(1), t: c.type,
       e: +c.energy.toFixed(1), a: c.age, gn: c.gen, id: c.id, hx: +c.homeX.toFixed(1), hy: +c.homeY.toFixed(1),

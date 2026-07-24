@@ -108,7 +108,9 @@ export function blendToward(child, model, alpha){
 
 const _h = new Array(MAX_NH);
 let _lastNH = 0;
-export function brainForward(b, inp, out){
+// `plast` (optional) is a per-creature plastic overlay on the hidden->output
+// weights, learned within a single lifetime and NOT inherited.
+export function brainForward(b, inp, out, plast){
   const nh = b.nh, w = b.w, b1off = nh * NIN, w2off = nh * NIN + nh, b2off = nh * NIN + nh + nh * NOUT;
   for(let j = 0; j < nh; j++){
     let s = w[b1off + j]; const base = j * NIN;
@@ -117,9 +119,24 @@ export function brainForward(b, inp, out){
   }
   for(let k = 0; k < NOUT; k++){
     let s = w[b2off + k];
-    for(let j = 0; j < nh; j++) s += _h[j] * w[w2off + j * NOUT + k];
+    if(plast) for(let j = 0; j < nh; j++) s += _h[j] * (w[w2off + j * NOUT + k] + plast[j * NOUT + k]);
+    else      for(let j = 0; j < nh; j++) s += _h[j] * w[w2off + j * NOUT + k];
     out[k] = Math.tanh(s);
   }
   _lastNH = nh;
 }
 export const getHidden = () => ({ h: _h, nh: _lastNH });
+
+// reward-modulated Hebbian learning: reinforce the hidden->output associations
+// that were just active, in proportion to the reward received. Uses the hidden
+// activations still held in _h from this creature's most recent forward pass.
+export function learn(b, plast, out, reward){
+  const nh = b.nh, lr = 0.03 * reward;
+  for(let j = 0; j < nh; j++){
+    const hj = _h[j], base = j * NOUT;
+    for(let k = 0; k < NOUT; k++){
+      let v = plast[base + k] + lr * hj * out[k];
+      plast[base + k] = v > 0.9 ? 0.9 : v < -0.9 ? -0.9 : v;   // bounded so it only nudges the evolved brain
+    }
+  }
+}
