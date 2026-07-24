@@ -63,6 +63,8 @@ function updateNests(){
     const nz = nests[i]; nz.str = Math.min(nz.str, 12);
     if(nz.str < 0.7){ nests.splice(i, 1); continue; }
     nz.r = 40 + nz.str * 6;
+    // announce a home once it has consolidated into a solid site (no spam from weak ones)
+    if(!nz.announced && nz.str >= 6){ nz.announced = true; logEvent('nest_' + nz.type); }
   }
 }
 // is a creature within the shelter of a nest of its own kind?

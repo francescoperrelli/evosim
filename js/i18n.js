@@ -78,6 +78,7 @@ export const I18N = {
     chr_ornament:"Ornamenti sempre più vistosi (selezione sessuale, {n})",
     chr_armament:"I carnivori sfoggiano armi da intimidazione (contesa, {n})",
     chr_herbshow:"Gli erbivori si fanno più appariscenti (selezione sociale, {n})",
+    chr_nest_herb:"È sorto un nido di erbivori", chr_nest_omni:"È sorto un nido di onnivori", chr_nest_carn:"È sorta una tana di carnivori",
     chr_challengeWon:"Sfida vinta: {n}", chr_challengeLost:"Sfida fallita: {n}" },
   en:{ menu:"☰ Menu", hint:"Drag to explore · wheel/pinch to zoom · tap to plant",
     numbers:"The ecosystem in numbers", herbivores:"Herbivores", carnivores:"Carnivores", omnivores:"Omnivores", plants:"Plants",
@@ -157,6 +158,7 @@ export const I18N = {
     chr_ornament:"Ornaments growing showier (sexual selection, {n})",
     chr_armament:"Carnivores flaunt intimidation weapons (contest, {n})",
     chr_herbshow:"Herbivores growing showier (social selection, {n})",
+    chr_nest_herb:"A herbivore nest has formed", chr_nest_omni:"An omnivore nest has formed", chr_nest_carn:"A carnivore den has formed",
     chr_challengeWon:"Challenge won: {n}", chr_challengeLost:"Challenge failed: {n}" }
 };
 
