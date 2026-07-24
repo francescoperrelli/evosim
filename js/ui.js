@@ -156,6 +156,7 @@ export function refreshInspector(){
   el('bgTerr').style.width = (g.territoriality * 100) + '%';
   el('bgAcuity').style.width = (g.acuity * 100) + '%';
   el('bgSexual').style.width = (g.sexual * 100) + '%';
+  el('bgDiet').style.width = ((g.diet || 0) * 100) + '%';
   drawNetwork(el('inspNet'), c);
 }
 

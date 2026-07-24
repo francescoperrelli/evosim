@@ -212,7 +212,7 @@ export function step(){
             const childE = (c.energy + mateRef.energy) * 0.22 * 1.2;   // hybrid vigor
             c.energy *= 0.6; mateRef.energy *= 0.6;
             c.matedTick = S.tick; mateRef.matedTick = S.tick;
-            const ch = makeCreature((c.x + mateRef.x) / 2, (c.y + mateRef.y) / 2, c.type, crossover(g, mateRef.g, c.type), Math.max(c.gen, mateRef.gen) + 1);
+            const ch = makeCreature((c.x + mateRef.x) / 2, (c.y + mateRef.y) / 2, c.type, crossover(g, mateRef.g), Math.max(c.gen, mateRef.gen) + 1);
             ch.energy = childE; ch.lineage = c.lineage; if(cfg.terr){ ch.homeX = ch.x; ch.homeY = ch.y; }
             c.kids++; mateRef.kids++;
             if(c.kids > S.records.maxKids) S.records.maxKids = c.kids;
@@ -222,7 +222,7 @@ export function step(){
       } else {
         // asexual: clone with mutation
         c.energy *= 0.5;
-        const ch = makeCreature(c.x + rnd(-6, 6), c.y + rnd(-6, 6), c.type, mutateGenome(g, c.type), c.gen + 1);
+        const ch = makeCreature(c.x + rnd(-6, 6), c.y + rnd(-6, 6), c.type, mutateGenome(g), c.gen + 1);
         ch.energy = c.energy; ch.lineage = c.lineage; if(cfg.terr){ ch.homeX = c.x; ch.homeY = c.y; }
         c.kids++; if(c.kids > S.records.maxKids) S.records.maxKids = c.kids;
         newborns.push(ch); if(ch.gen > S.maxGen) S.maxGen = ch.gen;
@@ -238,8 +238,11 @@ export function step(){
   let herbN = 0, omniN = 0, carnN = 0;
   for(const c of creatures){ if(c.type === 'carn') carnN++; else if(c.type === 'omni') omniN++; else herbN++; }
   if(herbN === 0) for(let i = 0; i < 30; i++) creatures.push(founder('herb'));
-  if(P.omnivoresOn && omniN === 0 && herbN > 40) for(let i = 0; i < 10; i++) creatures.push(founder('omni'));
-  if(P.predatorsOn && carnN === 0 && herbN > 50) for(let i = 0; i < 8; i++) creatures.push(founder('carn'));
+  // gentle immigration keeps diet niches occupied against the herbivory-collapse
+  if(S.tick % 25 === 0){
+    if(P.omnivoresOn && omniN < 6 && herbN > 40) creatures.push(founder('omni'), founder('omni'));
+    if(P.predatorsOn && carnN < 4 && herbN > 55) creatures.push(founder('carn'), founder('carn'));
+  }
 
   S.creatures = creatures;
 
@@ -271,7 +274,7 @@ export function snapshot(){
       e: +c.energy.toFixed(1), a: c.age, gn: c.gen, id: c.id, hx: +c.homeX.toFixed(1), hy: +c.homeY.toFixed(1),
       g: [+c.g.speed.toFixed(3), +c.g.sense.toFixed(1), +c.g.size.toFixed(2), +c.g.hue.toFixed(1),
           +c.g.sociality.toFixed(2), +c.g.camo.toFixed(2), +c.g.territoriality.toFixed(2),
-          +c.g.territoryR.toFixed(1), +c.g.acuity.toFixed(2), +c.g.sexual.toFixed(2)],
+          +c.g.territoryR.toFixed(1), +c.g.acuity.toFixed(2), +c.g.sexual.toFixed(2), +c.g.diet.toFixed(3)],
       b: c.g.brain.map(x => +x.toFixed(3))
     })),
     food: S.food.map(f => [+f.x.toFixed(1), +f.y.toFixed(1)]),
@@ -290,7 +293,9 @@ export function restore(s){
     mem: [0, 0], matedTick: -1, lineage: o.id, kids: 0, act: null, sick: 0,
     g: { speed: o.g[0], sense: o.g[1], size: o.g[2], hue: o.g[3], sociality: o.g[4], camo: o.g[5],
          territoriality: o.g[6], territoryR: o.g[7], acuity: o.g[8],
-         sexual: o.g[9] !== undefined ? o.g[9] : 0.5, brain: o.b.slice() }
+         sexual: o.g[9] !== undefined ? o.g[9] : 0.5,
+         diet: o.g[10] !== undefined ? o.g[10] : (o.t === 'carn' ? 0.85 : o.t === 'omni' ? 0.5 : 0.15),
+         brain: o.b.slice() }
   }));
   S.food = s.food.map(a => ({ x: a[0], y: a[1] }));
   S.rocks = (s.rocks || []).map(a => ({ x: a[0], y: a[1], r: a[2] }));

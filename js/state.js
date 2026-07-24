@@ -14,12 +14,14 @@ export const P = {
 // Per-species configuration. `hunts` = types this species preys on.
 export const TYPES = {
   herb:{ hueC:115, hueSpan:40, reproE:'herbReproE', startE:'herbStartE', maxAge:'herbMaxAge',
-         baseMeta:0.05, eatsPlants:true, hunts:[], terr:false, social:true, plantEff:1.0, preyEff:0, sexual:false },
+         baseMeta:0.05, eatsPlants:true, hunts:[], terr:false, social:true, plantEff:1.0, preyEff:0, sexual:false, dietLo:0.03, dietHi:0.30 },
   omni:{ hueC:272, hueSpan:20, reproE:'omniReproE', startE:'omniStartE', maxAge:'omniMaxAge',
-         baseMeta:0.074, eatsPlants:true, hunts:['herb'], terr:false, social:true, plantEff:0.72, preyEff:0.7, sexual:true },
+         baseMeta:0.074, eatsPlants:true, hunts:['herb'], terr:false, social:true, plantEff:0.72, preyEff:0.7, sexual:true, dietLo:0.40, dietHi:0.60 },
   carn:{ hueC:18, hueSpan:24, reproE:'carnReproE', startE:'carnStartE', maxAge:'carnMaxAge',
-         baseMeta:0.09, eatsPlants:false, hunts:['herb','omni'], terr:true, social:false, plantEff:0, preyEff:1.0, sexual:false }
+         baseMeta:0.09, eatsPlants:false, hunts:['herb','omni'], terr:true, social:false, plantEff:0, preyEff:1.0, sexual:false, dietLo:0.72, dietHi:0.97 }
 };
+// Diet is a continuous gene [0..1]; the feeding "band" (species) is derived from it.
+export function typeOf(diet){ return diet < 0.34 ? 'herb' : diet < 0.67 ? 'omni' : 'carn'; }
 // Predators of each type (computed from `hunts`)
 export const PREDATORS = {};
 for(const T in TYPES){ PREDATORS[T] = []; }

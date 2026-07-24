@@ -173,6 +173,16 @@ export function drawEvolution(){
   cv = el('evSex'); ctx = cv.getContext('2d'); d = fitChart(cv, ctx);
   ctx.clearRect(0, 0, d.w, d.h); ctx.fillStyle = '#0c120c'; ctx.fillRect(0, 0, d.w, d.h);
   line(ctx, H, e => d.h - pad - (d.h - 2 * pad) * e.sex, '#a97fe0', d.w, d.h, pad);
+  // diet distribution histogram (herbivore -> carnivore)
+  cv = el('evDiet'); ctx = cv.getContext('2d'); d = fitChart(cv, ctx);
+  ctx.clearRect(0, 0, d.w, d.h); ctx.fillStyle = '#0c120c'; ctx.fillRect(0, 0, d.w, d.h);
+  const B = 12, buckets = new Array(B).fill(0);
+  for(const c of S.creatures){ const bi = Math.min(B - 1, Math.max(0, Math.floor((c.g.diet || 0) * B))); buckets[bi]++; }
+  const dmax = Math.max(1, ...buckets), dbw = (d.w - 2 * pad) / B;
+  for(let i = 0; i < B; i++){
+    const hh = (d.h - 2 * pad) * (buckets[i] / dmax), hue = 120 * (1 - (i + 0.5) / B);
+    ctx.fillStyle = `hsl(${hue | 0} 60% 52%)`; ctx.fillRect(pad + i * dbw + 1, d.h - pad - hh, dbw - 2, hh);
+  }
   // dominant lineages (bar chart of current population by lineage)
   cv = el('evLin'); ctx = cv.getContext('2d'); d = fitChart(cv, ctx);
   ctx.clearRect(0, 0, d.w, d.h); ctx.fillStyle = '#0c120c'; ctx.fillRect(0, 0, d.w, d.h);

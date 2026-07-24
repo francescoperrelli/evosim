@@ -126,5 +126,5 @@ input[type=range]{width:100%; accent-color:var(--moss); margin-top:5px}
 .ev-rec{background:var(--panel2); border:1px solid var(--line); border-radius:9px; padding:8px 10px; text-align:left}
 .ev-rec .k{font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px}
 .ev-rec .v{font-size:18px; font-weight:700; margin-top:2px; font-variant-numeric:tabular-nums}
-#evGen,#evSex,#evLin{width:100%; display:block; background:#0c120c; border:1px solid var(--line); border-radius:9px; margin:6px 0 2px}
-#evGen,#evSex{height:74px} #evLin{height:110px}
+#evGen,#evSex,#evLin,#evDiet{width:100%; display:block; background:#0c120c; border:1px solid var(--line); border-radius:9px; margin:6px 0 2px}
+#evGen,#evSex{height:74px} #evLin,#evDiet{height:90px}
