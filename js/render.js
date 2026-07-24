@@ -192,6 +192,23 @@ export function draw(){
     wctx.fillStyle = '#3a3f42'; wctx.beginPath(); wctx.arc(rk.x, rk.y, rk.r, 0, TAU); wctx.fill();
     wctx.strokeStyle = '#4c5257'; wctx.lineWidth = 1.5 / z; wctx.stroke();
   }
+  // pheromone trails (faint scent field, drawn beneath everything living)
+  if(P.pherOn && S.pher){
+    const ph = S.pher, PC = S.worldW / ph.cols, cols = ph.cols, rows = ph.rows;
+    const cols3 = [[143, 196, 74], [169, 127, 224], [221, 111, 87]], keys = ['herb', 'omni', 'carn'];
+    for(let ti = 0; ti < 3; ti++){
+      const arr = ph.f[keys[ti]], rgb = cols3[ti];
+      for(let cy = 0; cy < rows; cy++){
+        const wy = cy * PC; if(wy > vy1 || wy + PC < vy0) continue;
+        for(let cx = 0; cx < cols; cx++){
+          const v = arr[cy * cols + cx]; if(v < 0.2) continue;
+          const wx = cx * PC; if(wx > vx1 || wx + PC < vx0) continue;
+          wctx.fillStyle = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${Math.min(0.16, v * 0.05)})`;
+          wctx.fillRect(wx, wy, PC + 0.6, PC + 0.6);
+        }
+      }
+    }
+  }
   // plants
   wctx.fillStyle = '#3a6b2e';
   for(const f of S.food){ if(!vis(f.x, f.y, 3)) continue; wctx.beginPath(); wctx.arc(f.x, f.y, 2.1, 0, TAU); wctx.fill(); }

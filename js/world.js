@@ -9,6 +9,47 @@ import { evalChallenge } from './challenges.js';
 const _in = new Array(NIN), _out = new Array(NOUT);
 const TAU2 = Math.PI * 2;
 
+// ---------- pheromone field (stigmergy): faint scent trails per species ----------
+// Each species deposits into a coarse grid as it moves; the field blurs and decays.
+// Creatures read the local gradient and drift up-scent, so paths and gathering
+// points emerge on their own without any of it being scripted.
+const PCELL = 46;
+let pher = null;
+export function pherInit(){
+  const cols = Math.max(1, Math.ceil((S.worldW || 1700) / PCELL));
+  const rows = Math.max(1, Math.ceil((S.worldH || 1050) / PCELL));
+  pher = { cols, rows, f: { herb: new Float32Array(cols * rows), omni: new Float32Array(cols * rows), carn: new Float32Array(cols * rows) } };
+  S.pher = pher;
+}
+function pherDeposit(c, amt){
+  const cx = clamp(Math.floor(c.x / PCELL), 0, pher.cols - 1), cy = clamp(Math.floor(c.y / PCELL), 0, pher.rows - 1);
+  const arr = pher.f[c.type], i = cy * pher.cols + cx;
+  arr[i] = Math.min(6, arr[i] + amt);
+}
+const _pg = [0, 0, 0];
+function pherGradient(c){
+  const cols = pher.cols, rows = pher.rows, arr = pher.f[c.type];
+  const cx = clamp(Math.floor(c.x / PCELL), 0, cols - 1), cy = clamp(Math.floor(c.y / PCELL), 0, rows - 1);
+  const l = arr[cy * cols + Math.max(0, cx - 1)], r = arr[cy * cols + Math.min(cols - 1, cx + 1)];
+  const u = arr[Math.max(0, cy - 1) * cols + cx], d = arr[Math.min(rows - 1, cy + 1) * cols + cx];
+  _pg[0] = r - l; _pg[1] = d - u; _pg[2] = arr[cy * cols + cx];
+}
+function pherUpdate(){
+  const cols = pher.cols, rows = pher.rows;
+  for(const tk of ['herb', 'omni', 'carn']){
+    const a = pher.f[tk], b = new Float32Array(a.length);
+    for(let y = 0; y < rows; y++) for(let x = 0; x < cols; x++){
+      const i = y * cols + x;
+      let s = a[i] * 4;
+      s += a[y * cols + Math.max(0, x - 1)] + a[y * cols + Math.min(cols - 1, x + 1)] +
+           a[Math.max(0, y - 1) * cols + x] + a[Math.min(rows - 1, y + 1) * cols + x];
+      b[i] = (s / 8) * 0.92;   // box-blur (diffusion) + decay
+    }
+    pher.f[tk] = b;
+  }
+  S.pher = pher;
+}
+
 // terrain: biome fertility field and water slowdown
 export function fertilityAt(x, y){
   let f = 1;
@@ -88,6 +129,7 @@ export function seed(){
   S.records = { oldestAge: 0, maxKids: 0, maxGen: 0 };
   S.chronicle = []; S.chronPrev = null;
   S.rocks = []; S.water = []; S.drought = 0; S.effects = []; S.challenge = null; S.shares = 0; S.packKills = 0; generateBiomes();
+  pherInit();
   for(let i = 0; i < P.herbStart; i++) S.creatures.push(founder('herb'));
   if(P.omnivoresOn) for(let i = 0; i < P.omniStart; i++) S.creatures.push(founder('omni'));
   if(P.predatorsOn) for(let i = 0; i < P.carnStart; i++) S.creatures.push(founder('carn'));
@@ -116,6 +158,10 @@ export function step(){
   if(S.drought > 0){ S.drought--; fm *= 0.12; }        // famine
   spawnFood(P.foodRate * fm);
   const rocks = S.rocks;
+  if(P.pherOn){
+    if(!pher || pher.cols !== Math.max(1, Math.ceil(S.worldW / PCELL))) pherInit();
+    if(S.tick % 4 === 0) pherUpdate();     // diffuse + fade the scent field
+  }
 
   const WW = S.worldW, HH = S.worldH, food = S.food;
   let creatures = S.creatures;
@@ -229,6 +275,13 @@ export function step(){
       const d = Math.sqrt(mateD) || 1; ix += matex / d * 1.1; iy += matey / d * 1.1;
     }
 
+    // follow the scent trail of one's own kind (stigmergy: emergent paths & gathering)
+    if(P.pherOn && !thrHas){
+      pherGradient(c);
+      const gl = Math.hypot(_pg[0], _pg[1]);
+      if(gl > 1e-3){ const s = 0.55 * (cfg.social ? 0.4 + g.sociality * 0.8 : 0.5) / gl; ix += _pg[0] * s; iy += _pg[1] * s; }
+    }
+
     // combine brain + instinct
     let dx = _out[0] * BRAIN_W + ix * INNATE_W, dy = _out[1] * BRAIN_W + iy * INNATE_W;
     if(dx * dx + dy * dy < 1e-4){ dx = rnd(-1, 1); dy = rnd(-1, 1); }
@@ -243,6 +296,9 @@ export function step(){
       const rk = rocks[ri], rdx = c.x - rk.x, rdy = c.y - rk.y, rr = rk.r + c.rad;
       if(rdx * rdx + rdy * rdy < rr * rr){ const rd = Math.hypot(rdx, rdy) || 1; c.x = rk.x + rdx / rd * rr; c.y = rk.y + rdy / rd * rr; c.vx *= 0.4; c.vy *= 0.4; }
     }
+
+    // lay a scent mark; the better fed, the stronger the trail it leaves behind
+    if(P.pherOn) pherDeposit(c, c.energy > P[cfg.reproE] * 0.5 ? 0.6 : 0.2);
 
     c.energy -= metabolism(c) * (P.seasonsOn && si.idx === 3 ? 1.15 : 1) + Math.abs(c.signal) * 0.02;   // honest signalling costs
     if(c.sick > 0){ c.sick--; c.energy -= 0.14; }        // disease drains energy
@@ -368,7 +424,7 @@ export function restore(s){
   S.rocks = (s.rocks || []).map(a => ({ x: a[0], y: a[1], r: a[2] }));
   S.water = (s.water || []).map(a => ({ x: a[0], y: a[1], r: a[2] }));
   S.biomes = (s.biomes || []).map(a => ({ x: a[0], y: a[1], r: a[2], fert: a[3] }));
-  S.drought = 0; S.effects = [];
+  S.drought = 0; S.effects = []; pherInit();
   S.tick = s.tick || 0; S.predations = s.predations || 0; S.maxGen = s.maxGen || 0; S.ID = s.ID || S.creatures.length + 1;
   S.selected = null;
   if(s.params) Object.assign(P, s.params);
