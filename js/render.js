@@ -35,6 +35,15 @@ function drawCreature(c, z){
   const dark = `hsl(${col.hue} ${col.sat}% ${clamp(col.light - 20, 8, 60)}%)`;
   const sp = Math.hypot(c.vx, c.vy) || 1, cos = c.vx / sp, sin = c.vy / sp;
 
+  // communication: a visible pulse when the creature broadcasts a signal
+  const sig = c.signal || 0;
+  if(Math.abs(sig) > 0.35 && appR >= 2){
+    const a = clamp((Math.abs(sig) - 0.35) / 0.65, 0, 1);
+    wctx.strokeStyle = sig >= 0 ? `rgba(120,200,230,${0.5 * a})` : `rgba(230,165,120,${0.5 * a})`;
+    wctx.lineWidth = Math.max(0.8, g.size * 0.16);
+    wctx.beginPath(); wctx.arc(c.x, c.y, g.size + 3 + a * 7, 0, TAU); wctx.stroke();
+  }
+
   // tier 0: far away — a simple dot
   if(appR < 3){
     wctx.fillStyle = fill; wctx.beginPath(); wctx.arc(c.x, c.y, g.size, 0, TAU); wctx.fill();

@@ -92,7 +92,7 @@ export function step(){
 
     let preyRef = null, preyD = senseSq, preyx = 0, preyy = 0;
     let thrHas = false, thrD = senseSq, thrx = 0, thry = 0;
-    let cnt = 0, sumx = 0, sumy = 0, sumvx = 0, sumvy = 0, sepx = 0, sepy = 0;
+    let cnt = 0, sumx = 0, sumy = 0, sumvx = 0, sumvy = 0, sepx = 0, sepy = 0, sumSig = 0;
     let bfx = 0, bfy = 0, bfD = senseSq, bfRef = null;
     let mateRef = null, mateD = senseSq, matex = 0, matey = 0;
     const mateReadyE = P[cfg.reproE] * 0.85;
@@ -111,7 +111,7 @@ export function step(){
           const dx = o.x - c.x, dy = o.y - c.y, d = dx * dx + dy * dy;
           if(c.sick > 0 && o.sick === 0 && d < 700 && Math.random() < 0.04) o.sick = 500;   // contagion
           if(o.type === c.type){
-            if(d < NEIGH_R2){ cnt++; sumx += o.x; sumy += o.y; sumvx += o.vx; sumvy += o.vy;
+            if(d < NEIGH_R2){ cnt++; sumx += o.x; sumy += o.y; sumvx += o.vx; sumvy += o.vy; sumSig += o.signal;
               if(d < SEP_R2){ sepx += (c.x - o.x); sepy += (c.y - o.y); } }
             if(d < mateD && o.g.sexual > 0.5 && o.energy >= mateReadyE && o.matedTick !== S.tick){
               mateD = d; mateRef = o; matex = dx; matey = dy;
@@ -148,9 +148,10 @@ export function step(){
     _in[12] = clamp(c.energy / P[cfg.reproE], 0, 1.5);
     _in[13] = seasonSig;
     _in[14] = c.mem[0]; _in[15] = c.mem[1];
-    _in[16] = 1;
+    _in[16] = cnt ? sumSig / cnt : 0;   // signal heard from same-type neighbours
+    _in[17] = 1;
     brainForward(g.brain, _in, _out);
-    c.mem[0] = _out[2]; c.mem[1] = _out[3];
+    c.mem[0] = _out[2]; c.mem[1] = _out[3]; c.signal = _out[4];
     if(c === S.selected){ const gh = getHidden(); c.act = { inp: _in.slice(), hid: gh.h.slice(0, gh.nh), out: _out.slice() }; }
 
     // instinct prior
@@ -188,7 +189,7 @@ export function step(){
       if(rdx * rdx + rdy * rdy < rr * rr){ const rd = Math.hypot(rdx, rdy) || 1; c.x = rk.x + rdx / rd * rr; c.y = rk.y + rdy / rd * rr; c.vx *= 0.4; c.vy *= 0.4; }
     }
 
-    c.energy -= metabolism(c) * (P.seasonsOn && si.idx === 3 ? 1.15 : 1);
+    c.energy -= metabolism(c) * (P.seasonsOn && si.idx === 3 ? 1.15 : 1) + Math.abs(c.signal) * 0.02;   // honest signalling costs
     if(c.sick > 0){ c.sick--; c.energy -= 0.14; }        // disease drains energy
 
     // interactions
@@ -269,7 +270,7 @@ export function step(){
 /* ---------- save / load ---------- */
 export function snapshot(){
   return {
-    v: 7, tick: S.tick, predations: S.predations, maxGen: S.maxGen, ID: S.ID,
+    v: 8, tick: S.tick, predations: S.predations, maxGen: S.maxGen, ID: S.ID,
     worldW: S.worldW, worldH: S.worldH,
     params: { foodRate: P.foodRate, mut: P.mut, predatorsOn: P.predatorsOn, omnivoresOn: P.omnivoresOn,
               flocksOn: P.flocksOn, terrOn: P.terrOn, mimicOn: P.mimicOn, seasonsOn: P.seasonsOn },
@@ -290,12 +291,12 @@ export function snapshot(){
 }
 
 export function restore(s){
-  if(!s || s.v !== 7) return false;
+  if(!s || s.v !== 8) return false;
   if(s.worldW){ S.worldW = s.worldW; S.worldH = s.worldH; }
   S.creatures = s.creatures.map(o => ({
     id: o.id, x: o.x, y: o.y, vx: 0, vy: 0, type: (o.t === 'carn' || o.t === 'omni' || o.t === 'herb') ? o.t : 'herb',
     energy: o.e, age: o.a, gen: o.gn, dead: false, homeX: (o.hx || o.x), homeY: (o.hy || o.y),
-    mem: [0, 0], matedTick: -1, lineage: o.id, kids: 0, act: null, sick: 0, parent: 0, anc: [],
+    mem: [0, 0], matedTick: -1, lineage: o.id, kids: 0, act: null, sick: 0, parent: 0, anc: [], signal: 0,
     g: { speed: o.g[0], sense: o.g[1], size: o.g[2], hue: o.g[3], sociality: o.g[4], camo: o.g[5],
          territoriality: o.g[6], territoryR: o.g[7], acuity: o.g[8],
          sexual: o.g[9] !== undefined ? o.g[9] : 0.5,

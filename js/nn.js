@@ -5,9 +5,10 @@
 import { clamp, gauss } from './utils.js';
 import { P } from './state.js';
 
-// Inputs (17): food fwd/lat/pres, prey fwd/lat/pres, threat fwd/lat/pres,
-//              neighbour fwd/lat/density, energy, season, mem0, mem1, bias
-export const NIN = 17, NOUT = 4, NMEM = 2;
+// Inputs (18): food fwd/lat/pres, prey fwd/lat/pres, threat fwd/lat/pres,
+//              neighbour fwd/lat/density, energy, season, mem0, mem1, heard-signal, bias
+// Outputs (5): moveX, moveY, mem0, mem1, signal (broadcast call)
+export const NIN = 18, NOUT = 5, NMEM = 2;
 export const MIN_NH = 4, MAX_NH = 24;
 
 // weight layout for a given hidden size (hidden-major):

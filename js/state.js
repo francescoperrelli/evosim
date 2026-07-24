@@ -35,7 +35,7 @@ export const SEP_R = 15, SEP_R2 = SEP_R * SEP_R;
 export const CELL = 175;          // spatial-grid cell (>= max sense radius)
 export const MAX_ZOOM = 2.5;
 
-export const SAVE_KEY = 'evosim_save_v7';
+export const SAVE_KEY = 'evosim_save_v8';
 export const LANG_KEY = 'evosim_lang';
 
 // Seasons: returns { idx 0..3, name key, foodMult, phase }
