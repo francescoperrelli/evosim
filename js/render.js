@@ -16,6 +16,88 @@ export function resize(){
 
 const SEASON_TINT = ['rgba(120,190,90,.05)', 'rgba(230,200,120,.05)', 'rgba(210,150,80,.06)', 'rgba(140,180,220,.07)'];
 
+// base body colour from diet band (+ camouflage for herbivores)
+function bodyColor(c){
+  const g = c.g;
+  if(c.type === 'herb'){
+    const camo = P.mimicOn ? g.camo : 0;
+    return { hue: (g.hue * (1 - camo) + 120 * camo) | 0, sat: 62 - camo * 30, light: clamp((38 + c.energy * 0.18) * (1 - camo * 0.35), 24, 70) };
+  }
+  if(c.type === 'omni') return { hue: g.hue | 0, sat: 55, light: clamp(46 + c.energy * 0.08, 46, 68) };
+  return { hue: g.hue | 0, sat: 68, light: clamp(40 + c.energy * 0.1, 42, 66) };
+}
+
+// draw one creature from its genome: eyes scale with vision, legs with speed,
+// body segments/elongation with the shape gene, markings with the pattern gene.
+function drawCreature(c, z){
+  const g = c.g, col = bodyColor(c), appR = g.size * z;
+  const fill = `hsl(${col.hue} ${col.sat}% ${col.light}%)`;
+  const dark = `hsl(${col.hue} ${col.sat}% ${clamp(col.light - 20, 8, 60)}%)`;
+  const sp = Math.hypot(c.vx, c.vy) || 1, cos = c.vx / sp, sin = c.vy / sp;
+
+  // tier 0: far away — a simple dot
+  if(appR < 3){
+    wctx.fillStyle = fill; wctx.beginPath(); wctx.arc(c.x, c.y, g.size, 0, TAU); wctx.fill();
+    if(c.sick > 0) sickRing(c, g, z);
+    return;
+  }
+
+  const senseN = clamp((g.sense - 20) / 145, 0, 1), speedN = clamp((g.speed - 0.4) / 3, 0, 1);
+  const shape = g.shape === undefined ? 0.3 : g.shape, pattern = g.pattern === undefined ? 0.5 : g.pattern;
+
+  // legs (only when reasonably large): pairs increase with speed
+  if(appR >= 6){
+    const pairs = 2 + Math.round(speedN * 3), legLen = g.size * (0.55 + speedN * 0.9);
+    wctx.strokeStyle = dark; wctx.lineWidth = Math.max(0.7, g.size * 0.13);
+    for(let i = 0; i < pairs; i++){
+      const tt = pairs > 1 ? (i / (pairs - 1) - 0.5) : 0;
+      const bx = c.x - cos * tt * g.size * 1.2, by = c.y - sin * tt * g.size * 1.2;
+      wctx.beginPath(); wctx.moveTo(bx, by); wctx.lineTo(bx - sin * legLen, by + cos * legLen); wctx.stroke();
+      wctx.beginPath(); wctx.moveTo(bx, by); wctx.lineTo(bx + sin * legLen, by - cos * legLen); wctx.stroke();
+    }
+  }
+
+  // body: 1-3 segments along the heading depending on the shape gene
+  const segs = shape > 0.66 ? 3 : shape > 0.33 ? 2 : 1;
+  wctx.fillStyle = fill;
+  for(let s = 0; s < segs; s++){
+    const off = -s * g.size * 0.85, r = g.size * (1 - s * 0.16);
+    wctx.beginPath(); wctx.arc(c.x + cos * off, c.y + sin * off, r, 0, TAU); wctx.fill();
+  }
+
+  // markings from the pattern gene
+  if(appR >= 6){
+    if(pattern > 0.66){
+      wctx.fillStyle = dark;
+      for(let i = 0; i < 3; i++){ const a = i * 2.1; wctx.beginPath(); wctx.arc(c.x + Math.cos(a) * g.size * 0.4, c.y + Math.sin(a) * g.size * 0.4, g.size * 0.19, 0, TAU); wctx.fill(); }
+    } else if(pattern < 0.33){
+      wctx.strokeStyle = dark; wctx.lineWidth = g.size * 0.24;
+      wctx.beginPath(); wctx.moveTo(c.x - sin * g.size * 0.7, c.y + cos * g.size * 0.7); wctx.lineTo(c.x + sin * g.size * 0.7, c.y - cos * g.size * 0.7); wctx.stroke();
+    }
+  }
+
+  // eyes at the front, sized by vision
+  const eyeR = g.size * (0.15 + senseN * 0.22), fx = c.x + cos * g.size * 0.6, fy = c.y + sin * g.size * 0.6;
+  for(const side of [1, -1]){
+    const ex = fx - sin * side * g.size * 0.34, ey = fy + cos * side * g.size * 0.34;
+    wctx.fillStyle = '#f2efe6'; wctx.beginPath(); wctx.arc(ex, ey, eyeR, 0, TAU); wctx.fill();
+    wctx.fillStyle = '#15130e'; wctx.beginPath(); wctx.arc(ex + cos * eyeR * 0.3, ey + sin * eyeR * 0.3, eyeR * 0.55, 0, TAU); wctx.fill();
+  }
+
+  // carnivore mouth
+  if((g.diet || 0) > 0.6 && appR >= 5){
+    const ang = Math.atan2(sin, cos);
+    wctx.strokeStyle = '#2a0d09'; wctx.lineWidth = Math.max(0.8, g.size * 0.16);
+    wctx.beginPath(); wctx.arc(fx, fy, g.size * 0.42, ang - 0.6, ang + 0.6); wctx.stroke();
+  }
+
+  if(c.sick > 0) sickRing(c, g, z);
+}
+function sickRing(c, g, z){
+  wctx.strokeStyle = 'rgba(232,240,120,.85)'; wctx.lineWidth = 1.4 / z;
+  wctx.beginPath(); wctx.arc(c.x, c.y, g.size + 3.5, 0, TAU); wctx.stroke();
+}
+
 export function draw(){
   const W = S.W, H = S.H, z = S.cam.zoom;
   // clear + seasonal wash in screen space
@@ -65,35 +147,10 @@ export function draw(){
   // plants
   wctx.fillStyle = '#3a6b2e';
   for(const f of S.food){ if(!vis(f.x, f.y, 3)) continue; wctx.beginPath(); wctx.arc(f.x, f.y, 2.1, 0, TAU); wctx.fill(); }
-  // creatures
+  // creatures (evolved morphology, level-of-detail by apparent size)
   for(const c of S.creatures){
-    if(!vis(c.x, c.y, c.g.size + 4)) continue;
-    const g = c.g;
-    if(c.type === 'herb'){
-      const camo = P.mimicOn ? g.camo : 0;
-      const hue = g.hue * (1 - camo) + 120 * camo;
-      const sat = (62 - camo * 30);
-      const light = clamp((38 + c.energy * 0.18) * (1 - camo * 0.35), 24, 70);
-      wctx.fillStyle = `hsl(${hue | 0} ${sat}% ${light}%)`;
-      wctx.beginPath(); wctx.arc(c.x, c.y, g.size, 0, TAU); wctx.fill();
-    } else if(c.type === 'omni'){
-      const light = clamp(46 + c.energy * 0.08, 46, 68);
-      wctx.fillStyle = `hsl(${g.hue | 0} 55% ${light}%)`;
-      wctx.beginPath(); wctx.arc(c.x, c.y, g.size, 0, TAU); wctx.fill();
-      wctx.fillStyle = `hsla(${g.hue | 0} 70% 85% / .8)`;
-      wctx.beginPath(); wctx.arc(c.x, c.y, g.size * 0.4, 0, TAU); wctx.fill();   // inner core
-    } else {
-      const light = clamp(40 + c.energy * 0.1, 42, 66);
-      wctx.fillStyle = `hsl(${g.hue | 0} 68% ${light}%)`;
-      wctx.beginPath(); wctx.arc(c.x, c.y, g.size, 0, TAU); wctx.fill();
-      wctx.strokeStyle = `hsla(${g.hue | 0} 80% 72% / .55)`; wctx.lineWidth = 1.2;
-      wctx.beginPath(); wctx.arc(c.x, c.y, g.size + 2.2, 0, TAU); wctx.stroke();
-    }
-    wctx.strokeStyle = `hsla(${g.hue | 0} 60% 78% / .5)`; wctx.lineWidth = 1.3;
-    wctx.beginPath(); wctx.moveTo(c.x, c.y);
-    wctx.lineTo(c.x + c.vx / g.speed * (g.size + 3), c.y + c.vy / g.speed * (g.size + 3)); wctx.stroke();
-    if(c.sick > 0){ wctx.strokeStyle = 'rgba(232,240,120,.85)'; wctx.lineWidth = 1.4 / z;
-      wctx.beginPath(); wctx.arc(c.x, c.y, g.size + 3.5, 0, TAU); wctx.stroke(); }
+    if(!vis(c.x, c.y, c.g.size + 6)) continue;
+    drawCreature(c, z);
   }
   // meteor shockwaves
   for(const e of S.effects){

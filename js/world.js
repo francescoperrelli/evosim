@@ -278,7 +278,8 @@ export function snapshot(){
       e: +c.energy.toFixed(1), a: c.age, gn: c.gen, id: c.id, hx: +c.homeX.toFixed(1), hy: +c.homeY.toFixed(1),
       g: [+c.g.speed.toFixed(3), +c.g.sense.toFixed(1), +c.g.size.toFixed(2), +c.g.hue.toFixed(1),
           +c.g.sociality.toFixed(2), +c.g.camo.toFixed(2), +c.g.territoriality.toFixed(2),
-          +c.g.territoryR.toFixed(1), +c.g.acuity.toFixed(2), +c.g.sexual.toFixed(2), +c.g.diet.toFixed(3)],
+          +c.g.territoryR.toFixed(1), +c.g.acuity.toFixed(2), +c.g.sexual.toFixed(2), +c.g.diet.toFixed(3),
+          +c.g.shape.toFixed(2), +c.g.pattern.toFixed(2)],
       b: c.g.brain.map(x => +x.toFixed(3))
     })),
     food: S.food.map(f => [+f.x.toFixed(1), +f.y.toFixed(1)]),
@@ -299,6 +300,7 @@ export function restore(s){
          territoriality: o.g[6], territoryR: o.g[7], acuity: o.g[8],
          sexual: o.g[9] !== undefined ? o.g[9] : 0.5,
          diet: o.g[10] !== undefined ? o.g[10] : (o.t === 'carn' ? 0.85 : o.t === 'omni' ? 0.5 : 0.15),
+         shape: o.g[11] !== undefined ? o.g[11] : 0.3, pattern: o.g[12] !== undefined ? o.g[12] : 0.5,
          brain: o.b.slice() }
   }));
   S.food = s.food.map(a => ({ x: a[0], y: a[1] }));

@@ -13,6 +13,7 @@ export function randomGenome(type){
     sociality: rnd(0.2, 0.9), camo: rnd(0, 0.3),
     territoriality: rnd(0.2, 0.8), territoryR: rnd(55, 120),
     acuity: rnd(0.2, 0.5), diet: rnd(cfg.dietLo, cfg.dietHi),
+    shape: rnd(0, 0.5), pattern: rnd(0, 1),
     sexual: cfg.sexual ? 1 : 0, brain: randomBrain()
   };
 }
@@ -33,6 +34,8 @@ export function mutateGenome(g){
     territoryR: clamp(g.territoryR + gauss() * 30 * m * 1.5, 30, 180),
     acuity: clamp(g.acuity + gauss() * m * 1.3, 0, 1),
     diet,
+    shape: clamp((g.shape === undefined ? 0.3 : g.shape) + gauss() * m * 1.3, 0, 1),
+    pattern: clamp((g.pattern === undefined ? 0.5 : g.pattern) + gauss() * m * 1.3, 0, 1),
     sexual: cfg.sexual ? 1 : 0,
     brain: mutateBrain(g.brain)
   };
@@ -50,7 +53,8 @@ export function crossover(ga, gb){
     speed: pk(ga.speed, gb.speed), sense: pk(ga.sense, gb.sense), size: pk(ga.size, gb.size),
     hue: pk(ga.hue, gb.hue), sociality: pk(ga.sociality, gb.sociality), camo: pk(ga.camo, gb.camo),
     territoriality: pk(ga.territoriality, gb.territoriality), territoryR: pk(ga.territoryR, gb.territoryR),
-    acuity: pk(ga.acuity, gb.acuity), diet: pk(ga.diet, gb.diet), brain: crossBrain(ga.brain, gb.brain)
+    acuity: pk(ga.acuity, gb.acuity), diet: pk(ga.diet, gb.diet),
+    shape: pk(ga.shape, gb.shape), pattern: pk(ga.pattern, gb.pattern), brain: crossBrain(ga.brain, gb.brain)
   };
   return mutateGenome(base);
 }
