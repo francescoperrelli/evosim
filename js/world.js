@@ -26,6 +26,24 @@ function generateBiomes(){
     S.biomes.push({ x: rnd(0, S.worldW), y: rnd(0, S.worldH), r: rnd(220, 420), fert: Math.random() < 0.6 ? rnd(0.4, 0.9) : rnd(-0.7, -0.3) });
 }
 
+// reproductive isolation: sexual partners must be genetically similar enough
+function mateCompatible(a, b){
+  const gd = Math.abs((a.diet || 0) - (b.diet || 0)) * 1.5 + Math.abs(a.size - b.size) / 9 +
+             Math.abs(a.speed - b.speed) / 3.4 + Math.abs(a.hue - b.hue) / 360;
+  return gd < 0.45;
+}
+// genome fingerprint for approximate species clustering
+function geneVec(c){ const g = c.g; return [g.speed / 3.4, g.sense / 165, g.size / 9, g.diet || 0, (g.hue || 0) / 360, g.shape || 0.3, g.pattern || 0.5]; }
+export function speciesCount(){
+  const TH2 = 0.42 * 0.42, reps = [];
+  for(const c of S.creatures){
+    const v = geneVec(c); let found = false;
+    for(const r of reps){ let s = 0; for(let i = 0; i < v.length; i++){ const d = v[i] - r[i]; s += d * d; } if(s < TH2){ found = true; break; } }
+    if(!found){ reps.push(v); if(reps.length >= 60) break; }
+  }
+  return reps.length;
+}
+
 export function spawnFood(n){
   const k = Math.floor(n) + (Math.random() < (n % 1) ? 1 : 0);
   for(let i = 0; i < k && S.food.length < P.maxFood; i++){
@@ -116,7 +134,7 @@ export function step(){
           if(o.type === c.type){
             if(d < NEIGH_R2){ cnt++; sumx += o.x; sumy += o.y; sumvx += o.vx; sumvy += o.vy; sumSig += o.signal;
               if(d < SEP_R2){ sepx += (c.x - o.x); sepy += (c.y - o.y); } }
-            if(d < mateD && o.g.sexual > 0.5 && o.energy >= mateReadyE && o.matedTick !== S.tick){
+            if(d < mateD && o.g.sexual > 0.5 && o.energy >= mateReadyE && o.matedTick !== S.tick && mateCompatible(g, o.g)){
               mateD = d; mateRef = o; matex = dx; matey = dy;
             }
             // kin food-sharing: a well-fed altruist gives energy to a starving relative nearby
