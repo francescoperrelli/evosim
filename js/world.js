@@ -35,6 +35,8 @@ export function spawnFood(n){
 }
 
 function founder(type){ const c = makeCreature(rnd(0, S.worldW), rnd(0, S.worldH), type, randomGenome(type), 0); c.lineage = c.id; return c; }
+// compact ancestry chain (last 10 forebears) inherited from the primary parent
+function ancestryOf(pp){ return [...(pp.anc || []), { id: pp.id, gen: pp.gen, diet: pp.g.diet, type: pp.type, hue: pp.g.hue }].slice(-10); }
 export function seed(){
   S.creatures = []; S.food = []; S.tick = 0; S.predations = 0; S.maxGen = 0;
   S.popHist.length = 0; S.traitHist.length = 0; S.evoHist.length = 0; S.ID = 1; S.selected = null;
@@ -213,7 +215,7 @@ export function step(){
             c.energy *= 0.6; mateRef.energy *= 0.6;
             c.matedTick = S.tick; mateRef.matedTick = S.tick;
             const ch = makeCreature((c.x + mateRef.x) / 2, (c.y + mateRef.y) / 2, c.type, crossover(g, mateRef.g), Math.max(c.gen, mateRef.gen) + 1);
-            ch.energy = childE; ch.lineage = c.lineage; if(cfg.terr){ ch.homeX = ch.x; ch.homeY = ch.y; }
+            ch.energy = childE; ch.lineage = c.lineage; ch.parent = c.id; ch.anc = ancestryOf(c); if(cfg.terr){ ch.homeX = ch.x; ch.homeY = ch.y; }
             c.kids++; mateRef.kids++;
             if(c.kids > S.records.maxKids) S.records.maxKids = c.kids;
             newborns.push(ch); if(ch.gen > S.maxGen) S.maxGen = ch.gen;
@@ -223,7 +225,7 @@ export function step(){
         // asexual: clone with mutation
         c.energy *= 0.5;
         const ch = makeCreature(c.x + rnd(-6, 6), c.y + rnd(-6, 6), c.type, mutateGenome(g), c.gen + 1);
-        ch.energy = c.energy; ch.lineage = c.lineage; if(cfg.terr){ ch.homeX = c.x; ch.homeY = c.y; }
+        ch.energy = c.energy; ch.lineage = c.lineage; ch.parent = c.id; ch.anc = ancestryOf(c); if(cfg.terr){ ch.homeX = c.x; ch.homeY = c.y; }
         c.kids++; if(c.kids > S.records.maxKids) S.records.maxKids = c.kids;
         newborns.push(ch); if(ch.gen > S.maxGen) S.maxGen = ch.gen;
       }
@@ -290,7 +292,7 @@ export function restore(s){
   S.creatures = s.creatures.map(o => ({
     id: o.id, x: o.x, y: o.y, vx: 0, vy: 0, type: (o.t === 'carn' || o.t === 'omni' || o.t === 'herb') ? o.t : 'herb',
     energy: o.e, age: o.a, gen: o.gn, dead: false, homeX: (o.hx || o.x), homeY: (o.hy || o.y),
-    mem: [0, 0], matedTick: -1, lineage: o.id, kids: 0, act: null, sick: 0,
+    mem: [0, 0], matedTick: -1, lineage: o.id, kids: 0, act: null, sick: 0, parent: 0, anc: [],
     g: { speed: o.g[0], sense: o.g[1], size: o.g[2], hue: o.g[3], sociality: o.g[4], camo: o.g[5],
          territoriality: o.g[6], territoryR: o.g[7], acuity: o.g[8],
          sexual: o.g[9] !== undefined ? o.g[9] : 0.5,

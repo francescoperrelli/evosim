@@ -9,7 +9,7 @@ import { I18N, t, setLang, getLang } from './i18n.js';
 /* ---------- overlays ---------- */
 function show(id){ el(id).classList.add('show'); }
 function hide(id){ el(id).classList.remove('show'); }
-function hideAll(){ ['menu','tutorial','options','inspector','evolution','events'].forEach(hide); }
+function hideAll(){ ['menu','tutorial','options','inspector','evolution','events','genealogy'].forEach(hide); }
 export { show };
 
 let toastT = null;
@@ -128,6 +128,37 @@ document.querySelectorAll('.lang button').forEach(b => { b.onclick = () => { set
 /* ---------- inspector ---------- */
 const TYPE_KEY = { herb: 'typeHerb', omni: 'typeOmni', carn: 'typeCarn' };
 el('inspClose').onclick = () => { hide('inspector'); S.selected = null; };
+
+/* ---------- genealogy ---------- */
+function dietDot(diet){ return `<span class="gen-dot" style="background:hsl(${(120 * (1 - (diet || 0))) | 0} 60% 52%)"></span>`; }
+function buildGenealogy(){
+  const wrap = el('genTree'), c = S.selected;
+  if(!c){ wrap.innerHTML = ''; return; }
+  const living = new Set(S.creatures.map(x => x.id));
+  const anc = c.anc || [];
+  let html = '<div class="gen-chain">';
+  if(!anc.length) html += `<div class="gen-hint">${t('genFounder')}</div>`;
+  for(const a of anc){
+    const live = living.has(a.id);
+    html += `<div class="gen-node${live ? ' gen-live' : ''}"${live ? ` data-nav="${a.id}"` : ''}>${dietDot(a.diet)}<span>gen ${a.gen} · ${t(TYPE_KEY[a.type] || 'typeHerb')}${live ? ' ▸' : ''}</span></div>`;
+  }
+  html += `<div class="gen-node gen-current">${dietDot(c.g.diet)}<span>gen ${c.gen} · ${t(TYPE_KEY[c.type])} — ${t('genThis')}</span></div></div>`;
+  const kids = S.creatures.filter(x => x.parent === c.id);
+  html += `<div class="gen-kids-label">${t('genChildren')}${kids.length ? ' (' + kids.length + ')' : ''}</div>`;
+  if(kids.length){
+    html += '<div class="gen-kids">';
+    for(const k of kids.slice(0, 30)) html += `<span class="gen-chip" data-nav="${k.id}">${dietDot(k.g.diet)}gen ${k.gen}</span>`;
+    html += '</div>';
+  } else html += `<div class="gen-hint">${t('genNoChildren')}</div>`;
+  wrap.innerHTML = html;
+}
+el('btnGenealogy').onclick = () => { if(S.selected){ buildGenealogy(); show('genealogy'); } };
+el('genClose').onclick = () => hide('genealogy');
+el('genTree').addEventListener('click', e => {
+  const n = e.target.closest('[data-nav]'); if(!n) return;
+  const found = S.creatures.find(x => x.id === +n.getAttribute('data-nav'));
+  if(found){ S.selected = found; buildGenealogy(); }
+});
 
 function selectAt(mx, my){
   let best = null, bestD = 1e9;

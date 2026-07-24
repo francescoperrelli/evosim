@@ -161,6 +161,7 @@
         <span><i style="background:#8fc44a"></i>+</span>
         <span><i style="background:#dd6f57"></i>−</span>
       </div>
+      <div class="row"><button class="btn ghost" id="btnGenealogy" data-i18n="genealogyBtn">🌳 Genealogia</button></div>
       <div class="row"><button class="btn primary" id="inspClose" data-i18n="close">Chiudi</button></div>
     </div>
   </div>
@@ -185,6 +186,17 @@
       <p class="insp-sub" data-i18n="evoLineages">Stirpi fondatrici dominanti</p>
       <canvas id="evLin"></canvas>
       <div class="row"><button class="btn primary" id="evClose" data-i18n="close">Chiudi</button></div>
+    </div>
+  </div>
+
+  <!-- GENEALOGY -->
+  <div class="overlay" id="genealogy">
+    <div class="card">
+      <p class="eyebrow" data-i18n="genEyebrow">La stirpe</p>
+      <h3 data-i18n="genTitle">Albero genealogico</h3>
+      <div id="genTree"></div>
+      <p class="gen-hint" data-i18n="genHint">Tocca un antenato vivo o un figlio per spostarti nell'albero.</p>
+      <div class="row"><button class="btn primary" id="genClose" data-i18n="close">Chiudi</button></div>
     </div>
   </div>
 
