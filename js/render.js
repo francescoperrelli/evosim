@@ -419,6 +419,16 @@ export function drawEvolution(){
     line(ctx, S.ornHist, o => map(o.o), '#a97fe0', d.w, d.h, pad);
     line(ctx, S.ornHist, o => map(o.c), '#dd6f57', d.w, d.h, pad);
   }
+  // constructive-behaviour genes over time (hoard / build / migrate / reciprocity)
+  cv = el('evBeh'); if(cv){
+    ctx = cv.getContext('2d'); d = fitChart(cv, ctx);
+    ctx.clearRect(0, 0, d.w, d.h); ctx.fillStyle = '#0c120c'; ctx.fillRect(0, 0, d.w, d.h);
+    const map = v => d.h - pad - (d.h - 2 * pad) * clamp(v, 0, 1);
+    line(ctx, S.behHist, b => map(b.hoard), '#d6b060', d.w, d.h, pad);
+    line(ctx, S.behHist, b => map(b.build), '#96b060', d.w, d.h, pad);
+    line(ctx, S.behHist, b => map(b.mig), '#e6c86a', d.w, d.h, pad);
+    line(ctx, S.behHist, b => map(b.rec), '#74bccb', d.w, d.h, pad);
+  }
   // emergent lexicon: a 4x3 heat grid of how each channel deviates in each context
   cv = el('evLex'); if(cv){
     ctx = cv.getContext('2d'); d = fitChart(cv, ctx);

@@ -246,7 +246,7 @@ export function seed(seedVal){
   const sd = (seedVal === undefined || seedVal === null || !isFinite(seedVal)) ? (Date.now() >>> 0) : (seedVal >>> 0);
   setSeed(sd); S.seed = sd;
   S.creatures = []; S.food = []; S.tick = 0; S.predations = 0; S.maxGen = 0;
-  S.popHist.length = 0; S.traitHist.length = 0; S.evoHist.length = 0; S.ornHist.length = 0; S.dataLog.length = 0; S.ID = 1; S.selected = null;
+  S.popHist.length = 0; S.traitHist.length = 0; S.evoHist.length = 0; S.ornHist.length = 0; S.behHist.length = 0; S.dataLog.length = 0; S.ID = 1; S.selected = null;
   S.records = { oldestAge: 0, maxKids: 0, maxGen: 0 };
   S.chronicle = []; S.chronPrev = null; S.lex = newLex(); S.dialect = {};
   S.rocks = []; S.water = []; S.drought = 0; S.effects = []; S.challenge = null; S.shares = 0; S.packKills = 0; S.nests = []; S.caches = []; S.shelters = []; generateBiomes();
@@ -624,20 +624,23 @@ export function step(){
 
   if(S.tick % 6 === 0){
     let hn = 0, cn = 0, on = 0, camo = 0, acu = 0, sx = 0, tot = 0, genSum = 0, brainSum = 0, ornSum = 0;
-    let hOrn = 0, oOrn = 0, cOrn = 0;
+    let hOrn = 0, oOrn = 0, cOrn = 0, hoardSum = 0, buildSum = 0, migSum = 0, recSum = 0;
     const lin = new Set();
     for(const c of creatures){
       const orn = c.g.ornament || 0;
       tot++; if(c.g.sexual > 0.5){ sx++; ornSum += orn; } genSum += c.gen; lin.add(c.lineage); brainSum += c.g.brain.nh;
+      hoardSum += c.g.hoard || 0; buildSum += c.g.build || 0; migSum += c.g.migrate || 0; recSum += c.g.reciprocity || 0;
       if(c.type === 'carn'){ cn++; acu += c.g.acuity; cOrn += orn; } else if(c.type === 'omni'){ on++; camo += c.g.camo; oOrn += orn; } else { hn++; camo += c.g.camo; hOrn += orn; }
       if(P.learnOn && c.plast){ const pl = c.plast; for(let i = 0; i < pl.length; i++) pl[i] *= 0.985; }   // slow forgetting
     }
     S.popHist.push({ h: hn, c: cn, o: on, f: food.length });
     S.traitHist.push({ camo: (hn + on) ? camo / (hn + on) : 0, acu: cn ? acu / cn : 0, sex: tot ? sx / tot : 0, orn: sx ? ornSum / sx : 0 });
     S.ornHist.push({ h: hn ? hOrn / hn : 0, o: on ? oOrn / on : 0, c: cn ? cOrn / cn : 0 });
+    S.behHist.push({ hoard: tot ? hoardSum / tot : 0, build: tot ? buildSum / tot : 0, mig: tot ? migSum / tot : 0, rec: tot ? recSum / tot : 0 });
     S.evoHist.push({ gen: tot ? genSum / tot : 0, sex: tot ? sx / tot : 0, lin: lin.size, nh: tot ? brainSum / tot : 0 });
     if(S.popHist.length > 240){ S.popHist.shift(); S.traitHist.shift(); }
     if(S.ornHist.length > 240){ S.ornHist.shift(); }
+    if(S.behHist.length > 240){ S.behHist.shift(); }
     if(S.evoHist.length > 240){ S.evoHist.shift(); }
     if(S.maxGen > S.records.maxGen) S.records.maxGen = S.maxGen;
   }
@@ -722,7 +725,7 @@ export function restore(s){
   S.tick = s.tick || 0; S.predations = s.predations || 0; S.maxGen = s.maxGen || 0; S.ID = s.ID || S.creatures.length + 1; S.seed = s.seed || 0;
   S.selected = null;
   if(s.params) Object.assign(P, s.params);
-  S.popHist.length = 0; S.traitHist.length = 0; S.ornHist.length = 0; S.dataLog.length = 0;
+  S.popHist.length = 0; S.traitHist.length = 0; S.ornHist.length = 0; S.behHist.length = 0; S.dataLog.length = 0;
   return true;
 }
 
