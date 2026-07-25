@@ -7,7 +7,7 @@ export const P = {
   herbReproE:120, herbStartE:70, herbMaxAge:2600,
   omniReproE:140, omniStartE:85, omniMaxAge:2800,
   carnReproE:255, carnStartE:150, carnMaxAge:3200,
-  seasonLength:3600, dayLength:1400, sexSel:1.4,
+  seasonLength:3600, dayLength:1400, sexSel:1.4, planetCount:4,
   predatorsOn:true, omnivoresOn:true, flocksOn:true, terrOn:true, mimicOn:true, seasonsOn:true, dayNightOn:true, bubblesOn:true, pherOn:true, cultureOn:true, learnOn:true, nestsOn:true, plaguesOn:false, migrateOn:true, hoardOn:true, buildOn:true
 };
 
@@ -66,7 +66,7 @@ export const S = {
   popHist: [], traitHist: [], evoHist: [], ornHist: [], behHist: [], dataLog: [],
   records: { oldestAge: 0, maxKids: 0, maxGen: 0 },
   selected: null, tool: 'plant',        // 'plant' | 'inspect' | 'meteor' | 'rock' | 'water'
-  drought: 0, effects: [], rocks: [], water: [], biomes: [], nests: [], caches: [], shelters: [],
+  drought: 0, effects: [], rocks: [], water: [], biomes: [], nests: [], caches: [], shelters: [], planets: [],
   challenge: null, shares: 0, packKills: 0,
   chronicle: [], chronPrev: null,
   // emergent-lexicon meter: how each of the 3 signal channels correlates with

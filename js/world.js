@@ -117,11 +117,40 @@ function ledgerBump(c, id, d){
 function randomPathogen(){ return { vir: rnd(0.3, 0.7), trans: rnd(0.4, 0.8) }; }
 function mutatePathogen(p){ return { vir: clamp(p.vir + gauss() * 0.08, 0.02, 1), trans: clamp(p.trans + gauss() * 0.08, 0.05, 1) }; }
 
-// terrain: biome fertility field and water slowdown
+// ---- planets: the world is a grid of planets separated by impassable void ----
+export function buildPlanets(count){
+  count = Math.max(1, count || 4);
+  const cols = count <= 1 ? 1 : count <= 4 ? 2 : 3;
+  const rows = Math.ceil(count / cols);
+  const PW = 1200, PH = 820, VG = 240;                 // planet size + void gutter
+  S.worldW = cols * PW + (cols + 1) * VG;
+  S.worldH = rows * PH + (rows + 1) * VG;
+  S.planets = [];
+  const hues = [130, 205, 28, 285, 330, 95];
+  let idx = 0;
+  for(let r = 0; r < rows && idx < count; r++) for(let c = 0; c < cols && idx < count; c++){
+    S.planets.push({ x: VG + c * (PW + VG), y: VG + r * (PH + VG), w: PW, h: PH, hue: hues[idx % hues.length], fert: 0.75 + rand() * 0.8, i: idx });
+    idx++;
+  }
+}
+export function planetIndexAt(x, y){
+  const P2 = S.planets;
+  for(let i = 0; i < P2.length; i++){ const p = P2[i]; if(x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h) return i; }
+  return -1;
+}
+// a random point inside a given planet (or any planet if idx omitted)
+function planetPoint(idx){
+  const P2 = S.planets; if(!P2.length) return { x: rnd(0, S.worldW), y: rnd(0, S.worldH), p: -1 };
+  const i = idx === undefined ? (rand() * P2.length | 0) : idx, p = P2[i];
+  return { x: rnd(p.x + 8, p.x + p.w - 8), y: rnd(p.y + 8, p.y + p.h - 8), p: i };
+}
+
+// terrain: biome fertility field and water slowdown (scaled by the planet's own fertility)
 export function fertilityAt(x, y){
-  let f = 1;
+  const pi = S.planets.length ? planetIndexAt(x, y) : -1;
+  let f = pi >= 0 ? S.planets[pi].fert : (S.planets.length ? 0.1 : 1);
   for(const bm of S.biomes){ const d2 = (x - bm.x) ** 2 + (y - bm.y) ** 2; if(d2 < bm.r * bm.r) f += bm.fert * (1 - Math.sqrt(d2) / bm.r); }
-  return clamp(f, 0.1, 2);
+  return clamp(f, 0.1, 2.4);
 }
 function waterFactor(x, y){
   for(const w of S.water){ if((x - w.x) ** 2 + (y - w.y) ** 2 < w.r * w.r) return 0.5; }
@@ -129,9 +158,11 @@ function waterFactor(x, y){
 }
 function generateBiomes(){
   S.biomes = [];
-  const n = 3 + (rand() * 3 | 0);
-  for(let i = 0; i < n; i++)
-    S.biomes.push({ x: rnd(0, S.worldW), y: rnd(0, S.worldH), r: rnd(220, 420), fert: rand() < 0.6 ? rnd(0.4, 0.9) : rnd(-0.7, -0.3) });
+  const per = 2;   // a couple of biome patches per planet, placed inside it
+  for(const p of (S.planets.length ? S.planets : [{ x: 0, y: 0, w: S.worldW, h: S.worldH }])){
+    for(let i = 0; i < per; i++)
+      S.biomes.push({ x: rnd(p.x + 60, p.x + p.w - 60), y: rnd(p.y + 60, p.y + p.h - 60), r: rnd(180, 340), fert: rand() < 0.6 ? rnd(0.4, 0.9) : rnd(-0.7, -0.3) });
+  }
 }
 
 // reproductive isolation: sexual partners must be genetically similar enough
@@ -225,12 +256,18 @@ export function speciesCount(){
 // food is richest moves with the season — herds that follow it end up migrating
 export function solarPeakY(tick){ return S.worldH * (0.5 - 0.34 * Math.cos(seasonInfo(tick).phase * TAU2)); }
 export function spawnFood(n){
+  const pf = S.planets.length || 1;                     // each planet gets its own food budget
+  n *= pf;
+  const cap = P.maxFood * pf;
   const k = Math.floor(n) + (rand() < (n % 1) ? 1 : 0);
   const mig = P.migrateOn && P.seasonsOn;
   const yPeak = mig ? solarPeakY(S.tick) : 0, band2 = mig ? (S.worldH * 0.26) ** 2 : 1;
-  for(let i = 0; i < k && S.food.length < P.maxFood; i++){
+  const hasP = S.planets.length > 0;
+  for(let i = 0; i < k && S.food.length < cap; i++){
     let bx = 0, by = 0, bf = -1;
-    for(let t = 0; t < 3; t++){ const x = rnd(6, S.worldW - 6), y = rnd(6, S.worldH - 6);
+    for(let t = 0; t < 3; t++){
+      let x, y;
+      if(hasP){ const pp = planetPoint(); x = pp.x; y = pp.y; } else { x = rnd(6, S.worldW - 6); y = rnd(6, S.worldH - 6); }
       let f = fertilityAt(x, y);
       if(mig){ const dy = y - yPeak; f *= 1 + 1.3 * Math.exp(-(dy * dy) / band2); }   // richer near the sunlit band (total food unchanged)
       if(f > bf){ bf = f; bx = x; by = y; } }
@@ -238,7 +275,7 @@ export function spawnFood(n){
   }
 }
 
-function founder(type){ const c = makeCreature(rnd(0, S.worldW), rnd(0, S.worldH), type, randomGenome(type), 0); c.lineage = c.id; return c; }
+function founder(type, planetIdx){ const pp = planetPoint(planetIdx); const c = makeCreature(pp.x, pp.y, type, randomGenome(type), 0); c.lineage = c.id; return c; }
 // compact ancestry chain (last 10 forebears) inherited from the primary parent
 function ancestryOf(pp){ return [...(pp.anc || []), { id: pp.id, gen: pp.gen, diet: pp.g.diet, type: pp.type, hue: pp.g.hue }].slice(-10); }
 export function seed(seedVal){
@@ -249,11 +286,17 @@ export function seed(seedVal){
   S.popHist.length = 0; S.traitHist.length = 0; S.evoHist.length = 0; S.ornHist.length = 0; S.behHist.length = 0; S.dataLog.length = 0; S.ID = 1; S.selected = null;
   S.records = { oldestAge: 0, maxKids: 0, maxGen: 0 };
   S.chronicle = []; S.chronPrev = null; S.lex = newLex(); S.dialect = {};
-  S.rocks = []; S.water = []; S.drought = 0; S.effects = []; S.challenge = null; S.shares = 0; S.packKills = 0; S.nests = []; S.caches = []; S.shelters = []; generateBiomes();
+  S.rocks = []; S.water = []; S.drought = 0; S.effects = []; S.challenge = null; S.shares = 0; S.packKills = 0; S.nests = []; S.caches = []; S.shelters = [];
+  buildPlanets(P.planetCount);
+  generateBiomes();
   pherInit();
-  for(let i = 0; i < P.herbStart; i++) S.creatures.push(founder('herb'));
-  if(P.omnivoresOn) for(let i = 0; i < P.omniStart; i++) S.creatures.push(founder('omni'));
-  if(P.predatorsOn) for(let i = 0; i < P.carnStart; i++) S.creatures.push(founder('carn'));
+  const nP = S.planets.length || 1;
+  const hs = Math.round(P.herbStart * 0.55), os = Math.round(P.omniStart * 0.6), cs = Math.round(P.carnStart * 0.7);
+  for(let pl = 0; pl < nP; pl++){                       // seed every planet with its own starter ecosystem
+    for(let i = 0; i < hs; i++) S.creatures.push(founder('herb', pl));
+    if(P.omnivoresOn) for(let i = 0; i < os; i++) S.creatures.push(founder('omni', pl));
+    if(P.predatorsOn) for(let i = 0; i < cs; i++) S.creatures.push(founder('carn', pl));
+  }
   spawnFood(P.maxFood * 0.6 | 0);
 }
 
@@ -484,6 +527,7 @@ export function step(){
     const dl = Math.hypot(dx, dy) || 1;
     c.vx = dx / dl * g.speed; c.vy = dy / dl * g.speed;
     const wf = S.water.length ? waterFactor(c.x, c.y) : 1;   // water slows movement
+    const ox = c.x, oy = c.y;                                // last in-planet position (for the void barrier)
     c.x += c.vx * wf; c.y += c.vy * wf;
     if(c.x < 4){ c.x = 4; c.vx = Math.abs(c.vx); } if(c.x > WW - 4){ c.x = WW - 4; c.vx = -Math.abs(c.vx); }
     if(c.y < 4){ c.y = 4; c.vy = Math.abs(c.vy); } if(c.y > HH - 4){ c.y = HH - 4; c.vy = -Math.abs(c.vy); }
@@ -497,6 +541,8 @@ export function step(){
       for(let si2 = 0; si2 < S.shelters.length; si2++){ const sh = S.shelters[si2];
         if((sh.x - c.x) ** 2 + (sh.y - c.y) ** 2 < sh.r * sh.r){ c.x -= c.vx * 0.5; c.y -= c.vy * 0.5; c.vx *= 0.45; c.vy *= 0.45; break; } }
     }
+    // the void between planets is impassable — a creature can't leave its world
+    if(S.planets.length && planetIndexAt(c.x, c.y) < 0){ c.x = ox; c.y = oy; c.vx *= -0.4; c.vy *= -0.4; }
 
     // lay a scent mark; the better fed, the stronger the trail it leaves behind
     if(P.pherOn) pherDeposit(c, c.energy > P[cfg.reproE] * 0.5 ? 0.6 : 0.2);
@@ -564,7 +610,7 @@ export function step(){
         if(S.selected === preyRef) S.selected = null;
       }
     }
-    if(c.age > matAge && c.energy >= P[cfg.reproE] && creatures.length + newborns.length < P.maxPop){
+    if(c.age > matAge && c.energy >= P[cfg.reproE] && creatures.length + newborns.length < P.maxPop * (S.planets.length || 1)){
       if(g.sexual > 0.5){
         // sexual: needs a ready mate in contact; offspring recombines both parents
         if(mateRef && !mateRef.dead && mateRef.matedTick !== S.tick){
@@ -597,26 +643,25 @@ export function step(){
   if(newborns.length) creatures = creatures.concat(newborns);
   creatures = creatures.filter(c => !c.dead);
 
-  // safety net
-  let herbN = 0, omniN = 0, carnN = 0;
-  for(const c of creatures){ if(c.type === 'carn') carnN++; else if(c.type === 'omni') omniN++; else herbN++; }
-  if(herbN === 0) for(let i = 0; i < 30; i++) creatures.push(founder('herb'));
-  // gentle immigration keeps diet niches occupied against the herbivory-collapse
-  if(S.tick % 25 === 0){
-    if(P.omnivoresOn && omniN < 12 && herbN > 28){
-      // reinforce from survivors when possible, so evolved traits aren't diluted away
-      for(let k = 0; k < 3; k++){
-        let src = null; for(const cc of creatures){ if(cc.type === 'omni'){ if(!src || rand() < 0.3) src = cc; } }
-        if(src){ const ch = makeCreature(rnd(0, WW), rnd(0, HH), 'omni', mutateGenome(src.g), src.gen); ch.lineage = src.lineage; creatures.push(ch); }
-        else creatures.push(founder('omni'));
-      }
+  // per-planet safety net: each planet keeps its own three bands alive
+  const nP = S.planets.length || 1;
+  const cnt = new Array(nP * 3).fill(0);
+  for(const c of creatures){ const pi = nP > 1 ? planetIndexAt(c.x, c.y) : 0; if(pi < 0) continue;
+    cnt[pi * 3 + (c.type === 'carn' ? 2 : c.type === 'omni' ? 1 : 0)]++; }
+  // reinforce a band on a given planet from a surviving member (anywhere), else a fresh founder
+  const reinforce = (type, pl, count) => {
+    for(let k = 0; k < count; k++){
+      let src = null; for(const cc of creatures){ if(cc.type === type){ if(!src || rand() < 0.35) src = cc; } }
+      if(src){ const pp = planetPoint(pl); const ch = makeCreature(pp.x, pp.y, type, mutateGenome(src.g), src.gen); ch.lineage = src.lineage; ch.homeX = ch.x; ch.homeY = ch.y; creatures.push(ch); }
+      else creatures.push(founder(type, pl));
     }
-    if(P.predatorsOn && carnN < 4 && herbN > 38){
-      for(let k = 0; k < 2; k++){
-        let src = null; for(const cc of creatures){ if(cc.type === 'carn'){ if(!src || rand() < 0.4) src = cc; } }
-        if(src){ const ch = makeCreature(rnd(0, WW), rnd(0, HH), 'carn', mutateGenome(src.g), src.gen); ch.lineage = src.lineage; ch.homeX = ch.x; ch.homeY = ch.y; creatures.push(ch); }
-        else creatures.push(founder('carn'));
-      }
+  };
+  for(let pl = 0; pl < nP; pl++){
+    const h = cnt[pl * 3], o = cnt[pl * 3 + 1], cN = cnt[pl * 3 + 2];
+    if(h === 0) for(let i = 0; i < 20; i++) creatures.push(founder('herb', pl));
+    if(S.tick % 25 === 0){
+      if(P.omnivoresOn && o < 8 && h > 24) reinforce('omni', pl, 3);
+      if(P.predatorsOn && cN < 3 && h > 32) reinforce('carn', pl, 2);
     }
   }
 
@@ -691,7 +736,8 @@ export function snapshot(){
     water: S.water.map(w => [+w.x.toFixed(1), +w.y.toFixed(1), +w.r.toFixed(1)]),
     biomes: S.biomes.map(bm => [+bm.x.toFixed(0), +bm.y.toFixed(0), +bm.r.toFixed(0), +bm.fert.toFixed(2)]),
     caches: S.caches.map(ca => [+ca.x.toFixed(0), +ca.y.toFixed(0), ca.type, +ca.amount.toFixed(0), ca.lineage || 0]),
-    shelters: S.shelters.map(sh => [+sh.x.toFixed(0), +sh.y.toFixed(0), sh.lineage || 0, +sh.str.toFixed(1)])
+    shelters: S.shelters.map(sh => [+sh.x.toFixed(0), +sh.y.toFixed(0), sh.lineage || 0, +sh.str.toFixed(1)]),
+    planets: S.planets.map(p => [p.x, p.y, p.w, p.h, p.hue, +p.fert.toFixed(2)])
   };
 }
 
@@ -721,6 +767,7 @@ export function restore(s){
   S.biomes = (s.biomes || []).map(a => ({ x: a[0], y: a[1], r: a[2], fert: a[3] }));
   S.caches = (s.caches || []).map(a => ({ x: a[0], y: a[1], type: a[2], amount: a[3], lineage: a[4] || 0 }));
   S.shelters = (s.shelters || []).map(a => ({ x: a[0], y: a[1], lineage: a[2] || 0, str: a[3], r: 30 + a[3] * 3 }));
+  S.planets = (s.planets || []).map((a, i) => ({ x: a[0], y: a[1], w: a[2], h: a[3], hue: a[4], fert: a[5], i }));
   S.drought = 0; S.effects = []; S.nests = []; pherInit();
   S.tick = s.tick || 0; S.predations = s.predations || 0; S.maxGen = s.maxGen || 0; S.ID = s.ID || S.creatures.length + 1; S.seed = s.seed || 0;
   S.selected = null;

@@ -195,9 +195,19 @@ export function draw(){
   // visible bounds (for culling)
   const vx0 = S.cam.x - 30, vy0 = S.cam.y - 30, vx1 = S.cam.x + W / z + 30, vy1 = S.cam.y + H / z + 30;
   const vis = (x, y, m) => x + m > vx0 && x - m < vx1 && y + m > vy0 && y - m < vy1;
-  // world border
-  wctx.strokeStyle = 'rgba(120,150,110,.18)'; wctx.lineWidth = 2 / z;
-  wctx.strokeRect(0, 0, S.worldW, S.worldH);
+  // planets — each a tinted disc of land in the void of space
+  if(S.planets.length){
+    for(const p of S.planets){
+      if(!vis(p.x + p.w / 2, p.y + p.h / 2, Math.max(p.w, p.h) / 2 + 20)) continue;
+      wctx.fillStyle = `hsla(${p.hue} 40% 12% / 0.9)`;
+      wctx.fillRect(p.x, p.y, p.w, p.h);
+      wctx.strokeStyle = `hsla(${p.hue} 55% 55% / 0.5)`; wctx.lineWidth = 2.5 / z;
+      wctx.strokeRect(p.x, p.y, p.w, p.h);
+    }
+  } else {
+    wctx.strokeStyle = 'rgba(120,150,110,.18)'; wctx.lineWidth = 2 / z;
+    wctx.strokeRect(0, 0, S.worldW, S.worldH);
+  }
   // seasonal sunlit band — the productive latitude that drifts through the year
   if(P.migrateOn && P.seasonsOn && S.worldH){
     const yPeak = solarPeakY(S.tick), band = S.worldH * 0.26;
