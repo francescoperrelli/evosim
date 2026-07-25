@@ -303,6 +303,18 @@ export function draw(){
   // plants
   wctx.fillStyle = '#3a6b2e';
   for(const f of S.food){ if(!vis(f.x, f.y, 3)) continue; wctx.beginPath(); wctx.arc(f.x, f.y, 2.1, 0, TAU); wctx.fill(); }
+  // husbandry: faint tethers from livestock to their herder, plus a collar ring
+  if(P.husbandOn){
+    let herders = null;
+    for(const c of S.creatures){
+      if(!c.owner || !vis(c.x, c.y, 8)) continue;
+      if(!herders){ herders = new Map(); for(const h of S.creatures) if(h.herd) herders.set(h.id, h); }
+      const h = herders.get(c.owner);
+      if(h){ wctx.strokeStyle = 'rgba(232,200,120,0.16)'; wctx.lineWidth = 1 / z; wctx.beginPath(); wctx.moveTo(c.x, c.y); wctx.lineTo(h.x, h.y); wctx.stroke(); }
+      wctx.strokeStyle = 'rgba(232,200,120,0.5)'; wctx.lineWidth = 1.2 / z;
+      wctx.beginPath(); wctx.arc(c.x, c.y, (c.rad || c.g.size) + 2.6, 0, TAU); wctx.stroke();
+    }
+  }
   // creatures (evolved morphology, level-of-detail by apparent size)
   const bubbles = [];
   for(const c of S.creatures){
@@ -439,6 +451,7 @@ export function drawEvolution(){
     line(ctx, S.behHist, b => map(b.mig), '#e6c86a', d.w, d.h, pad);
     line(ctx, S.behHist, b => map(b.rec), '#74bccb', d.w, d.h, pad);
     line(ctx, S.behHist, b => map(b.disp), '#c98be0', d.w, d.h, pad);
+    line(ctx, S.behHist, b => map(b.husb), '#e08b8b', d.w, d.h, pad);
   }
   // emergent lexicon: a 4x3 heat grid of how each channel deviates in each context
   cv = el('evLex'); if(cv){

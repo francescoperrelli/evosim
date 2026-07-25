@@ -154,6 +154,27 @@ function confineBirth(ch, rx, ry){
   ch.x = clamp(ch.x, p.x + 6, p.x + p.w - 6); ch.y = clamp(ch.y, p.y + 6, p.y + p.h - 6);
 }
 
+// Animal husbandry: livestock stay "owned" only while their herder is alive and
+// nearby; strays go feral. Recomputes each herder's current herd size, used to
+// gate harvesting (never cull below a viable herd) and to render the herds.
+const HERD_R2 = 230 * 230;   // a stray beyond this from its keeper goes feral again
+const TAME_R2 = 80 * 80;     // a herder can claim unowned herbivores within this reach
+const HERD_CAP = 12;         // max head a keeper with full husbandry can manage (scaled by the gene)
+let _byId = null;
+function updateHerds(creatures){
+  if(!P.husbandOn){ if(_byId) _byId.clear(); return; }
+  if(!_byId) _byId = new Map(); else _byId.clear();
+  for(const c of creatures){ c.herd = 0; _byId.set(c.id, c); }
+  for(const c of creatures){
+    if(!c.owner) continue;
+    const h = _byId.get(c.owner);
+    if(!h || h.dead){ c.owner = 0; continue; }
+    const dx = c.x - h.x, dy = c.y - h.y;
+    if(dx * dx + dy * dy > HERD_R2){ c.owner = 0; continue; }   // wandered off → feral again
+    h.herd = (h.herd || 0) + 1;
+  }
+}
+
 // Dispersal: a creature whose lineage has evolved enough dispersal technology
 // (the `disperse` gene) and banked enough energy can cross the void to colonise
 // another planet. Targeting the least-crowded world means the tech pays off by
@@ -321,7 +342,7 @@ export function seed(seedVal){
   S.popHist.length = 0; S.traitHist.length = 0; S.evoHist.length = 0; S.ornHist.length = 0; S.behHist.length = 0; S.dataLog.length = 0; S.ID = 1; S.selected = null;
   S.records = { oldestAge: 0, maxKids: 0, maxGen: 0 };
   S.chronicle = []; S.chronPrev = null; S.lex = newLex(); S.dialect = {};
-  S.rocks = []; S.water = []; S.drought = 0; S.effects = []; S.challenge = null; S.shares = 0; S.packKills = 0; S.nests = []; S.caches = []; S.shelters = []; S.colonized = [];
+  S.rocks = []; S.water = []; S.drought = 0; S.effects = []; S.challenge = null; S.shares = 0; S.packKills = 0; S.nests = []; S.caches = []; S.shelters = []; S.colonized = []; S.tamedEver = false;
   buildPlanets(P.planetCount);
   generateBiomes();
   pherInit();
@@ -365,6 +386,7 @@ export function step(){
 
   const WW = S.worldW, HH = S.worldH, food = S.food;
   let creatures = S.creatures;
+  updateHerds(creatures);        // refresh livestock ownership + per-herder herd counts
   const newborns = [];
   const cols = Math.max(1, Math.ceil(WW / CELL)), rows = Math.max(1, Math.ceil(HH / CELL));
   const cgrid = buildGrid(creatures, cols, rows);
@@ -405,6 +427,12 @@ export function step(){
     let ornRival = 0, attrx = 0, attry = 0, attW = 0;   // contest (carn) & social-display (herb) selection
     let bfx = 0, bfy = 0, bfD = senseSq, bfRef = null;
     let mateRef = null, mateScore = Infinity, matex = 0, matey = 0;
+    // husbandry: can this creature claim livestock right now, and how many more can it hold?
+    // Herd capacity scales smoothly with the gene, so higher husbandry -> bigger herd ->
+    // more renewable yield: a continuous uphill gradient selection can climb (no plateau).
+    const canHerdNow = P.husbandOn && hunts.length && (g.husbandry || 0) >= P.husbandThresh && g.brain.nh >= P.herdBrain && c.energy >= P[cfg.reproE] * 0.22;
+    const herdCap = canHerdNow ? Math.max(1, Math.round((g.husbandry || 0) * HERD_CAP)) : 0;
+    let herdRoom = canHerdNow ? Math.max(0, herdCap - (c.herd || 0)) : 0;
     const mateReadyE = P[cfg.reproE] * 0.85;
     const fSense = (cfg.eatsPlants && P.mimicOn) ? senseSq * (1 - 0.3 * g.camo) * (1 - 0.3 * g.camo) : senseSq;
 
@@ -455,8 +483,14 @@ export function step(){
             if(o.alert > 0) er *= 0.55;                    // an alert (warned) prey is harder to spot
             if(o.g.ornament) er *= (1 + o.g.ornament * 0.5);   // a showy display is easier to spot (cost of the ornament)
             if(d < er && d < preyD){ preyD = d; preyRef = o; preyx = dx; preyy = dy; }
+            // animal husbandry: an intelligent, willing, well-enough-fed herder claims
+            // nearby unowned herbivores as livestock (building a flock, not just eating one)
+            if(canHerdNow && o.type === 'herb' && !o.owner && d < TAME_R2 && herdRoom > 0){
+              o.owner = c.id; o.tamedTick = S.tick; herdRoom--;
+              if(!S.tamedEver){ S.tamedEver = true; logEvent('husbandry', Math.round((g.husbandry || 0) * 100), { x: c.x, y: c.y, id: c.id }); }
+            }
           }
-          if(preds.length && preds.indexOf(o.type) >= 0){
+          if(preds.length && preds.indexOf(o.type) >= 0 && o.id !== c.owner){   // domesticated stock don't fear their own keeper
             if(d < thrD){ thrD = d; thrx = dx; thry = dy; thrHas = true; }
           }
         }
@@ -556,6 +590,14 @@ export function step(){
       if(bc){ const dd = Math.sqrt(bd) || 1; ix += (bc.x - c.x) / dd * 0.8; iy += (bc.y - c.y) / dd * 0.8; }
     }
 
+    // livestock are kept close to their herder (the herd coheres, and stays under
+    // the herder's protection) — the shepherded animals drift back if they stray
+    if(P.husbandOn && c.owner && _byId){
+      const h = _byId.get(c.owner);
+      if(h){ const hx = h.x - c.x, hy = h.y - c.y, hd = Math.hypot(hx, hy) || 1;
+        if(hd > 40){ const s = Math.min(1, hd / 160); ix += hx / hd * s * 1.1; iy += hy / hd * s * 1.1; } }
+    }
+
     // combine brain + instinct
     let dx = _out[0] * BRAIN_W + ix * INNATE_W, dy = _out[1] * BRAIN_W + iy * INNATE_W;
     if(dx * dx + dy * dy < 1e-4){ dx = rnd(-1, 1); dy = rnd(-1, 1); }
@@ -587,6 +629,12 @@ export function step(){
 
     const sigCost = (Math.abs(c.sig[0]) + Math.abs(c.sig[1]) + Math.abs(c.sig[2])) * 0.012;   // honest signalling costs
     c.energy -= metabolism(c) * (P.seasonsOn && si.idx === 3 ? 1.15 : 1) + sigCost;
+    // husbandry's renewable yield: a tended herd gives a steady trickle of sustenance
+    // (milk, eggs, wool) without killing — the sustainable payoff that makes farming
+    // beat boom-and-bust hunting, and lets the trait be selected upward
+    if(P.husbandOn && c.herd && (g.husbandry || 0) >= P.husbandThresh && g.brain.nh >= P.herdBrain){
+      c.energy += Math.min(c.herd, 6) * 0.06 * (0.6 + 0.4 * (g.husbandry || 0));
+    }
     // carnivore contest: yielding to a showier rival costs energy, so intimidation
     // displays escalate (armament selection), bounded by the ornament's metabolic cost
     if(cfg.terr && ornRival > (g.ornament || 0) + 0.08) c.energy -= 0.05;
@@ -634,18 +682,33 @@ export function step(){
     }
     if(preyRef && !preyRef.dead){
       const er = c.rad + (preyRef.rad || preyRef.g.size) + 2;
-      let killP = 1 / (1 + 0.12 * (preyRef.groupSize || 0));
-      // a juvenile sheltering at a nest of its kind is harder to pick off
-      const preyMat = P[TYPES[preyRef.type].maxAge] * 0.16;
-      if(P.nestsOn && preyRef.age < preyMat && nestShelter(preyRef)) killP *= 0.45;
-      if(P.buildOn && shelterProtect(preyRef)) killP *= 0.25;   // safe inside its family's built shelter
-      if((preyRef.x - c.x) ** 2 + (preyRef.y - c.y) ** 2 < er * er && rand() < killP){
-        preyRef.dead = true; S.predations++;
-        const packBonus = 1 + 0.25 * Math.min(cnt, 3);     // hunting near allies pays off
-        c.energy += P.preyEnergy * cfg.preyEff * packBonus;
-        if(P.learnOn && c.plast) learn(g.brain, c.plast, _out, 0.2);    // reinforce a successful hunt
-        if(cnt > 0) S.packKills++;
-        if(S.selected === preyRef) S.selected = null;
+      const inReach = (preyRef.x - c.x) ** 2 + (preyRef.y - c.y) ** 2 < er * er;
+      const hungry = c.energy < P[cfg.reproE] * 0.45;
+      const starving = c.energy < P[cfg.reproE] * 0.22;   // only a starving herder eats its stock outright
+      const ownStock = P.husbandOn && preyRef.owner === c.id;
+      // a qualified, non-starving herder shepherds herbivores rather than devouring them
+      // (claiming happens in the neighbour scan); it only culls its own herd when hungry
+      const tending = canHerdNow && !starving && preyRef.type === 'herb' && !(ownStock && hungry && (c.herd || 0) >= 4);
+      if(tending){
+        c.energy -= 0.02;    // the effort of shepherding
+      } else {
+        let killP = 1 / (1 + 0.12 * (preyRef.groupSize || 0));
+        // a juvenile sheltering at a nest of its kind is harder to pick off
+        const preyMat = P[TYPES[preyRef.type].maxAge] * 0.16;
+        if(P.nestsOn && preyRef.age < preyMat && nestShelter(preyRef)) killP *= 0.45;
+        if(P.buildOn && shelterProtect(preyRef)) killP *= 0.25;   // safe inside its family's built shelter
+        if(P.husbandOn && preyRef.owner && preyRef.owner !== c.id) killP *= 0.28;   // another herder guards its flock
+        const ownHarvest = ownStock;
+        // culls its OWN herd when starving, or when hungry and the herd can spare one
+        const mayTake = !ownHarvest || starving || (hungry && (c.herd || 0) >= 4);
+        if(inReach && mayTake && rand() < killP){
+          preyRef.dead = true; S.predations++;
+          const packBonus = 1 + 0.25 * Math.min(cnt, 3);     // hunting near allies pays off
+          c.energy += P.preyEnergy * cfg.preyEff * packBonus * (ownHarvest ? 1.15 : 1);   // culled livestock yields a little more
+          if(P.learnOn && c.plast) learn(g.brain, c.plast, _out, 0.2);    // reinforce a successful hunt
+          if(cnt > 0) S.packKills++;
+          if(S.selected === preyRef) S.selected = null;
+        }
       }
     }
     if(c.age > matAge && c.energy >= P[cfg.reproE] && creatures.length + newborns.length < P.maxPop * (S.planets.length || 1)){
@@ -709,19 +772,19 @@ export function step(){
 
   if(S.tick % 6 === 0){
     let hn = 0, cn = 0, on = 0, camo = 0, acu = 0, sx = 0, tot = 0, genSum = 0, brainSum = 0, ornSum = 0;
-    let hOrn = 0, oOrn = 0, cOrn = 0, hoardSum = 0, buildSum = 0, migSum = 0, recSum = 0, dispSum = 0;
+    let hOrn = 0, oOrn = 0, cOrn = 0, hoardSum = 0, buildSum = 0, migSum = 0, recSum = 0, dispSum = 0, husbSum = 0;
     const lin = new Set();
     for(const c of creatures){
       const orn = c.g.ornament || 0;
       tot++; if(c.g.sexual > 0.5){ sx++; ornSum += orn; } genSum += c.gen; lin.add(c.lineage); brainSum += c.g.brain.nh;
-      hoardSum += c.g.hoard || 0; buildSum += c.g.build || 0; migSum += c.g.migrate || 0; recSum += c.g.reciprocity || 0; dispSum += c.g.disperse || 0;
+      hoardSum += c.g.hoard || 0; buildSum += c.g.build || 0; migSum += c.g.migrate || 0; recSum += c.g.reciprocity || 0; dispSum += c.g.disperse || 0; husbSum += c.g.husbandry || 0;
       if(c.type === 'carn'){ cn++; acu += c.g.acuity; cOrn += orn; } else if(c.type === 'omni'){ on++; camo += c.g.camo; oOrn += orn; } else { hn++; camo += c.g.camo; hOrn += orn; }
       if(P.learnOn && c.plast){ const pl = c.plast; for(let i = 0; i < pl.length; i++) pl[i] *= 0.985; }   // slow forgetting
     }
     S.popHist.push({ h: hn, c: cn, o: on, f: food.length });
     S.traitHist.push({ camo: (hn + on) ? camo / (hn + on) : 0, acu: cn ? acu / cn : 0, sex: tot ? sx / tot : 0, orn: sx ? ornSum / sx : 0 });
     S.ornHist.push({ h: hn ? hOrn / hn : 0, o: on ? oOrn / on : 0, c: cn ? cOrn / cn : 0 });
-    S.behHist.push({ hoard: tot ? hoardSum / tot : 0, build: tot ? buildSum / tot : 0, mig: tot ? migSum / tot : 0, rec: tot ? recSum / tot : 0, disp: tot ? dispSum / tot : 0 });
+    S.behHist.push({ hoard: tot ? hoardSum / tot : 0, build: tot ? buildSum / tot : 0, mig: tot ? migSum / tot : 0, rec: tot ? recSum / tot : 0, disp: tot ? dispSum / tot : 0, husb: tot ? husbSum / tot : 0 });
     S.evoHist.push({ gen: tot ? genSum / tot : 0, sex: tot ? sx / tot : 0, lin: lin.size, nh: tot ? brainSum / tot : 0 });
     if(S.popHist.length > 240){ S.popHist.shift(); S.traitHist.shift(); }
     if(S.ornHist.length > 240){ S.ornHist.shift(); }
@@ -760,15 +823,15 @@ export function snapshot(){
     worldW: S.worldW, worldH: S.worldH,
     params: { foodRate: P.foodRate, mut: P.mut, predatorsOn: P.predatorsOn, omnivoresOn: P.omnivoresOn,
               flocksOn: P.flocksOn, terrOn: P.terrOn, mimicOn: P.mimicOn, seasonsOn: P.seasonsOn,
-              pherOn: P.pherOn, cultureOn: P.cultureOn, learnOn: P.learnOn, nestsOn: P.nestsOn, plaguesOn: P.plaguesOn, migrateOn: P.migrateOn, hoardOn: P.hoardOn, buildOn: P.buildOn, dispOn: P.dispOn },
+              pherOn: P.pherOn, cultureOn: P.cultureOn, learnOn: P.learnOn, nestsOn: P.nestsOn, plaguesOn: P.plaguesOn, migrateOn: P.migrateOn, hoardOn: P.hoardOn, buildOn: P.buildOn, dispOn: P.dispOn, husbandOn: P.husbandOn },
     creatures: S.creatures.map(c => ({
       x: +c.x.toFixed(1), y: +c.y.toFixed(1), t: c.type,
-      e: +c.energy.toFixed(1), a: c.age, gn: c.gen, id: c.id, hx: +c.homeX.toFixed(1), hy: +c.homeY.toFixed(1),
+      e: +c.energy.toFixed(1), a: c.age, gn: c.gen, id: c.id, hx: +c.homeX.toFixed(1), hy: +c.homeY.toFixed(1), ow: c.owner || 0,
       g: [+c.g.speed.toFixed(3), +c.g.sense.toFixed(1), +c.g.size.toFixed(2), +c.g.hue.toFixed(1),
           +c.g.sociality.toFixed(2), +c.g.camo.toFixed(2), +c.g.territoriality.toFixed(2),
           +c.g.territoryR.toFixed(1), +c.g.acuity.toFixed(2), +c.g.sexual.toFixed(2), +c.g.diet.toFixed(3),
           +c.g.shape.toFixed(2), +c.g.pattern.toFixed(2), +c.g.altruism.toFixed(2),
-          +(c.g.ornament || 0).toFixed(2), +(c.g.preference || 0).toFixed(2), +(c.g.resist || 0).toFixed(2), +(c.g.reciprocity || 0).toFixed(2), +(c.g.migrate || 0).toFixed(2), +(c.g.hoard || 0).toFixed(2), +(c.g.build || 0).toFixed(2), +(c.g.disperse || 0).toFixed(2)],
+          +(c.g.ornament || 0).toFixed(2), +(c.g.preference || 0).toFixed(2), +(c.g.resist || 0).toFixed(2), +(c.g.reciprocity || 0).toFixed(2), +(c.g.migrate || 0).toFixed(2), +(c.g.hoard || 0).toFixed(2), +(c.g.build || 0).toFixed(2), +(c.g.disperse || 0).toFixed(2), +(c.g.husbandry || 0).toFixed(2)],
       b: { nh: c.g.brain.nh, w: c.g.brain.w.map(x => +x.toFixed(3)) }
     })),
     food: S.food.map(f => [+f.x.toFixed(1), +f.y.toFixed(1)]),
@@ -788,7 +851,7 @@ export function restore(s){
   S.creatures = s.creatures.map(o => ({
     id: o.id, x: o.x, y: o.y, vx: 0, vy: 0, type: (o.t === 'carn' || o.t === 'omni' || o.t === 'herb') ? o.t : 'herb',
     energy: o.e, age: o.a, gen: o.gn, dead: false, homeX: (o.hx || o.x), homeY: (o.hy || o.y),
-    mem: [0, 0], matedTick: -1, lineage: o.id, kids: 0, act: null, sick: 0, pathogen: null, immune: 0, ledger: [], carry: 0, parent: 0, anc: [], sig: [0, 0, 0], rad: o.g[2], alert: 0, groupSize: 0,
+    mem: [0, 0], matedTick: -1, lineage: o.id, kids: 0, act: null, sick: 0, pathogen: null, immune: 0, ledger: [], carry: 0, parent: 0, anc: [], sig: [0, 0, 0], rad: o.g[2], alert: 0, groupSize: 0, owner: o.ow || 0, tamedTick: -1, herd: 0,
     g: { speed: o.g[0], sense: o.g[1], size: o.g[2], hue: o.g[3], sociality: o.g[4], camo: o.g[5],
          territoriality: o.g[6], territoryR: o.g[7], acuity: o.g[8],
          sexual: o.g[9] !== undefined ? o.g[9] : 0.5,
@@ -800,6 +863,7 @@ export function restore(s){
          migrate: o.g[18] !== undefined ? o.g[18] : 0.1, hoard: o.g[19] !== undefined ? o.g[19] : 0.1,
          build: o.g[20] !== undefined ? o.g[20] : 0.1,
          disperse: o.g[21] !== undefined ? o.g[21] : 0.05,
+         husbandry: o.g[22] !== undefined ? o.g[22] : 0.05,
          // migrate single-channel (v8) brains up to the three-channel layout
          brain: o.b.w.length === brainLenOld(o.b.nh) ? migrateBrain(o.b.nh, o.b.w) : { nh: o.b.nh, w: o.b.w.slice() } }
   }));

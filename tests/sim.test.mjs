@@ -95,7 +95,7 @@ const rt = await page.evaluate(async () => {
   return { v: snap.v, gLen: snap.creatures[0] ? snap.creatures[0].g.length : 0, ok, err, hasSeed: snap.seed !== undefined };
 });
 check('snapshot is versioned (v9)', rt.v === 9);
-check('genome serialises 22 fields', rt.gLen === 22, 'len=' + rt.gLen);
+check('genome serialises 23 fields', rt.gLen === 23, 'len=' + rt.gLen);
 check('snapshot records the seed', rt.hasSeed);
 check('restore + step runs without error', rt.ok && !rt.err, rt.err);
 
@@ -147,6 +147,30 @@ const dp = await page.evaluate(async () => {
   return { colonized: (st.S.colonized || []).length };
 });
 check('evolved dispersal can colonise other planets', dp.colonized >= 1, 'colonized=' + dp.colonized);
+
+// ---- husbandry: intelligent herders tame livestock, and only they can ----
+const hus = await page.evaluate(async () => {
+  const w = await import('./js/world.js'), st = await import('./js/state.js');
+  w.seed(88); for(let i = 0; i < 300; i++) w.step();
+  // willing herders, and drop the intelligence gate so the gene alone can express
+  st.P.herdBrain = 0;
+  let tamed = 0, dumbTamed = 0;
+  for(let i = 0; i < 600; i++){ w.step();
+    for(const c of st.S.creatures){ if(c.type !== 'herb') c.g.husbandry = 0.95; }
+  }
+  for(const c of st.S.creatures){ if(c.owner) tamed++; }
+  // now raise the intelligence gate above every brain — husbandry must NOT express
+  st.S.creatures.forEach(c => { c.owner = 0; });
+  st.P.herdBrain = 999;
+  for(let i = 0; i < 400; i++){ w.step();
+    for(const c of st.S.creatures){ if(c.type !== 'herb') c.g.husbandry = 0.95; }
+  }
+  for(const c of st.S.creatures){ if(c.owner) dumbTamed++; }
+  st.P.herdBrain = 10;
+  return { tamed, dumbTamed };
+});
+check('intelligent species tame livestock', hus.tamed >= 1, 'tamed=' + hus.tamed);
+check('husbandry needs intelligence (gated on brain)', hus.dumbTamed === 0, 'dumbTamed=' + hus.dumbTamed);
 
 await browser.close();
 server.close();

@@ -14,7 +14,7 @@ export function randomGenome(type){
     territoriality: rnd(0.2, 0.8), territoryR: rnd(55, 120),
     acuity: rnd(0.2, 0.5), diet: rnd(cfg.dietLo, cfg.dietHi),
     shape: rnd(0, 0.5), pattern: rnd(0, 1), altruism: rnd(0, 0.5),
-    ornament: rnd(0, 0.3), preference: rnd(0.1, 0.5), resist: rnd(0, 0.2), reciprocity: rnd(0, 0.4), migrate: rnd(0, 0.4), hoard: rnd(0, 0.3), build: rnd(0, 0.3), disperse: rnd(0, 0.12),
+    ornament: rnd(0, 0.3), preference: rnd(0.1, 0.5), resist: rnd(0, 0.2), reciprocity: rnd(0, 0.4), migrate: rnd(0, 0.4), hoard: rnd(0, 0.3), build: rnd(0, 0.3), disperse: rnd(0, 0.12), husbandry: rnd(0, 0.2),
     sexual: cfg.sexual ? 1 : 0, brain: randomBrain()
   };
 }
@@ -46,6 +46,7 @@ export function mutateGenome(g){
     hoard: clamp((g.hoard === undefined ? 0.1 : g.hoard) + gauss() * m * 1.3, 0, 1),
     build: clamp((g.build === undefined ? 0.1 : g.build) + gauss() * m * 1.3, 0, 1),
     disperse: clamp((g.disperse === undefined ? 0.05 : g.disperse) + gauss() * m * 1.3, 0, 1),
+    husbandry: clamp((g.husbandry === undefined ? 0.05 : g.husbandry) + gauss() * m * 1.3, 0, 1),
     sexual: cfg.sexual ? 1 : 0,
     brain: mutateBrain(g.brain)
   };
@@ -65,7 +66,7 @@ export function crossover(ga, gb){
     territoriality: pk(ga.territoriality, gb.territoriality), territoryR: pk(ga.territoryR, gb.territoryR),
     acuity: pk(ga.acuity, gb.acuity), diet: pk(ga.diet, gb.diet),
     shape: pk(ga.shape, gb.shape), pattern: pk(ga.pattern, gb.pattern), altruism: pk(ga.altruism, gb.altruism),
-    ornament: sp.ornament, preference: sp.preference, resist: pk(ga.resist, gb.resist), reciprocity: pk(ga.reciprocity, gb.reciprocity), migrate: pk(ga.migrate, gb.migrate), hoard: pk(ga.hoard, gb.hoard), build: pk(ga.build, gb.build), disperse: pk(ga.disperse, gb.disperse), brain: crossBrain(ga.brain, gb.brain)
+    ornament: sp.ornament, preference: sp.preference, resist: pk(ga.resist, gb.resist), reciprocity: pk(ga.reciprocity, gb.reciprocity), migrate: pk(ga.migrate, gb.migrate), hoard: pk(ga.hoard, gb.hoard), build: pk(ga.build, gb.build), disperse: pk(ga.disperse, gb.disperse), husbandry: pk(ga.husbandry, gb.husbandry), brain: crossBrain(ga.brain, gb.brain)
   };
   return mutateGenome(base);
 }
@@ -78,7 +79,8 @@ export function makeCreature(x, y, type, genome, gen){
     energy: startE, age: 0, gen: gen || 0, dead: false, homeX: x, homeY: y,
     mem: new Array(NMEM).fill(0), matedTick: -1,
     lineage: 0, kids: 0, act: null, sick: 0, pathogen: null, immune: 0, ledger: [], carry: 0, parent: 0, anc: [], sig: [0, 0, 0],
-    rad: genome.size * 0.45, alert: 0, groupSize: 0
+    rad: genome.size * 0.45, alert: 0, groupSize: 0,
+    owner: 0, tamedTick: -1, herd: 0   // owner: id of the herder tending this creature as livestock; herd: livestock a herder tends
   };
 }
 
@@ -90,5 +92,6 @@ export function metabolism(c){
   if(g.ornament) m += g.ornament * 0.014;   // a showy ornament is costly to carry, whatever it advertises
   if(g.resist) m += g.resist * 0.01;         // an immune system costs upkeep (so resistance only pays under disease)
   if(g.disperse) m += g.disperse * 0.012;    // dispersal tech (space-faring machinery) is costly to build and carry
+  if(g.husbandry && g.brain.nh >= P.herdBrain) m += g.husbandry * 0.012;   // husbandry only expresses (and costs) in brainy lineages
   return m;
 }
