@@ -144,6 +144,41 @@ function planetPoint(idx){
   const i = idx === undefined ? (rand() * P2.length | 0) : idx, p = P2[i];
   return { x: rnd(p.x + 8, p.x + p.w - 8), y: rnd(p.y + 8, p.y + p.h - 8), p: i };
 }
+// keep a point inside the planet that contains the reference (parent) point — a
+// newborn placed near an edge could otherwise land in the void and get stuck there
+function confineBirth(ch, rx, ry){
+  if(!S.planets.length || planetIndexAt(ch.x, ch.y) >= 0) return;
+  const pi = planetIndexAt(rx, ry);
+  if(pi < 0){ ch.x = rx; ch.y = ry; return; }
+  const p = S.planets[pi];
+  ch.x = clamp(ch.x, p.x + 6, p.x + p.w - 6); ch.y = clamp(ch.y, p.y + 6, p.y + p.h - 6);
+}
+
+// Dispersal: a creature whose lineage has evolved enough dispersal technology
+// (the `disperse` gene) and banked enough energy can cross the void to colonise
+// another planet. Targeting the least-crowded world means the tech pays off by
+// escaping competition, so — when planets are unequal — the gene can be selected
+// upward. Returns true if the creature launched.
+function tryDisperse(c){
+  const P2 = S.planets; if(P2.length < 2) return false;
+  const g = c.g; if((g.disperse || 0) < P.dispThresh) return false;
+  const cost = P[TYPES[c.type].reproE] * 0.6;
+  if(c.energy < cost + 14) return false;                       // must be well-fed to launch
+  // rare per-contact launch chance, higher the more tech beyond the threshold
+  if(rand() > 0.03 + (g.disperse - P.dispThresh) * 0.08) return false;
+  const home = planetIndexAt(c.homeX, c.homeY);
+  const cnt = new Array(P2.length).fill(0);
+  for(const o of S.creatures){ const pi = planetIndexAt(o.x, o.y); if(pi >= 0) cnt[pi]++; }
+  let best = -1, bestScore = Infinity;
+  for(let i = 0; i < P2.length; i++){ if(i === home) continue; const s = cnt[i] / (P2[i].fert || 1); if(s < bestScore){ bestScore = s; best = i; } }
+  if(best < 0) return false;
+  const pp = planetPoint(best);
+  c.x = pp.x; c.y = pp.y; c.homeX = pp.x; c.homeY = pp.y;
+  c.vx = rnd(-1, 1); c.vy = rnd(-1, 1); c.energy -= cost;
+  if(!S.colonized) S.colonized = [];
+  if(S.colonized.indexOf(best) < 0){ S.colonized.push(best); logEvent('colonize', best + 1, { x: c.x, y: c.y, id: c.id }); }
+  return true;
+}
 
 // terrain: biome fertility field and water slowdown (scaled by the planet's own fertility)
 export function fertilityAt(x, y){
@@ -286,7 +321,7 @@ export function seed(seedVal){
   S.popHist.length = 0; S.traitHist.length = 0; S.evoHist.length = 0; S.ornHist.length = 0; S.behHist.length = 0; S.dataLog.length = 0; S.ID = 1; S.selected = null;
   S.records = { oldestAge: 0, maxKids: 0, maxGen: 0 };
   S.chronicle = []; S.chronPrev = null; S.lex = newLex(); S.dialect = {};
-  S.rocks = []; S.water = []; S.drought = 0; S.effects = []; S.challenge = null; S.shares = 0; S.packKills = 0; S.nests = []; S.caches = []; S.shelters = [];
+  S.rocks = []; S.water = []; S.drought = 0; S.effects = []; S.challenge = null; S.shares = 0; S.packKills = 0; S.nests = []; S.caches = []; S.shelters = []; S.colonized = [];
   buildPlanets(P.planetCount);
   generateBiomes();
   pherInit();
@@ -541,8 +576,11 @@ export function step(){
       for(let si2 = 0; si2 < S.shelters.length; si2++){ const sh = S.shelters[si2];
         if((sh.x - c.x) ** 2 + (sh.y - c.y) ** 2 < sh.r * sh.r){ c.x -= c.vx * 0.5; c.y -= c.vy * 0.5; c.vx *= 0.45; c.vy *= 0.45; break; } }
     }
-    // the void between planets is impassable — a creature can't leave its world
-    if(S.planets.length && planetIndexAt(c.x, c.y) < 0){ c.x = ox; c.y = oy; c.vx *= -0.4; c.vy *= -0.4; }
+    // the void between planets is impassable — unless the lineage has evolved the
+    // dispersal technology to cross it and colonise another world
+    if(S.planets.length && planetIndexAt(c.x, c.y) < 0){
+      if(!(P.dispOn && tryDisperse(c))){ c.x = ox; c.y = oy; c.vx *= -0.4; c.vy *= -0.4; }
+    }
 
     // lay a scent mark; the better fed, the stronger the trail it leaves behind
     if(P.pherOn) pherDeposit(c, c.energy > P[cfg.reproE] * 0.5 ? 0.6 : 0.2);
@@ -620,6 +658,7 @@ export function step(){
             c.energy *= 0.6; mateRef.energy *= 0.6;
             c.matedTick = S.tick; mateRef.matedTick = S.tick;
             const ch = makeCreature((c.x + mateRef.x) / 2, (c.y + mateRef.y) / 2, c.type, crossover(g, mateRef.g), Math.max(c.gen, mateRef.gen) + 1);
+            confineBirth(ch, c.x, c.y);
             ch.energy = childE; ch.lineage = c.lineage; ch.parent = c.id; ch.anc = ancestryOf(c); if(cfg.terr){ ch.homeX = ch.x; ch.homeY = ch.y; }
             imitateNearby(ch, c, gcx, gcy);
             c.kids++; mateRef.kids++;
@@ -631,6 +670,7 @@ export function step(){
         // asexual: clone with mutation
         c.energy *= 0.5;
         const ch = makeCreature(c.x + rnd(-6, 6), c.y + rnd(-6, 6), c.type, mutateGenome(g), c.gen + 1);
+        confineBirth(ch, c.x, c.y);
         ch.energy = c.energy; ch.lineage = c.lineage; ch.parent = c.id; ch.anc = ancestryOf(c); if(cfg.terr){ ch.homeX = c.x; ch.homeY = c.y; }
         imitateNearby(ch, c, gcx, gcy);
         c.kids++; if(c.kids > S.records.maxKids) S.records.maxKids = c.kids;
@@ -669,19 +709,19 @@ export function step(){
 
   if(S.tick % 6 === 0){
     let hn = 0, cn = 0, on = 0, camo = 0, acu = 0, sx = 0, tot = 0, genSum = 0, brainSum = 0, ornSum = 0;
-    let hOrn = 0, oOrn = 0, cOrn = 0, hoardSum = 0, buildSum = 0, migSum = 0, recSum = 0;
+    let hOrn = 0, oOrn = 0, cOrn = 0, hoardSum = 0, buildSum = 0, migSum = 0, recSum = 0, dispSum = 0;
     const lin = new Set();
     for(const c of creatures){
       const orn = c.g.ornament || 0;
       tot++; if(c.g.sexual > 0.5){ sx++; ornSum += orn; } genSum += c.gen; lin.add(c.lineage); brainSum += c.g.brain.nh;
-      hoardSum += c.g.hoard || 0; buildSum += c.g.build || 0; migSum += c.g.migrate || 0; recSum += c.g.reciprocity || 0;
+      hoardSum += c.g.hoard || 0; buildSum += c.g.build || 0; migSum += c.g.migrate || 0; recSum += c.g.reciprocity || 0; dispSum += c.g.disperse || 0;
       if(c.type === 'carn'){ cn++; acu += c.g.acuity; cOrn += orn; } else if(c.type === 'omni'){ on++; camo += c.g.camo; oOrn += orn; } else { hn++; camo += c.g.camo; hOrn += orn; }
       if(P.learnOn && c.plast){ const pl = c.plast; for(let i = 0; i < pl.length; i++) pl[i] *= 0.985; }   // slow forgetting
     }
     S.popHist.push({ h: hn, c: cn, o: on, f: food.length });
     S.traitHist.push({ camo: (hn + on) ? camo / (hn + on) : 0, acu: cn ? acu / cn : 0, sex: tot ? sx / tot : 0, orn: sx ? ornSum / sx : 0 });
     S.ornHist.push({ h: hn ? hOrn / hn : 0, o: on ? oOrn / on : 0, c: cn ? cOrn / cn : 0 });
-    S.behHist.push({ hoard: tot ? hoardSum / tot : 0, build: tot ? buildSum / tot : 0, mig: tot ? migSum / tot : 0, rec: tot ? recSum / tot : 0 });
+    S.behHist.push({ hoard: tot ? hoardSum / tot : 0, build: tot ? buildSum / tot : 0, mig: tot ? migSum / tot : 0, rec: tot ? recSum / tot : 0, disp: tot ? dispSum / tot : 0 });
     S.evoHist.push({ gen: tot ? genSum / tot : 0, sex: tot ? sx / tot : 0, lin: lin.size, nh: tot ? brainSum / tot : 0 });
     if(S.popHist.length > 240){ S.popHist.shift(); S.traitHist.shift(); }
     if(S.ornHist.length > 240){ S.ornHist.shift(); }
@@ -720,7 +760,7 @@ export function snapshot(){
     worldW: S.worldW, worldH: S.worldH,
     params: { foodRate: P.foodRate, mut: P.mut, predatorsOn: P.predatorsOn, omnivoresOn: P.omnivoresOn,
               flocksOn: P.flocksOn, terrOn: P.terrOn, mimicOn: P.mimicOn, seasonsOn: P.seasonsOn,
-              pherOn: P.pherOn, cultureOn: P.cultureOn, learnOn: P.learnOn, nestsOn: P.nestsOn, plaguesOn: P.plaguesOn, migrateOn: P.migrateOn, hoardOn: P.hoardOn, buildOn: P.buildOn },
+              pherOn: P.pherOn, cultureOn: P.cultureOn, learnOn: P.learnOn, nestsOn: P.nestsOn, plaguesOn: P.plaguesOn, migrateOn: P.migrateOn, hoardOn: P.hoardOn, buildOn: P.buildOn, dispOn: P.dispOn },
     creatures: S.creatures.map(c => ({
       x: +c.x.toFixed(1), y: +c.y.toFixed(1), t: c.type,
       e: +c.energy.toFixed(1), a: c.age, gn: c.gen, id: c.id, hx: +c.homeX.toFixed(1), hy: +c.homeY.toFixed(1),
@@ -728,7 +768,7 @@ export function snapshot(){
           +c.g.sociality.toFixed(2), +c.g.camo.toFixed(2), +c.g.territoriality.toFixed(2),
           +c.g.territoryR.toFixed(1), +c.g.acuity.toFixed(2), +c.g.sexual.toFixed(2), +c.g.diet.toFixed(3),
           +c.g.shape.toFixed(2), +c.g.pattern.toFixed(2), +c.g.altruism.toFixed(2),
-          +(c.g.ornament || 0).toFixed(2), +(c.g.preference || 0).toFixed(2), +(c.g.resist || 0).toFixed(2), +(c.g.reciprocity || 0).toFixed(2), +(c.g.migrate || 0).toFixed(2), +(c.g.hoard || 0).toFixed(2), +(c.g.build || 0).toFixed(2)],
+          +(c.g.ornament || 0).toFixed(2), +(c.g.preference || 0).toFixed(2), +(c.g.resist || 0).toFixed(2), +(c.g.reciprocity || 0).toFixed(2), +(c.g.migrate || 0).toFixed(2), +(c.g.hoard || 0).toFixed(2), +(c.g.build || 0).toFixed(2), +(c.g.disperse || 0).toFixed(2)],
       b: { nh: c.g.brain.nh, w: c.g.brain.w.map(x => +x.toFixed(3)) }
     })),
     food: S.food.map(f => [+f.x.toFixed(1), +f.y.toFixed(1)]),
@@ -737,7 +777,8 @@ export function snapshot(){
     biomes: S.biomes.map(bm => [+bm.x.toFixed(0), +bm.y.toFixed(0), +bm.r.toFixed(0), +bm.fert.toFixed(2)]),
     caches: S.caches.map(ca => [+ca.x.toFixed(0), +ca.y.toFixed(0), ca.type, +ca.amount.toFixed(0), ca.lineage || 0]),
     shelters: S.shelters.map(sh => [+sh.x.toFixed(0), +sh.y.toFixed(0), sh.lineage || 0, +sh.str.toFixed(1)]),
-    planets: S.planets.map(p => [p.x, p.y, p.w, p.h, p.hue, +p.fert.toFixed(2)])
+    planets: S.planets.map(p => [p.x, p.y, p.w, p.h, p.hue, +p.fert.toFixed(2)]),
+    colonized: (S.colonized || []).slice()
   };
 }
 
@@ -758,6 +799,7 @@ export function restore(s){
          resist: o.g[16] !== undefined ? o.g[16] : 0.05, reciprocity: o.g[17] !== undefined ? o.g[17] : 0.1,
          migrate: o.g[18] !== undefined ? o.g[18] : 0.1, hoard: o.g[19] !== undefined ? o.g[19] : 0.1,
          build: o.g[20] !== undefined ? o.g[20] : 0.1,
+         disperse: o.g[21] !== undefined ? o.g[21] : 0.05,
          // migrate single-channel (v8) brains up to the three-channel layout
          brain: o.b.w.length === brainLenOld(o.b.nh) ? migrateBrain(o.b.nh, o.b.w) : { nh: o.b.nh, w: o.b.w.slice() } }
   }));
@@ -768,6 +810,7 @@ export function restore(s){
   S.caches = (s.caches || []).map(a => ({ x: a[0], y: a[1], type: a[2], amount: a[3], lineage: a[4] || 0 }));
   S.shelters = (s.shelters || []).map(a => ({ x: a[0], y: a[1], lineage: a[2] || 0, str: a[3], r: 30 + a[3] * 3 }));
   S.planets = (s.planets || []).map((a, i) => ({ x: a[0], y: a[1], w: a[2], h: a[3], hue: a[4], fert: a[5], i }));
+  S.colonized = (s.colonized || []).slice();
   S.drought = 0; S.effects = []; S.nests = []; pherInit();
   S.tick = s.tick || 0; S.predations = s.predations || 0; S.maxGen = s.maxGen || 0; S.ID = s.ID || S.creatures.length + 1; S.seed = s.seed || 0;
   S.selected = null;

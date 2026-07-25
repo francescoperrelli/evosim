@@ -14,7 +14,7 @@ export function randomGenome(type){
     territoriality: rnd(0.2, 0.8), territoryR: rnd(55, 120),
     acuity: rnd(0.2, 0.5), diet: rnd(cfg.dietLo, cfg.dietHi),
     shape: rnd(0, 0.5), pattern: rnd(0, 1), altruism: rnd(0, 0.5),
-    ornament: rnd(0, 0.3), preference: rnd(0.1, 0.5), resist: rnd(0, 0.2), reciprocity: rnd(0, 0.4), migrate: rnd(0, 0.4), hoard: rnd(0, 0.3), build: rnd(0, 0.3),
+    ornament: rnd(0, 0.3), preference: rnd(0.1, 0.5), resist: rnd(0, 0.2), reciprocity: rnd(0, 0.4), migrate: rnd(0, 0.4), hoard: rnd(0, 0.3), build: rnd(0, 0.3), disperse: rnd(0, 0.12),
     sexual: cfg.sexual ? 1 : 0, brain: randomBrain()
   };
 }
@@ -45,6 +45,7 @@ export function mutateGenome(g){
     migrate: clamp((g.migrate === undefined ? 0.1 : g.migrate) + gauss() * m * 1.3, 0, 1),
     hoard: clamp((g.hoard === undefined ? 0.1 : g.hoard) + gauss() * m * 1.3, 0, 1),
     build: clamp((g.build === undefined ? 0.1 : g.build) + gauss() * m * 1.3, 0, 1),
+    disperse: clamp((g.disperse === undefined ? 0.05 : g.disperse) + gauss() * m * 1.3, 0, 1),
     sexual: cfg.sexual ? 1 : 0,
     brain: mutateBrain(g.brain)
   };
@@ -64,7 +65,7 @@ export function crossover(ga, gb){
     territoriality: pk(ga.territoriality, gb.territoriality), territoryR: pk(ga.territoryR, gb.territoryR),
     acuity: pk(ga.acuity, gb.acuity), diet: pk(ga.diet, gb.diet),
     shape: pk(ga.shape, gb.shape), pattern: pk(ga.pattern, gb.pattern), altruism: pk(ga.altruism, gb.altruism),
-    ornament: sp.ornament, preference: sp.preference, resist: pk(ga.resist, gb.resist), reciprocity: pk(ga.reciprocity, gb.reciprocity), migrate: pk(ga.migrate, gb.migrate), hoard: pk(ga.hoard, gb.hoard), build: pk(ga.build, gb.build), brain: crossBrain(ga.brain, gb.brain)
+    ornament: sp.ornament, preference: sp.preference, resist: pk(ga.resist, gb.resist), reciprocity: pk(ga.reciprocity, gb.reciprocity), migrate: pk(ga.migrate, gb.migrate), hoard: pk(ga.hoard, gb.hoard), build: pk(ga.build, gb.build), disperse: pk(ga.disperse, gb.disperse), brain: crossBrain(ga.brain, gb.brain)
   };
   return mutateGenome(base);
 }
@@ -88,5 +89,6 @@ export function metabolism(c){
   m += g.brain.nh * 0.0016;                                  // a bigger brain costs energy (modest, so complexity can accrue)
   if(g.ornament) m += g.ornament * 0.014;   // a showy ornament is costly to carry, whatever it advertises
   if(g.resist) m += g.resist * 0.01;         // an immune system costs upkeep (so resistance only pays under disease)
+  if(g.disperse) m += g.disperse * 0.012;    // dispersal tech (space-faring machinery) is costly to build and carry
   return m;
 }

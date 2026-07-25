@@ -438,6 +438,7 @@ export function drawEvolution(){
     line(ctx, S.behHist, b => map(b.build), '#96b060', d.w, d.h, pad);
     line(ctx, S.behHist, b => map(b.mig), '#e6c86a', d.w, d.h, pad);
     line(ctx, S.behHist, b => map(b.rec), '#74bccb', d.w, d.h, pad);
+    line(ctx, S.behHist, b => map(b.disp), '#c98be0', d.w, d.h, pad);
   }
   // emergent lexicon: a 4x3 heat grid of how each channel deviates in each context
   cv = el('evLex'); if(cv){

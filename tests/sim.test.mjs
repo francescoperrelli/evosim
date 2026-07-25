@@ -95,7 +95,7 @@ const rt = await page.evaluate(async () => {
   return { v: snap.v, gLen: snap.creatures[0] ? snap.creatures[0].g.length : 0, ok, err, hasSeed: snap.seed !== undefined };
 });
 check('snapshot is versioned (v9)', rt.v === 9);
-check('genome serialises 21 fields', rt.gLen === 21, 'len=' + rt.gLen);
+check('genome serialises 22 fields', rt.gLen === 22, 'len=' + rt.gLen);
 check('snapshot records the seed', rt.hasSeed);
 check('restore + step runs without error', rt.ok && !rt.err, rt.err);
 
@@ -117,6 +117,36 @@ const mig = await page.evaluate(async () => {
 check('accepts and migrates a v8 save', mig.ok);
 check('migrated brain has the new layout', mig.brainLen === mig.expLen, mig.brainLen + ' vs ' + mig.expLen);
 check('runs after migration without error', !mig.err, mig.err);
+
+// ---- multi-planet world: planets build, creatures stay confined ----
+const pl = await page.evaluate(async () => {
+  const w = await import('./js/world.js'), st = await import('./js/state.js');
+  w.seed(321); let voidSamples = 0;
+  for(let i = 0; i < 1500; i++){ w.step();
+    if(i > 200){ for(const c of st.S.creatures){ if(w.planetIndexAt(c.x, c.y) < 0) voidSamples++; } }
+  }
+  const per = new Array(st.S.planets.length).fill(0);
+  for(const c of st.S.creatures){ const pi = w.planetIndexAt(c.x, c.y); if(pi >= 0) per[pi]++; }
+  const alive = per.filter(n => n > 0).length;
+  return { nPlanets: st.S.planets.length, alive, voidSamples };
+});
+check('world builds multiple planets', pl.nPlanets >= 2, 'n=' + pl.nPlanets);
+check('every planet sustains life', pl.alive === pl.nPlanets, pl.alive + '/' + pl.nPlanets);
+check('creatures stay confined to planets', pl.voidSamples < 40, 'void=' + pl.voidSamples);
+
+// ---- dispersal: a high-tech lineage can cross the void to colonise ----
+const dp = await page.evaluate(async () => {
+  const w = await import('./js/world.js'), st = await import('./js/state.js');
+  w.seed(55); for(let i = 0; i < 300; i++) w.step();
+  // force the whole population to be launch-ready dispersers
+  for(const c of st.S.creatures){ c.g.disperse = 0.95; c.energy = 400; }
+  st.S.colonized = [];
+  for(let i = 0; i < 2500; i++){ w.step();
+    for(const c of st.S.creatures){ if(c.g.disperse < 0.6) c.g.disperse = 0.9; if(c.energy > 260) c.energy = 260; }
+  }
+  return { colonized: (st.S.colonized || []).length };
+});
+check('evolved dispersal can colonise other planets', dp.colonized >= 1, 'colonized=' + dp.colonized);
 
 await browser.close();
 server.close();
