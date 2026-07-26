@@ -2,7 +2,9 @@
 // prey/threat channels, memory), brain + instinct steering, interactions, save/load.
 import { rnd, clamp, rand, gauss, setSeed } from './utils.js';
 import { P, S, TYPES, PREDATORS, BRAIN_W, INNATE_W, NEIGH_R2, SEP_R2, CELL, SAVE_KEY, seasonInfo, dayInfo, newLex } from './state.js';
-import { randomGenome, mutateGenome, crossover, makeCreature, metabolism } from './genome.js';
+import { randomGenome, mutateGenome, crossover, makeCreature, metabolism, lifeHistory } from './genome.js';
+import * as flora from './flora.js';
+import * as phylo from './phylo.js';
 import { brainForward, getHidden, learn, NIN, NOUT, NCHAN, IN_HEARD, OUT_SIG, migrateBrain, brainLenOld, blendToward } from './nn.js';
 import { evalChallenge } from './challenges.js';
 
@@ -225,7 +227,9 @@ function generateBiomes(){
 function mateCompatible(a, b){
   const gd = Math.abs((a.diet || 0) - (b.diet || 0)) * 1.5 + Math.abs(a.size - b.size) / 9 +
              Math.abs(a.speed - b.speed) / 3.4 + Math.abs(a.hue - b.hue) / 360;
-  return gd < 0.45;
+  if(gd >= 0.45) return false;
+  // speciation adds a second, evolving barrier on top of the fixed one
+  return P.speciesOn === false ? true : phylo.compatible(a, b);
 }
 // genome fingerprint for approximate species clustering
 function geneVec(c){ const g = c.g; return [g.speed / 3.4, g.sense / 165, g.size / 9, g.diet || 0, (g.hue || 0) / 360, g.shape || 0.3, g.pattern || 0.5]; }
@@ -322,7 +326,8 @@ function dropFood(pi, mig, yPeak, band2){
     let f = fertilityAt(x, y);
     if(mig){ const dy = y - yPeak; f *= 1 + 1.3 * Math.exp(-(dy * dy) / band2); }   // richer near the sunlit band (total food unchanged)
     if(f > bf){ bf = f; bx = x; by = y; } }
-  S.food.push({ x: bx, y: by });
+  // a new plant inherits from the nearest standing parent when flora genetics is on
+  S.food.push(Object.assign({ x: bx, y: by }, flora.plantGenome(null)));
 }
 export function spawnFood(n, bulk){
   const pf = S.planets.length || 1;                     // each planet gets its own food budget
@@ -362,6 +367,7 @@ export function seed(seedVal){
   S.records = { oldestAge: 0, maxKids: 0, maxGen: 0 };
   S.chronicle = []; S.chronPrev = null; S.lex = newLex(); S.dialect = {};
   S.rocks = []; S.water = []; S.drought = 0; S.effects = []; S.challenge = null; S.shares = 0; S.packKills = 0; S.nests = []; S.caches = []; S.shelters = []; S.colonized = []; S.tamedEver = false;
+  phylo.phyloReset(); flora.floraReset();
   buildPlanets(P.planetCount);
   generateBiomes();
   pherInit();
@@ -435,7 +441,10 @@ export function step(){
     c.age++;
     const g = c.g, cfg = TYPES[c.type], senseSq = g.sense * g.sense;
     const preds = PREDATORS[c.type], hunts = cfg.hunts;
-    const matAge = P[cfg.maxAge] * 0.16;                                  // grow to adult size over the first ~16% of life
+    // r/K life history: a fast lineage matures early, breeds cheaply and dies young;
+    // a slow one invests in a long-lived body and a few well-provisioned offspring
+    const lh = lifeHistory(g);
+    const matAge = P[cfg.maxAge] * 0.16 * lh.matMult;                     // grow to adult size over the first ~16% of life
     c.rad = g.size * clamp(0.45 + 0.55 * (c.age / matAge), 0.45, 1);
     if(c.alert > 0) c.alert--;
     if(c.fed > 0) c.fed--;                                                // still handling/digesting its last kill
@@ -682,7 +691,11 @@ export function step(){
     if(cfg.eatsPlants && bfRef){
       const er = c.rad + 4;
       if((bfRef.x - c.x) ** 2 + (bfRef.y - c.y) ** 2 < er * er){
-        const gain = P.foodEnergy * cfg.plantEff;
+        // the plant's own genome decides what this mouthful is worth, and what
+        // its chemistry costs the eater — the herbivore's `detox` gene is the reply
+        const b = flora.bite(c, bfRef);
+        const gain = b.gain;
+        if(b.harm) c.energy -= b.harm;
         // a well-fed hoarder pockets the surplus instead of eating it (to cache later)
         if(P.hoardOn && g.hoard > 0.1 && c.energy > P[cfg.reproE] * 0.55 && c.carry < g.hoard * 55) c.carry += gain;
         else c.energy += gain;
@@ -765,7 +778,11 @@ export function step(){
     // whereas the ground itself is finite and cannot be evaded.
     const cellB = cgrid[gcy * cols + gcx];
     const dd = stab ? clamp((cellB ? cellB.length : 1) / 4, 0, 2) : 0;
-    const reproE = P[cfg.reproE] * (1 + 1.8 * dd * dd);
+    const reproE = P[cfg.reproE] * (1 + 1.8 * dd * dd) * lh.reproMult;
+    // clutch size: the r end of the axis spends the same reproductive budget on
+    // several small young, the K end on one large one (stochastic rounding keeps
+    // fractional clutches meaningful without biasing the mean)
+    const clutch = Math.max(1, Math.floor(lh.clutch) + (rand() < (lh.clutch % 1) ? 1 : 0));
     if(c.age > matAge && c.energy >= reproE && creatures.length + newborns.length < P.maxPop * (S.planets.length || 1)){
       if(g.sexual > 0.5){
         // sexual: needs a ready mate in contact; offspring recombines both parents
@@ -775,27 +792,33 @@ export function step(){
             const childE = (c.energy + mateRef.energy) * 0.22 * 1.2;   // hybrid vigor
             c.energy *= 0.6; mateRef.energy *= 0.6;
             c.matedTick = S.tick; mateRef.matedTick = S.tick;
-            const ch = makeCreature((c.x + mateRef.x) / 2, (c.y + mateRef.y) / 2, c.type, crossover(g, mateRef.g), Math.max(c.gen, mateRef.gen) + 1);
-            confineBirth(ch, c.x, c.y);
-            ch.energy = childE; ch.lineage = c.lineage; ch.parent = c.id; ch.anc = ancestryOf(c); if(cfg.terr){ ch.homeX = ch.x; ch.homeY = ch.y; }
-            imitateNearby(ch, c, gcx, gcy);
-            c.kids++; mateRef.kids++;
+            for(let ki = 0; ki < clutch; ki++){
+              const ch = makeCreature((c.x + mateRef.x) / 2, (c.y + mateRef.y) / 2, c.type, crossover(g, mateRef.g), Math.max(c.gen, mateRef.gen) + 1);
+              confineBirth(ch, c.x, c.y);
+              ch.energy = childE / clutch; ch.lineage = c.lineage; ch.parent = c.id; ch.anc = ancestryOf(c); ch.sp = c.sp; if(cfg.terr){ ch.homeX = ch.x; ch.homeY = ch.y; }
+              imitateNearby(ch, c, gcx, gcy);
+              c.kids++; mateRef.kids++;
+              newborns.push(ch); if(ch.gen > S.maxGen) S.maxGen = ch.gen;
+            }
             if(c.kids > S.records.maxKids) S.records.maxKids = c.kids;
-            newborns.push(ch); if(ch.gen > S.maxGen) S.maxGen = ch.gen;
           }
         }
       } else {
         // asexual: clone with mutation
         c.energy *= 0.5;
-        const ch = makeCreature(c.x + rnd(-6, 6), c.y + rnd(-6, 6), c.type, mutateGenome(g), c.gen + 1);
-        confineBirth(ch, c.x, c.y);
-        ch.energy = c.energy; ch.lineage = c.lineage; ch.parent = c.id; ch.anc = ancestryOf(c); if(cfg.terr){ ch.homeX = c.x; ch.homeY = c.y; }
-        imitateNearby(ch, c, gcx, gcy);
-        c.kids++; if(c.kids > S.records.maxKids) S.records.maxKids = c.kids;
-        newborns.push(ch); if(ch.gen > S.maxGen) S.maxGen = ch.gen;
+        const share = c.energy / clutch;
+        for(let ki = 0; ki < clutch; ki++){
+          const ch = makeCreature(c.x + rnd(-6, 6), c.y + rnd(-6, 6), c.type, mutateGenome(g), c.gen + 1);
+          confineBirth(ch, c.x, c.y);
+          ch.energy = share; ch.lineage = c.lineage; ch.parent = c.id; ch.anc = ancestryOf(c); ch.sp = c.sp; if(cfg.terr){ ch.homeX = c.x; ch.homeY = c.y; }
+          imitateNearby(ch, c, gcx, gcy);
+          c.kids++;
+          newborns.push(ch); if(ch.gen > S.maxGen) S.maxGen = ch.gen;
+        }
+        if(c.kids > S.records.maxKids) S.records.maxKids = c.kids;
       }
     }
-    if(c.energy <= 0 || c.age > P[cfg.maxAge]){ c.dead = true; if(c.age > S.records.oldestAge) S.records.oldestAge = c.age; if(S.selected === c) S.selected = null; }
+    if(c.energy <= 0 || c.age > P[cfg.maxAge] * lh.ageMult){ c.dead = true; if(c.age > S.records.oldestAge) S.records.oldestAge = c.age; if(S.selected === c) S.selected = null; }
   }
 
   if(newborns.length) creatures = creatures.concat(newborns);
@@ -824,6 +847,9 @@ export function step(){
   }
 
   S.creatures = creatures;
+
+  if(P.floraOn !== false) flora.floraTick();
+  if(P.speciesOn !== false) phylo.phyloTick();
 
   if(S.tick % 6 === 0){
     let hn = 0, cn = 0, on = 0, camo = 0, acu = 0, sx = 0, tot = 0, genSum = 0, brainSum = 0, ornSum = 0;
@@ -874,22 +900,26 @@ export function step(){
 /* ---------- save / load ---------- */
 export function snapshot(){
   return {
-    v: 9, tick: S.tick, predations: S.predations, maxGen: S.maxGen, ID: S.ID, seed: S.seed,
+    v: 10, tick: S.tick, predations: S.predations, maxGen: S.maxGen, ID: S.ID, seed: S.seed,
     worldW: S.worldW, worldH: S.worldH,
     params: { foodRate: P.foodRate, mut: P.mut, predatorsOn: P.predatorsOn, omnivoresOn: P.omnivoresOn,
               flocksOn: P.flocksOn, terrOn: P.terrOn, mimicOn: P.mimicOn, seasonsOn: P.seasonsOn,
-              pherOn: P.pherOn, cultureOn: P.cultureOn, learnOn: P.learnOn, nestsOn: P.nestsOn, plaguesOn: P.plaguesOn, migrateOn: P.migrateOn, hoardOn: P.hoardOn, buildOn: P.buildOn, dispOn: P.dispOn, husbandOn: P.husbandOn },
+              pherOn: P.pherOn, cultureOn: P.cultureOn, learnOn: P.learnOn, nestsOn: P.nestsOn, plaguesOn: P.plaguesOn, migrateOn: P.migrateOn, hoardOn: P.hoardOn, buildOn: P.buildOn, dispOn: P.dispOn, husbandOn: P.husbandOn,
+              lifeHistOn: P.lifeHistOn, evolvOn: P.evolvOn, floraOn: P.floraOn, speciesOn: P.speciesOn },
     creatures: S.creatures.map(c => ({
       x: +c.x.toFixed(1), y: +c.y.toFixed(1), t: c.type,
-      e: +c.energy.toFixed(1), a: c.age, gn: c.gen, id: c.id, hx: +c.homeX.toFixed(1), hy: +c.homeY.toFixed(1), ow: c.owner || 0,
+      e: +c.energy.toFixed(1), a: c.age, gn: c.gen, id: c.id, hx: +c.homeX.toFixed(1), hy: +c.homeY.toFixed(1), ow: c.owner || 0, sp: c.sp || 0,
       g: [+c.g.speed.toFixed(3), +c.g.sense.toFixed(1), +c.g.size.toFixed(2), +c.g.hue.toFixed(1),
           +c.g.sociality.toFixed(2), +c.g.camo.toFixed(2), +c.g.territoriality.toFixed(2),
           +c.g.territoryR.toFixed(1), +c.g.acuity.toFixed(2), +c.g.sexual.toFixed(2), +c.g.diet.toFixed(3),
           +c.g.shape.toFixed(2), +c.g.pattern.toFixed(2), +c.g.altruism.toFixed(2),
-          +(c.g.ornament || 0).toFixed(2), +(c.g.preference || 0).toFixed(2), +(c.g.resist || 0).toFixed(2), +(c.g.reciprocity || 0).toFixed(2), +(c.g.migrate || 0).toFixed(2), +(c.g.hoard || 0).toFixed(2), +(c.g.build || 0).toFixed(2), +(c.g.disperse || 0).toFixed(2), +(c.g.husbandry || 0).toFixed(2)],
+          +(c.g.ornament || 0).toFixed(2), +(c.g.preference || 0).toFixed(2), +(c.g.resist || 0).toFixed(2), +(c.g.reciprocity || 0).toFixed(2), +(c.g.migrate || 0).toFixed(2), +(c.g.hoard || 0).toFixed(2), +(c.g.build || 0).toFixed(2), +(c.g.disperse || 0).toFixed(2), +(c.g.husbandry || 0).toFixed(2),
+          +(c.g.pace === undefined ? 0.5 : c.g.pace).toFixed(2), +(c.g.mutRate === undefined ? 0.5 : c.g.mutRate).toFixed(3), +(c.g.detox || 0).toFixed(2)],
       b: { nh: c.g.brain.nh, w: c.g.brain.w.map(x => +x.toFixed(3)) }
     })),
-    food: S.food.map(f => [+f.x.toFixed(1), +f.y.toFixed(1)]),
+    food: S.food.map(flora.packPlant),
+    phylo: (S.phylo || []).map(r => ({ id: r.id, parent: r.parent, born: r.born, died: r.died, n: r.n, peak: r.peak, type: r.type, hue: +(r.hue || 0).toFixed(1) })),
+    speciesN: S.speciesN || 0,
     rocks: S.rocks.map(r => [+r.x.toFixed(1), +r.y.toFixed(1), +r.r.toFixed(1)]),
     water: S.water.map(w => [+w.x.toFixed(1), +w.y.toFixed(1), +w.r.toFixed(1)]),
     biomes: S.biomes.map(bm => [+bm.x.toFixed(0), +bm.y.toFixed(0), +bm.r.toFixed(0), +bm.fert.toFixed(2)]),
@@ -901,12 +931,12 @@ export function snapshot(){
 }
 
 export function restore(s){
-  if(!s || (s.v !== 8 && s.v !== 9)) return false;
+  if(!s || (s.v !== 8 && s.v !== 9 && s.v !== 10)) return false;
   if(s.worldW){ S.worldW = s.worldW; S.worldH = s.worldH; }
   S.creatures = s.creatures.map(o => ({
     id: o.id, x: o.x, y: o.y, vx: 0, vy: 0, type: (o.t === 'carn' || o.t === 'omni' || o.t === 'herb') ? o.t : 'herb',
     energy: o.e, age: o.a, gen: o.gn, dead: false, homeX: (o.hx || o.x), homeY: (o.hy || o.y),
-    mem: [0, 0], matedTick: -1, lineage: o.id, kids: 0, act: null, sick: 0, pathogen: null, immune: 0, ledger: [], carry: 0, parent: 0, anc: [], sig: [0, 0, 0], rad: o.g[2], alert: 0, groupSize: 0, owner: o.ow || 0, tamedTick: -1, herd: 0,
+    mem: [0, 0], matedTick: -1, lineage: o.id, kids: 0, act: null, sick: 0, pathogen: null, immune: 0, ledger: [], carry: 0, parent: 0, anc: [], sig: [0, 0, 0], rad: o.g[2], alert: 0, groupSize: 0, owner: o.ow || 0, tamedTick: -1, herd: 0, sp: o.sp || 0,
     g: { speed: o.g[0], sense: o.g[1], size: o.g[2], hue: o.g[3], sociality: o.g[4], camo: o.g[5],
          territoriality: o.g[6], territoryR: o.g[7], acuity: o.g[8],
          sexual: o.g[9] !== undefined ? o.g[9] : 0.5,
@@ -919,10 +949,16 @@ export function restore(s){
          build: o.g[20] !== undefined ? o.g[20] : 0.1,
          disperse: o.g[21] !== undefined ? o.g[21] : 0.05,
          husbandry: o.g[22] !== undefined ? o.g[22] : 0.05,
+         pace: o.g[23] !== undefined ? o.g[23] : 0.5,
+         mutRate: o.g[24] !== undefined ? o.g[24] : 0.5,
+         detox: o.g[25] !== undefined ? o.g[25] : 0.05,
          // migrate single-channel (v8) brains up to the three-channel layout
          brain: o.b.w.length === brainLenOld(o.b.nh) ? migrateBrain(o.b.nh, o.b.w) : { nh: o.b.nh, w: o.b.w.slice() } }
   }));
-  S.food = s.food.map(a => ({ x: a[0], y: a[1] }));
+  S.food = s.food.map(flora.unpackPlant);
+  phylo.phyloReset(); flora.floraReset();
+  S.phylo = (s.phylo || []).map(r => ({ id: r.id, parent: r.parent || 0, born: r.born || 0, died: r.died || 0, n: r.n || 0, peak: r.peak || 0, type: r.type || 'herb', hue: r.hue || 0, cx: 0, cy: 0, g: null }));
+  S.speciesN = s.speciesN || S.phylo.length;
   S.rocks = (s.rocks || []).map(a => ({ x: a[0], y: a[1], r: a[2] }));
   S.water = (s.water || []).map(a => ({ x: a[0], y: a[1], r: a[2] }));
   S.biomes = (s.biomes || []).map(a => ({ x: a[0], y: a[1], r: a[2], fert: a[3] }));

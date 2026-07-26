@@ -13,7 +13,13 @@ export const P = {
   stableOn:true,      // density-dependent damping of the boom-bust cycle
   starsOn:true,       // starfield / nebula in the void
   lightsOn:true,      // real directional lighting instead of a flat night wash
-  fxOn:true           // particles, birth/death animations, motion trails
+  fxOn:true,          // particles, birth/death animations, motion trails
+  // level-1 evolution mechanics
+  lifeHistOn:true,    // r/K life-history strategies (the `pace` gene)
+  evolvOn:true,       // evolvable mutation rate + gene/neuron duplication
+  floraOn:true,       // plant genomes: chemical defence vs. herbivore detoxification
+  speciesOn:true,     // reproductive isolation -> speciation + phylogeny
+  specThresh:0.42     // genetic distance above which two lineages stop interbreeding
 };
 
 // Per-species configuration. `hunts` = types this species preys on.
@@ -74,6 +80,9 @@ export const S = {
   drought: 0, effects: [], parts: [], flights: [], rocks: [], water: [], biomes: [], nests: [], caches: [], shelters: [], planets: [], colonized: [],
   challenge: null, shares: 0, packKills: 0, tamedEver: false,
   chronicle: [], chronPrev: null,
+  // phylogeny: species records maintained by phylo.js, read by the tree view.
+  // Each record: { id, parent, born, died, n, peak, type, hue, cx, cy }
+  phylo: [], speciesN: 0,
   // emergent-lexicon meter: how each of the 3 signal channels correlates with
   // context (threat / prey / food / crowd), measured live from the population
   lex: null,
