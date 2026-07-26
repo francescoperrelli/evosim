@@ -154,6 +154,8 @@ input[type=range]{width:100%; accent-color:var(--moss); margin-top:5px}
 .ev-rec .v{font-size:18px; font-weight:700; margin-top:2px; font-variant-numeric:tabular-nums}
 #evGen,#evSex,#evLin,#evDiet{width:100%; display:block; background:#0c120c; border:1px solid var(--line); border-radius:9px; margin:6px 0 2px}
 #evGen,#evSex{height:74px} #evLin,#evDiet{height:90px}
+/* the tree of life sizes itself to the number of lineages, so height is set from render.js */
+#evPhylo{width:100%; display:block; background:#0c120c; border:1px solid var(--line); border-radius:9px; margin:6px 0 2px; height:196px}
 
 /* --- genealogy tree --- */
 #genTree{text-align:left; margin:6px 0 16px}

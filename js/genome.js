@@ -178,7 +178,13 @@ export function metabolism(c){
   if(g.resist) m += g.resist * 0.01;         // an immune system costs upkeep (so resistance only pays under disease)
   if(g.disperse) m += g.disperse * 0.012;    // dispersal tech (space-faring machinery) is costly to build and carry
   if(g.husbandry && g.brain.nh >= P.herdBrain) m += g.husbandry * 0.012;   // husbandry only expresses (and costs) in brainy lineages
-  if(g.detox && P.floraOn && cfg.eatsPlants) m += g.detox * 0.011;         // a detoxifying liver costs upkeep, so it only pays where plants fight back
+  // A detoxifying liver costs upkeep, so it only pays where plants fight back —
+  // with flora off the gene is free and simply drifts, which is the control this
+  // coefficient was tuned against. Measured over 4 seeds x 14k ticks, mean detox
+  // in defended vs undefended worlds: 0.428/0.296 at 0.011 (ranges overlap),
+  // 0.425/0.254 at 0.044 (no rank overlap), 0.369/0.327 at 0.09 (effect gone,
+  // the liver is priced out before the toxins can select for it). 0.044 it is.
+  if(g.detox && P.floraOn && cfg.eatsPlants) m += g.detox * 0.044;
   // Rate of living: a fast life history is a hot one. Growing up in half the time
   // and breeding on a shallow reserve is bought with a higher mass-specific
   // metabolic rate — and the same hot metabolism is why the fast body wears out
