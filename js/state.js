@@ -23,6 +23,11 @@ export const P = {
   // level-2 civilisation mechanics
   villageOn:true,     // co-located shelters coalesce into maintained settlements
   labourOn:true,      // polyethism: forager / guard / nurse roles inside a settlement
+  // How loudly the evolved brain speaks against the innate steering prior. These
+  // were fixed constants; they are knobs because the question "does anything a body
+  // learns in its life reach its legs?" cannot be asked without sweeping them, and
+  // until the brain-output frame was fixed the answer was structurally no.
+  brainW:0.7, innateW:1.25,
   propSteer:true,      // the non-kin cache pull is a steering force in world.js, not a private walk
   propertyOn:true,    // raiding a granary vs. respecting it, and punishing raiders
   propertyPunish:true,// the second-order half of it: whether respecters pay to punish raiders

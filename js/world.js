@@ -697,7 +697,8 @@ export function step(){
     // second for a long time, which is why lifetime learning had no measurable
     // effect: nothing a body learned could be expressed as movement.
     const bx = _out[0] * hx - _out[1] * hy, by = _out[0] * hy + _out[1] * hx;
-    let dx = bx * BRAIN_W + ix * INNATE_W, dy = by * BRAIN_W + iy * INNATE_W;
+    const bw = P.brainW === undefined ? BRAIN_W : P.brainW, iw = P.innateW === undefined ? INNATE_W : P.innateW;
+    let dx = bx * bw + ix * iw, dy = by * bw + iy * iw;
     if(dx * dx + dy * dy < 1e-4){ dx = rnd(-1, 1); dy = rnd(-1, 1); }
     const dl = Math.hypot(dx, dy) || 1;
     const spd = g.speed * re.speedMul;                       // a forager runs, a nurse does not
