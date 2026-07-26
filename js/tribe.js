@@ -51,7 +51,7 @@
 // Escalation is instead gated on h3(), a pure integer hash of the two ids and the
 // tick, which is stable across both calls and reproducible from the seed alone.
 
-import { S } from './state.js';
+import { P, S } from './state.js';
 import { clamp } from './utils.js';
 
 /* ---------------- reading a badge ---------------- */
@@ -125,6 +125,11 @@ const FORCE = 0.55;
 // 0.201+-0.038 without. A destructive-only version of this mechanic cannot select
 // for itself and should not be attempted again.
 const SPOIL = 0.9;
+
+// Radius over which spoils are divided among coalition-mates under P.assortOn.
+// One coalition cell (CELLT 320) is the natural scale: the bodies close enough to
+// have been part of the same show of force.
+const SHARE_R = 320;
 
 /* ---------------- coalition bookkeeping ---------------- */
 
@@ -202,9 +207,15 @@ export function aggression(a, b){
   const edge = A - B;
   if(edge <= 0) return 0;
   let ta = (t - TRIB_MIN) / TRIB_REF; if(ta > 1) ta = 1;
-  const w = ta * ((HOST_SIM - sim) / HOST_SIM) * (edge / (A + B + 4)) * (A / (A + NUM_K));
+  const nk = P.assortOn && P.assortK !== undefined ? P.assortK : NUM_K;
+  const w = ta * ((HOST_SIM - sim) / HOST_SIM) * (edge / (A + B + 4)) * (A / (A + nk));
   tribeStats.contacts++; tribeStats.wsum += w;
-  if(h3(a.id, b.id, S.tick) >= w * RATE) return 0;  // the die; w*RATE > 1 means certain
+  // P.tribeRate is this module's drift control, the one named in THE BALANCE
+  // LEDGER: at 0 the gene still mutates, still costs metabolism and still decides
+  // coalition strength, but nobody ever escalates, so the whole payoff channel is
+  // gone. Any gene movement that survives that arm is drift.
+  const rate = P.tribeRate === undefined ? RATE : P.tribeRate;
+  if(h3(a.id, b.id, S.tick) >= w * rate) return 0;  // the die; w*rate > 1 means certain
   const f = FORCE * (0.4 + 0.6 * w);
   // world.js calls this twice per contact (test, then value) — same arguments, same
   // tick, so a consecutive-duplicate check logs each raid exactly once.
@@ -219,6 +230,17 @@ export function aggression(a, b){
 /* ---------------- coalitions ---------------- */
 
 const _buckets = new Map();
+
+function tribalPow(mem){
+  let s = 0;
+  for(let i = 0; i < mem.length; i++){
+    const t = mem[i].g.tribal;
+    if(t === undefined || t < TRIB_MIN) continue;
+    let w = (t - TRIB_MIN) / TRIB_REF; if(w > 1) w = 1;
+    s += w;
+  }
+  return s;
+}
 
 function freeSlot(){
   if(_slots.length) return _slots.pop();
@@ -284,7 +306,30 @@ function rebuild(){
       r = { id, band: e.band, born: S.tick, raids: 0 };
     }
     r.n = e.n; r.x = e.x; r.y = e.y; r.m = e.m; r.band = e.band;
-    _pow[r.id] = e.n;
+    // ASSORTMENT, LEVER 1 (P.assortOn). Shipped behaviour makes a coalition's
+    // strength a raw headcount, so an indifferent body contributes exactly as much
+    // fighting power as a committed one — the numbers advantage that produces the
+    // spoils is a pure commons and `tribal` free-rides on it perfectly. Under
+    // assortment strength is the SUM OF WILLINGNESS instead: a body contributes
+    // min(tribal/TRIB_REF, 1), the same term aggression() already uses for its own
+    // willingness, so a coalition of carriers can out-muscle an equally numerous
+    // coalition of indifferents and take its energy. The public good is now
+    // produced by carriers and collected by carriers because a coalition is a
+    // spatial-plus-badge cluster and badges are inherited: co-carriers are what a
+    // coalition is made of. Nothing here reads a body's own gene to pay it — the
+    // payoff still arrives through the group, which is what keeps this kin/group
+    // selection rather than a private bonus wearing a public good's clothes.
+    //
+    // Sizing: mean tribal sits at 0.25, so mean willingness is 0.5 and A halves
+    // against the shipped arm. A/(A+NUM_K) and edge/(A+B+4) both assume headcounts,
+    // so P.assortK rescales NUM_K to hold the mechanic's operating point; the arms
+    // below are run with assortK 5 for exactly that reason and the ledger records
+    // what happens if it is left at 10.
+    _pow[r.id] = P.assortOn ? tribalPow(e.mem) : e.n;
+    // kept only for the spoils split (lever 2) and refreshed every REBUILD ticks;
+    // members that died in between are filtered at payout, and the list is dropped
+    // entirely when assortment is off so the shipped path allocates nothing new
+    r.mem = P.assortOn ? e.mem.slice() : null;
     for(let i = 0; i < e.mem.length; i++) e.mem[i].tribe = r.id;
     out.push(r);
   }
@@ -306,10 +351,46 @@ function settle(){
     if(!a || a.dead || !v) continue;
     const take = Math.min(4.5 * _lf[i] * SPOIL, Math.max(0, v.energy));
     if(take <= 0) continue;
-    a.energy += take;
-    tribeStats.spoils += take;
     const r = S.tribes;
-    for(let k = 0; k < r.length; k++) if(r[k].id === a.tribe){ r[k].raids++; break; }
+    let rec = null;
+    for(let k = 0; k < r.length; k++) if(r[k].id === a.tribe){ rec = r[k]; break; }
+    // ASSORTMENT, LEVER 2 (P.assortOn). Shipped behaviour hands the whole take to
+    // the aggressor, which is deliberate — the ledger records that a purely
+    // destructive version selected `tribal` DOWN, because the benefit (one fewer
+    // competitor) was a local public good. But a wholly private payoff is the other
+    // extreme, and it is also the one that cannot build a group: nothing an
+    // individual takes ever reaches the coalition-mates whose numbers made the raid
+    // possible in the first place, so the gene that produces the numbers advantage
+    // is never paid for producing it. Under assortment the take is divided among
+    // the raider and its coalition-mates within SHARE_R, in proportion to the same
+    // willingness term that produced the strength — the ones who paid the risk are
+    // the ones who eat. Because coalitions are badge-and-space clusters and badges
+    // are inherited, those shares land disproportionately on co-carriers, which is
+    // the whole mechanism. The aggressor is by construction a carrier and keeps the
+    // largest single share, so the private incentive the ledger showed to be
+    // necessary is reduced, not removed.
+    if(P.assortOn && rec && rec.mem){
+      const mem = rec.mem, R2 = SHARE_R * SHARE_R;
+      let tot = 0;
+      for(let k = 0; k < mem.length; k++){
+        const o = mem[k]; if(o.dead) continue;
+        const dx = o.x - a.x, dy = o.y - a.y; if(dx * dx + dy * dy > R2) continue;
+        const t = o.g.tribal; if(t === undefined || t < TRIB_MIN) continue;
+        let wgt = (t - TRIB_MIN) / TRIB_REF; if(wgt > 1) wgt = 1;
+        tot += wgt;
+      }
+      if(tot > 1e-9){
+        for(let k = 0; k < mem.length; k++){
+          const o = mem[k]; if(o.dead) continue;
+          const dx = o.x - a.x, dy = o.y - a.y; if(dx * dx + dy * dy > R2) continue;
+          const t = o.g.tribal; if(t === undefined || t < TRIB_MIN) continue;
+          let wgt = (t - TRIB_MIN) / TRIB_REF; if(wgt > 1) wgt = 1;
+          o.energy += take * wgt / tot;
+        }
+      } else a.energy += take;
+    } else a.energy += take;
+    tribeStats.spoils += take;
+    if(rec) rec.raids++;
   }
   _ln = 0;
 }

@@ -172,12 +172,21 @@ const SH_PER_E = 0.25;
 const GUARD_E = 0.12, GUARD_W = 0.55;
 const NURSE_E = 3.2, NURSE_EFF = 0.75;         // same 25% transfer loss world.js uses for kin food-sharing
 
+// Energy this module removes from the ecology, split by channel. `upkeep` and
+// `guard` are removed from bodies and turned into fortification stock and watch,
+// neither of which is energy and neither of which any body can ever eat again, so
+// both are pure destruction from the ecosystem's point of view. `nurseLoss` is the
+// 25% the transfer costs; the other 75% is a transfer and is not counted here.
+// Not read by the sim — this is the instrument the balance work was done with.
+export const villStats = { upkeep: 0, guard: 0, nurseLoss: 0 };
+
 let nextId = 1;
 let byId = new Map();
 
 /* ---------- lifecycle ---------- */
 
-export function villageReset(){ S.villages = []; nextId = 1; byId = new Map(); }
+export function villageReset(){ S.villages = []; nextId = 1; byId = new Map();
+  villStats.upkeep = villStats.guard = villStats.nurseLoss = 0; }
 
 // Grow / retire settlements from the standing shelters. An existing village keeps
 // its identity (and its stock, and its founding tick) as long as MIN_SH shelters
@@ -245,6 +254,56 @@ function defOf(v){
   return 1 - clamp(VILL.defStr * s + (P.labourOn ? VILL.defWatch * w : 0), 0, VILL.defCap);
 }
 
+/* ------------------------------------------------------------------ *
+ * ASSORTMENT (P.assortOn)
+ *
+ * The measurement block at the top of this file already states the reason
+ * civic cannot be selected here, and it is a theorem rather than a tuning
+ * problem: "Strengthening a public good raises the free-rider's payoff by
+ * precisely as much as the contributor's, so it selects for living in a
+ * village, never for paying for one." The only lever that changes that
+ * conclusion is ASSORTMENT — making the benefit land preferentially on
+ * bodies that carry the gene, so that b*r > c has something to work with.
+ *
+ * The population already supplies the correlation for free: `lineage` is
+ * the founder id of a clade, relatives build near relatives (the modal
+ * lineage is 0.74+-0.06 of a village's residents, measured), and gene
+ * values within a clade are correlated by descent. So bucketing the
+ * fortification stock BY LINEAGE turns the commons into a set of
+ * kin-limited goods without inventing a recognition mechanism, without a
+ * green-beard, and without anyone deciding who deserves what: a lineage is
+ * protected by exactly what its own members paid in.
+ *
+ * The normalisation matters and is not a fudge. A lineage that is `frac` of
+ * the village occupies `frac` of the ground, so its half-saturation point
+ * is STR_K*frac, not STR_K. A lineage that pays in proportion to its size
+ * therefore gets EXACTLY the defence the undivided commons gave it — the
+ * neutral point of the whole change is the shipped behaviour, so any
+ * difference the arms show is assortment and not a rescaled payoff. A
+ * lineage that pays nothing gets nothing; one that overpays for its size
+ * gets more. Free riding is now costly to the free rider's own relatives,
+ * which is the entire content of Hamilton's rule.
+ *
+ * HONESTY NOTE: `lineage` is a clade, not a family. Mean relatedness inside
+ * one is well below 0.5 and falls as the clade ages, so this is a WEAK
+ * assortment — the r in b*r > c is small. It is the strongest one available
+ * without adding a recognition machinery that would be the hand-scripted
+ * answer the mechanic is supposed to avoid. If the genes still do not move
+ * under it, that is the finding, and it is recorded as such.
+ * ------------------------------------------------------------------ */
+function lget(m, k){ const v = m.get(k); return v === undefined ? 0 : v; }
+// A lineage's share of the two defence channels, normalised by its share of
+// the village so that proportional contribution reproduces defOf() exactly.
+function defFor(v, lin){
+  if(!P.assortOn || !v.lpop) return v.def;
+  const n = v.pop || 1, ln = lget(v.lpop, lin);
+  if(!ln) return 1;                                   // not resident: no lineage stake here
+  const frac = ln / n;
+  const L = lget(v.lstr, lin), W = lget(v.lwat, lin);
+  const s = L / (L + STR_K * frac), w = W / (W + WATCH_K * frac);
+  return 1 - clamp(VILL.defStr * s + (P.labourOn ? VILL.defWatch * w : 0), 0, VILL.defCap);
+}
+
 // The census: who lives here, what the place needs, who does what about it, and
 // who pays. One pass over the population per RESCAN ticks.
 function census(){
@@ -254,6 +313,12 @@ function census(){
     v.str = Math.min(v.str * STR_DECAY, STR_CAP); v.watch = Math.min(v.watch * WATCH_DECAY, WATCH_CAP);
     v.pop = 0; v.kin = 0; v.juv = 0; v.pred = 0; v.up = 0; v.roles[0] = v.roles[1] = v.roles[2] = 0;
     v.res = [];
+    // per-lineage buckets decay on exactly the same clocks as the commons they
+    // partition, so switching P.assortOn changes WHO collects and nothing else
+    if(!v.lstr){ v.lstr = new Map(); v.lwat = new Map(); v.lpop = new Map(); }
+    for(const [k, s] of v.lstr){ const n = s * STR_DECAY; if(n < 0.01) v.lstr.delete(k); else v.lstr.set(k, n); }
+    for(const [k, s] of v.lwat){ const n = s * WATCH_DECAY; if(n < 0.01) v.lwat.delete(k); else v.lwat.set(k, n); }
+    v.lpop.clear();
   }
   const creatures = S.creatures;
   if(V.length) for(let ci = 0; ci < creatures.length; ci++){
@@ -273,6 +338,7 @@ function census(){
     }
     if(!best){ c.vill = 0; c.role = 0; continue; }
     c.vill = best.id; best.res.push(c); best.pop++;
+    best.lpop.set(c.lineage, lget(best.lpop, c.lineage) + 1);
     if(c.lineage === best.lin) best.kin++;
   }
   else for(let ci = 0; ci < creatures.length; ci++){ const c = creatures[ci]; if(c.vill){ c.vill = 0; c.role = 0; } }
@@ -359,14 +425,18 @@ function census(){
       const civ = g.civic || 0;
       if(civ > 0.02 && c.energy > P[cfg.reproE] * UP_MIN){
         const pay = civ * UP_E;
-        c.energy -= pay; v.up += pay;
+        c.energy -= pay; v.up += pay; villStats.upkeep += pay;
         let mine = null;
         for(let s = 0; s < huts.length; s++) if(huts[s].lineage === c.lineage){ mine = huts[s]; break; }
         if(mine && VILL.thatch > 0){
           v.str += pay * 0.5 * STR_PER_E;
+          if(P.assortOn) v.lstr.set(c.lineage, lget(v.lstr, c.lineage) + pay * 0.5 * STR_PER_E);
           mine.str = Math.min(mine.str + pay * 0.5 * SH_PER_E * VILL.thatch, 14);   // same ceiling world.js builds to
           mine.r = 30 + mine.str * 3;
-        } else v.str += pay * STR_PER_E;
+        } else {
+          v.str += pay * STR_PER_E;
+          if(P.assortOn) v.lstr.set(c.lineage, lget(v.lstr, c.lineage) + pay * STR_PER_E);
+        }
       }
       if(P.labourOn){
         const k = clamp(g.caste || 0, 0, 1);
@@ -374,7 +444,11 @@ function census(){
           if(c.role === 1 && c.energy > P[cfg.reproE] * 0.25){
             // a guard stands watch instead of feeding: it pays energy, and what it
             // buys is collected by everyone inside the fence, kin or not
-            c.energy -= GUARD_E * k; v.watch += GUARD_W * k;
+            // a guard's shift is the purest commons in the file, so it is also
+            // where assortment has the most to change: under P.assortOn the watch
+            // it stands protects its own lineage's quarter of the settlement
+            c.energy -= GUARD_E * k; v.watch += GUARD_W * k; villStats.guard += GUARD_E * k;
+            if(P.assortOn) v.lwat.set(c.lineage, lget(v.lwat, c.lineage) + GUARD_W * k);
           } else if(c.role === 2) nurses.push(c);
         }
       }
@@ -398,7 +472,7 @@ function census(){
         const ju = juv[found];
         juv.splice(found, 1);                     // one ration per juvenile per census
         cur = juv.length ? found % juv.length : 0;
-        nu.energy -= give; ju.energy += give * NURSE_EFF;
+        nu.energy -= give; ju.energy += give * NURSE_EFF; villStats.nurseLoss += give * (1 - NURSE_EFF);
       }
     }
     v.res = null;   // don't hold creature references between censuses
@@ -422,7 +496,8 @@ export function defence(c){
   // residency is only refreshed every RESCAN ticks, so confirm the body is really
   // still standing in the village before handing it the settlement's protection
   const dx = v.x - c.x, dy = v.y - c.y;
-  return (dx * dx + dy * dy < v.r * v.r) ? v.def : 1;
+  if(dx * dx + dy * dy >= v.r * v.r) return 1;
+  return P.assortOn ? defFor(v, c.lineage) : v.def;
 }
 
 // Polyethism as a body plan, not a job title: `caste` is how far the individual

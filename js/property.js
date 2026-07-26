@@ -70,7 +70,16 @@ const D = {
   seekK: 0.9,          // see the encounter note below — this block is the single most
   seekMin: 6,          // consequential tuning in the file
   seekThr: 0.5,
-  seekR: 2
+  seekR: 2,
+  rotK: 3.2e-6,        // self-limiting granary rot, per tick per unit stored. See the
+                       // granary-stock note in section 3 for the derivation.
+  // P.assortOn only: how hard a witness polices a granary of its own lineage
+  // against one belonging to a stranger. Chosen so that the OVERALL punishment
+  // rate is close to the shipped arm (roughly a third of witnesses share the
+  // cache's lineage in the observed world, so 0.35*1.8 + 0.65*0.35 ~= 0.86) —
+  // assortment must redirect the policing, not quietly turn its volume up, or
+  // the arms are not comparable.
+  punKin: 1.8, punOut: 0.35
 };
 const T = k => { const o = P._prop; return (o && o[k] !== undefined) ? o[k] : D[k]; };
 
@@ -78,6 +87,12 @@ const TAKE_R2 = 52 * 52;   // must match world.js's own reach test for a granary
 const PUN_CELL = 160;      // punishment-witness grid cell, >= the largest punR tried
 
 let events = [];           // thefts committed this step, resolved in propertyTick
+
+// Energy this module removes from the ecology, by channel. punCost is what the
+// punishers burn, punDam is what the thief loses (nobody collects it — punishment
+// is destruction, not transfer, which is what makes it costly to enforce), rot is
+// what spoils in the granaries. Instrument only; the sim never reads it.
+export const propStats = { punCost: 0, punDam: 0, rot: 0 };
 
 export function mayTake(c, cache){
   const g = c.g; if(!g) return false;
@@ -103,6 +118,56 @@ export function onTake(c, cache, amt){
   // Cap the event list: at pathological theft rates this was the only allocation
   // that grew without bound. 96 is far above the observed per-step maximum (~20).
   if(events.length < 96) events.push({ x: c.x, y: c.y, id: c.id, ca: cache });
+}
+
+// ---------------------------------------------------------------------------
+// CARRIED-OVER ITEM (a): the non-kin cache pull belongs in world.js's steering.
+//
+// propertyTick() currently moves the body itself (see section 1), which is a
+// teleport: it ignores the brain, the innate vector, water drag, rock collision
+// and the void barrier, all of which world.js applies to every other movement.
+// The correct home for it is the innate-steering block at world.js:667, next to
+// the own-lineage version that is already there.
+//
+// This is the whole interface world.js needs. It is exported now so the change is
+// a single block in world.js and nothing here has to move:
+//
+//   SEEK_W                       -- the innate weight to use (0.8 own-lineage today)
+//   seekHungry(c, reproE)        -- boolean: is this body hungry enough to look?
+//   seekTarget(c)                -- the nearest non-kin cache worth walking to on
+//                                   this body's own planet, or null. Genotype-BLIND
+//                                   on purpose (see the note in section 1).
+//
+// The world.js edit, immediately after the own-lineage `hungry hoarder` block:
+//
+//   if(P.propertyOn && P.hoardOn && !thrHas && S.caches.length &&
+//      property.seekHungry(c, P[cfg.reproE])){
+//     const t = property.seekTarget(c);
+//     if(t){ const dd = Math.hypot(t.x - c.x, t.y - c.y) || 1;
+//       ix += (t.x - c.x) / dd * property.SEEK_W; iy += (t.y - c.y) / dd * property.SEEK_W; }
+//   }
+//
+// and then `P.propSteer = true` in state.js, which is what makes section 1 below
+// stand down. Both halves are needed: with the flag off and no world.js block the
+// mechanic keeps working exactly as measured, and with both the pull becomes a
+// steering force like every other.
+// ---------------------------------------------------------------------------
+export const SEEK_W = 0.8;
+export function seekHungry(c, reproE){ return c.energy < reproE * T('seekThr'); }
+export function seekTarget(c){
+  const caches = S.caches; if(!caches.length) return null;
+  const g = c.g; if(!g) return null;
+  const lo = T('seekMin'), sr = (g.sense || 60) * T('seekR');
+  let best = null, bd = sr * sr, kin = false;
+  for(let j = 0; j < caches.length; j++){
+    const ca = caches[j]; if(ca.amount < lo) continue;
+    const dx = ca.x - c.x, dy = ca.y - c.y, dd = dx * dx + dy * dy;
+    if(dd < bd){ bd = dd; best = ca; kin = ca.lineage === c.lineage; }
+  }
+  if(!best || kin) return null;                 // world.js already walks them to the family granary
+  if(best.pi === undefined) best.pi = planetOf(best.x, best.y);
+  if(best.pi !== planetOf(c.x, c.y)) return null;   // never tow a body across the void
+  return best;
 }
 
 // Planet containment copied rather than imported: property.js is imported *by*
@@ -145,23 +210,17 @@ export function propertyTick(){
   //     "own-lineage" granary within 120px). Cache energy 28432 vs 12513 and
   //     population 221 vs 256: twice as much energy locked in stores that spoil.
   //     Removed.
-  if(P.hoardOn && caches.length){
-    const k = T('seekK'), lo = T('seekMin'), thr = T('seekThr'), rk = T('seekR');
+  // P.propSteer is set once world.js does the steering itself (see the interface
+  // above); until then this block is the mechanic.
+  if(P.hoardOn && caches.length && !P.propSteer){
+    const k = T('seekK');
     for(let i = 0; i < cs.length; i++){
       const c = cs[i], g = c.g, cfg = TYPES[c.type]; if(!cfg) continue;
-      if(c.energy >= P[cfg.reproE] * thr) continue;           // only the hungry look
-      const sr = (g.sense || 60) * rk, sr2 = sr * sr;
-      let best = null, bd = sr2, kin = false;
-      for(let j = 0; j < caches.length; j++){
-        const ca = caches[j]; if(ca.amount < lo) continue;
-        const dx = ca.x - c.x, dy = ca.y - c.y, dd = dx * dx + dy * dy;
-        if(dd < bd){ bd = dd; best = ca; kin = ca.lineage === c.lineage; }
-      }
-      if(!best || kin) continue;   // world.js already walks them to the family granary
-      if(best.pi === undefined) best.pi = planetOf(best.x, best.y);
-      if(best.pi !== planetOf(c.x, c.y)) continue;            // never tow a body across the void
-      const d = Math.sqrt(bd) || 1, s = Math.min((g.speed || 1) * k, d);
-      const nx = c.x + (best.x - c.x) / d * s, ny = c.y + (best.y - c.y) / d * s;
+      if(!seekHungry(c, P[cfg.reproE])) continue;             // only the hungry look
+      const best = seekTarget(c); if(!best) continue;
+      const dx = best.x - c.x, dy = best.y - c.y;
+      const d = Math.sqrt(dx * dx + dy * dy) || 1, s = Math.min((g.speed || 1) * k, d);
+      const nx = c.x + dx / d * s, ny = c.y + dy / d * s;
       if(onPlanet(nx, ny)){ c.x = nx; c.y = ny; }
     }
   }
@@ -194,15 +253,30 @@ export function propertyTick(){
             const o = b[i];
             if(o.id === ev.id){ thief = o; continue; }
             const dx = o.x - ev.x, dy = o.y - ev.y; if(dx * dx + dy * dy > R2) continue;
-            const r = o.g.respect || 0; if(r <= 0) continue;
+            let r = o.g.respect || 0; if(r <= 0) continue;
             if(o.energy <= cost * 3) continue;   // you cannot police on an empty stomach
+            // ASSORTMENT (P.assortOn). Punishment as shipped is the textbook
+            // second-order public good: the punisher pays privately and the whole
+            // neighbourhood collects the deterrence, whoever's granary it was. That
+            // is exactly why `respect` cannot be selected, and it is not a tuning
+            // problem — see the l2Cost sweep in genome.js, which shows that making
+            // the cost bigger only makes the gene drift downward faster.
+            // Under assortment a body still polices for anyone, but it polices for
+            // its OWN LINEAGE'S granaries much harder. The deterrence a punisher
+            // buys then lands mostly on stores its relatives eat from, and relatives
+            // carry `respect` at a correlated frequency, so b*r finally has an r in
+            // it. Kin recognition is not invented for this: it is the same
+            // `ca.lineage === c.lineage` test world.js already uses to decide who
+            // may withdraw from a cache without stealing.
+            if(P.assortOn && ev.ca) r *= (ev.ca.lineage === o.lineage) ? T('punKin') : T('punOut');
             if(rand() >= r * pp) continue;
-            o.energy -= cost; n++;
+            o.energy -= cost; n++; propStats.punCost += cost;
           }
         }
         if(n){
           if(!thief) for(let i = 0; i < cs.length; i++) if(cs[i].id === ev.id){ thief = cs[i]; break; }
-          if(thief){ thief.energy -= T('punDam') * n; thief.grudge = (thief.grudge || 0) + T('punGrudge') * n; }
+          if(thief){ thief.energy -= T('punDam') * n; propStats.punDam += T('punDam') * n;
+                     thief.grudge = (thief.grudge || 0) + T('punGrudge') * n; }
           S.punishments = (S.punishments || 0) + n;
           if(ev.ca) ev.ca.guard = Math.min(1, (ev.ca.guard || 0) + T('guardGain') * n);
         }
@@ -221,10 +295,85 @@ export function propertyTick(){
     for(let i = 0; i < cs.length; i++){ const g = cs[i].grudge; if(g) cs[i].grudge = g > 0.02 ? g * gd : 0; }
     const cd = Math.pow(T('guardDecay'), 8);
     for(let i = 0; i < caches.length; i++){ const ca = caches[i]; if(ca.guard) ca.guard = ca.guard > 0.01 ? ca.guard * cd : 0; }
+
+    // ---- granary rot ----
+    //
+    // READ THE REFUTATION FIRST. This block was written to fix the level-2
+    // population regression. It does not fix it. It is kept because the stock it
+    // holds down was genuinely unbounded and because the accounting it produced is
+    // what found the real cause (the ore breeding gate; see canBreed() in trade.js).
+    //
+    // THE HYPOTHESIS, AND ITS NUMBERS (3 seeds x 6000 ticks, sampled every 200
+    // after t=2400; mean+-sd between seeds), all six level-2 flags off vs all on:
+    //
+    //             pop      per-body E   bodies hold   caches hold   total
+    //   off     289+-55       101          29189       6308+-3092   35497
+    //   on      192+-6         97          18624      17370+-5516   35994
+    //
+    // Mobile energy looked CONSERVED across the two arms to within 1.4%, and the
+    // level-2 layer did not appear to starve anyone: standing food is HIGHER with it
+    // on (3308 vs 3081), bodies below the hunger line are FEWER (32 vs 41), mean
+    // per-body energy is unchanged, and local density is LOWER (4.34 vs 5.52) so the
+    // (1+1.8dd^2) reproduction brake is *less* binding. The reading was that ~11000
+    // units — 31% of the world's energy — were immobilised in granaries, and that
+    // since per-body energy is pinned near the reproduction threshold, population is
+    // near-linear in body energy (0.638 energy ratio vs 0.664 population ratio).
+    // Single-removal arms agreed: only noProp brought the stock back to baseline
+    // (5296+-1626); noTrade 18614, noLabour 18425, noTribe 13190, noCult 13125.
+    //
+    // REFUTED BY ITS OWN FIX. The rot below does exactly what it was designed to do
+    // to the stock — cacheE 17370+-5516 -> 5752+-1167, i.e. back at the 6308+-3092
+    // baseline — and the population did not move: 192+-6 -> 201+-62 against a
+    // baseline of 289+-55. Worse, post-fix world energy is 25048 against 35994, so
+    // the energy was destroyed, not released to bodies. The conservation above was
+    // an accounting coincidence: an equilibrium stock and an equilibrium population
+    // are both consequences of the same throughput, and neither causes the other.
+    // The lesson, recorded because it cost a day: a stock-vs-stock identity is not a
+    // mechanism. Only per-channel FLOW instrumentation (propStats/villStats/
+    // tradeStats/tribeStats, all added for this) settled it, and what it showed is
+    // that the whole level-2 layer destroys ~7.4 energy/tick — of which this rot is
+    // 5.85, by far the largest single channel — while the population is limited by
+    // something that costs no energy at all.
+    //
+    // REJECTED — raising the upkeep coefficients, or lowering them. l2Cost=0 gives
+    // pop 185+-11, *worse* than l2Cost=1 at 192+-6, confirming the sweep recorded
+    // above metabolism() in genome.js. The metabolism lines are not the problem.
+    // REJECTED — a hard cap on ca.amount: it makes the granary a step function, so
+    // hoarding stops paying abruptly at a number nothing in the genome can see.
+    // REJECTED — returning rot to the ground as food. spawnFood()'s logistic term
+    // is capped at P.maxFood (900/planet, 3600 total) and standing crop is already
+    // 3081-3334, so returned energy would displace new growth instead of adding to
+    // it — a null change dressed up as recycling.
+    //
+    // WHAT THIS IS, AND WHY IT STAYS. world.js already spoils every cache by 0.985 per 120 ticks, a
+    // LINEAR loss: at equilibrium the stock self-adjusts until spoilage equals the
+    // deposit rate, so the coefficient sets how fast the stock relaxes but not
+    // where it settles — which is why raising it does not hold the heap down.
+    // Damp, vermin and heat do not scale with the heap, they scale with the heap
+    // SQUARED (surface contact times contents), so the honest form is
+    //   d(amount)/dt = -k * amount^2
+    // whose equilibrium per cache is sqrt(deposit/k) — a soft ceiling with no cliff
+    // and no magic number in the genome's way. At steady state this destroys
+    // exactly the same energy per tick as the linear form (inflow == outflow either
+    // way); all it changes is the SIZE OF THE STANDING STOCK, which is the thing
+    // holding the population down. Sizing: mean cache 434 units under the linear
+    // rot implies a net inflow near 0.054/tick/cache; k = 3.2e-6 puts equilibrium
+    // at sqrt(0.054/3.2e-6) ~= 130 units, ~5200 across the 40-cache cap, i.e. back
+    // at the mechanic-off baseline.
+    //
+    // Written in the implicit form a/(1+k8*a) rather than a - k8*a^2: identical to
+    // second order, cannot go negative, and stays stable if a cache is ever much
+    // larger than the equilibrium (a raid-fed spike of 5000+ was observed).
+    const k8 = T('rotK') * 8;
+    if(k8 > 0) for(let i = 0; i < caches.length; i++){
+      const ca = caches[i], a = ca.amount;
+      if(a > 0){ ca.amount = a / (1 + k8 * a); propStats.rot += a - ca.amount; }
+    }
   }
 }
 
-export function propertyReset(){ S.thefts = 0; S.punishments = 0; events = []; }
+export function propertyReset(){ S.thefts = 0; S.punishments = 0; events = [];
+  propStats.punCost = propStats.punDam = propStats.rot = 0; }
 
 export function drawWorld(ctx, view){
   // A defended granary wears a ring that widens and brightens with `guard`, so a

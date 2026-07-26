@@ -134,7 +134,7 @@ const K = {
   rate: 0.15,         // rations/step picked up while standing on a seam
   bg: 0.006,          // rations/step from diffuse ore in the soil, times local ore richness
   holdN: 3,           // most a body will carry, in births' worth (see note at gather())
-  need: 1.0,          // rations one birth costs
+  need: 0.5,          // rations one birth costs (was 1.0; see the requirement note below)
   tradeR: 90,         // how far a deal reaches
   priceF: 0.09,       // price of one ration, as a fraction of the buyer's reproE
   keep: 0.9,          // fraction of the price that reaches the seller (the rest is the cost of dealing)
@@ -291,6 +291,35 @@ export function gather(c){
 // breeding. It is a *delay*, not a veto — a body with energy but no ore keeps
 // living, keeps banking, and breeds as soon as it crosses a seam or buys one —
 // which is why a mineral-poor patch is a fitness cost rather than a cull.
+//
+// AND IT WAS THE LEVEL-2 POPULATION SINK. Note 4 above measured this requirement
+// against a tradeless world and called it an 8% cost. That measurement was taken
+// with only `tradeOn` live. With all six level-2 flags live it is not 8%, it is
+// most of the regression: the other mechanics each pull bodies below the energy
+// line for a while, and every body that spends longer under the line spends
+// longer accumulating ore it cannot use, while a body that is finally energy-ready
+// now finds a *second* gate in front of it. The two costs multiply. Measured,
+// 3 seeds (11/23/37) x 6000 ticks, sampled every 200 ticks after tick 2400,
+// mean +- sd ACROSS SEEDS (`blocked` = mature, energy-ready bodies held back by
+// this gate; `ready` = mature and energy-ready):
+//
+//   arm                pop      ready  blocked  births/1k  trades   fights  villages
+//   all level-2 off  289+-55   88+-12    0.00     250+-81       0        0      0.00
+//   need = 1.0       197+-62   57+-20    7.82     154+-53  201+-69     6013      7.28
+//   need = 0.5       277+-40   76+-19    4.16     244+-12  199+-27     9183      6.10
+//   need = 0         236+-62   62+-20    0.00     216+-75        0     8898      6.04
+//
+// At need 1.0 one energy-ready body in seven is standing still waiting for ore at
+// any instant, and the birth rate falls by 38% against the level-2-off world.
+// Halving the requirement restores the population to within 4% of that baseline
+// while the exchange itself is untouched (199+-27 deals against 201+-69) and every
+// other level-2 mechanic runs harder, not weaker.
+//
+// REJECTED: need = 0. It is worse than need = 0.5 on population (236+-62) *and*
+// it clears exactly zero deals, because nothing is scarce enough to be worth
+// buying. The requirement is not the problem; its size was. Do not "fix" this by
+// deleting it. (Note 1's permutation test was NOT re-run at 0.5; what is known is
+// that the deal count is unchanged, so the pool of pairs it tested still exists.)
 // ---------------------------------------------------------------------------
 export function canBreed(c){ return (c.min || 0) >= K.need; }
 
@@ -300,7 +329,11 @@ export function canBreed(c){ return (c.min || 0) >= K.need; }
 // pays for a sexual birth — world.js has no hook for the partner.
 export function payBreed(c){ const m = (c.min || 0) - K.need; c.min = m > 0 ? m : 0; }
 
-export function tradeReset(){ S.minerals = []; S.trades = 0; _gGain = null; _gDep = null; _flash = []; _tint = null; applyTune(); }
+// Energy this module removes from the ecology. Only one channel: K.keep < 1, so a
+// tenth of every price paid vanishes in the exchange. Instrument only.
+export const tradeStats = { loss: 0 };
+
+export function tradeReset(){ S.minerals = []; S.trades = 0; _gGain = null; _gDep = null; _flash = []; _tint = null; tradeStats.loss = 0; applyTune(); }
 
 // ---------------------------------------------------------------------------
 // Exchange.
@@ -334,6 +367,36 @@ export function tradeReset(){ S.minerals = []; S.trades = 0; _gGain = null; _gDe
 const CELL = 64;
 let _cells = null, _cols = 0, _rows = 0;
 const _sellers = [];
+
+// ---------------------------------------------------------------------------
+// CARRIED-OVER ITEM (b): a deal is a reciprocity event and should be in the ledger.
+//
+// world.js already keeps a per-body ledger of recent non-kin partners
+// (world.js:115-125) and the reciprocal-altruism block reads it: a negative score
+// means "I gave to them and they owe me", a positive one means "they helped me".
+// A trade is exactly that kind of event and today it is invisible to it, so a
+// body that has just bought its way out of a mineral shortage does not remember
+// who sold to it, and a seller has no history to consult before dealing again.
+//
+// The two functions are declared in world.js but not exported. The signatures
+// this module needs are the ones already in use there, unchanged:
+//
+//   export function ledgerScore(c, id)      // -> number, 0 if `id` is not on c's ledger
+//   export function ledgerBump(c, id, d)    // d is +1 or -1
+//
+// THE ONE-LINE CHANGE, once world.js exports them: delete the `let` line below and
+// uncomment the import. Nothing else in this file moves — the call sites are live
+// and simply do nothing while the hooks are null. Note that world.js imports this
+// module, so the import is a cycle; it is safe because both are hoisted function
+// declarations and neither is called at module-evaluation time.
+//
+// import { ledgerScore as _ledgerScore, ledgerBump as _ledgerBump } from './world.js';
+let _ledgerScore = null, _ledgerBump = null;
+// Threshold for refusing to deal. A body only reaches -3 by having been given to
+// repeatedly without reciprocating, so this is "you have taken from me three times
+// and never paid it back", not a general suspicion of strangers.
+const LEDGER_CUT = -3;
+// ---------------------------------------------------------------------------
 
 export function tradeTick(){
   const C = S.creatures, n = C.length;
@@ -378,12 +441,19 @@ export function tradeTick(){
           const dx = o.x - s.x, dy = o.y - s.y;
           if(dx * dx + dy * dy > R2) continue;
           const ts = s.g.trade, to = o.g.trade;
+          // a seller who has been repeatedly taken from by this buyer without
+          // return will not deal with it again (inert until world.js exports the ledger)
+          if(_ledgerScore && _ledgerScore(s, o.id) <= LEDGER_CUT) continue;
           if(rand() >= (ts < to ? ts : to) * K.meet) continue;
           const price = P[TYPES[o.type].reproE] * K.priceF;
           if(o.energy - price < P[TYPES[o.type].reproE]) continue;   // never sell yourself out of your own birth
           o.energy -= price; s.energy += price * K.keep;
+          tradeStats.loss += price * (1 - K.keep);   // the broker's cut: destroyed, not moved
           o.min = (o.min || 0) + K.need; s.min -= K.need;
           S.trades++;
+          // the deal is a reciprocity event on both ledgers: the seller has given
+          // ore and is owed, the buyer has been helped and remembers it
+          if(_ledgerBump){ _ledgerBump(s, o.id, -1); _ledgerBump(o, s.id, +1); }
           if(_flash.length < 120) _flash.push({ x: (s.x + o.x) * 0.5, y: (s.y + o.y) * 0.5, t: S.tick });
           // research hook: both endpoints, not just the midpoint, because the question
           // "does exchange pair ore country with food country?" is about the *pair*.
