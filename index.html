@@ -12,6 +12,58 @@
 <meta name="apple-mobile-web-app-title" content="EvoSim">
 <link rel="apple-touch-icon" href="assets/icon-192.png">
 <link rel="stylesheet" href="css/style.css">
+<style>
+/* Surfaces for the level-3 mechanics (tools, fire, marks, tech, terra).
+   Kept here rather than in css/style.css so the swatch colours sit next to the
+   markup that uses them; every colour is copied from the module that draws it. */
+
+/* --- evolution HUD: a one-line gloss under the counters that need one --- */
+.ev-rec .h{font-size:9.5px; line-height:1.35; color:var(--muted); opacity:.72; margin-top:3px}
+.ev-rec.span2{grid-column:1 / -1}
+
+/* --- inspector: gene on the left, what the body actually holds on the right --- */
+.l3-hint{font-size:11px; line-height:1.45; color:var(--muted); text-align:left; margin:0 0 10px}
+.l3-list{text-align:left; display:flex; flex-direction:column; gap:8px; margin-bottom:18px}
+.l3-row{display:grid; grid-template-columns:78px 56px 1fr; gap:9px; align-items:center; font-size:11.5px; color:var(--muted)}
+.l3-row.off{opacity:.35}
+.l3-row .track{height:6px; background:#0c120c; border:1px solid var(--line); border-radius:5px; overflow:hidden}
+.l3-row .fill{height:100%; background:linear-gradient(90deg,var(--moss-d),var(--moss)); border-radius:5px}
+.l3-row .conv{display:flex; gap:3px}
+.l3-row .conv i{flex:1; height:6px; border-radius:5px; background:#0c120c; border:1px solid var(--line)}
+.l3-row .conv i.on{background:var(--moss); border-color:var(--moss)}
+.l3-row .st{color:var(--ink); opacity:.85}
+.l3-row .st .dim{color:var(--muted); opacity:.8}
+.l3-row .cap{display:inline-block; width:7px; height:7px; border-radius:2px; margin-right:4px; vertical-align:0}
+.l3-row .glyph{font-size:13px; vertical-align:-1px; margin-left:3px}
+
+/* --- legend --- */
+#legend .lg-list{text-align:left; display:flex; flex-direction:column; gap:10px; margin:0 0 16px}
+.lg-item{display:grid; grid-template-columns:30px 1fr; gap:10px; align-items:start}
+.lg-sw{display:flex; align-items:center; justify-content:center; height:26px}
+.lg-tx{display:block; font-size:11.5px; line-height:1.5; color:var(--muted)}
+.lg-tx b{display:block; color:var(--ink); font-size:12.5px; font-weight:600; margin-bottom:1px}
+.lg-glyphs{gap:3px; font-size:14px; line-height:1}
+.lg-pips{gap:4px}
+.lg-pips i{width:6px; height:6px; border-radius:1px; display:block}
+.lg-caps{flex-wrap:wrap; justify-content:flex-start; gap:8px 14px; margin:0 0 14px; text-align:left}
+.lg-note{font-size:11.5px; line-height:1.6; color:var(--muted); text-align:left;
+  border-left:2px solid var(--line); padding-left:11px; margin:18px 0 4px}
+.sw-shell{width:22px; height:16px; border-radius:50%; background:#cebe9e; border:1px solid #685c46;
+  box-shadow:inset -5px 0 0 -2px #ecb260}
+.sw-stone{width:13px; height:13px; border-radius:50%; background:#96928a; border:1px solid #3c3a36}
+.sw-flame{width:22px; height:22px; border-radius:50%; background:radial-gradient(circle,#ee8c2c 0%,#ee8c2c 42%,rgba(210,86,26,.55) 70%,rgba(210,86,26,0) 100%)}
+/* the scar really is near-black in the world; keep the fill honest and let the
+   border do the work of making the swatch findable on the card */
+.sw-scar{width:22px; height:22px; border-radius:7px; background:#1a1512; border:1px solid #574a3e}
+.sw-ash{width:22px; height:22px; border-radius:7px; background:#38542c; border:1px solid #47603a}
+.sw-ghost{width:22px; height:22px; border-radius:50%; border:2px solid rgba(236,146,62,.55)}
+.sw-vring{width:22px; height:22px; border-radius:50%;
+  background:conic-gradient(#ec923e 0 22%,transparent 22% 25%,#94c878 25% 47%,transparent 47% 50%,#bccae4 50% 72%,transparent 72% 100%);
+  -webkit-mask:radial-gradient(circle,transparent 62%,#000 64%); mask:radial-gradient(circle,transparent 62%,#000 64%)}
+.sw-tilled{width:22px; height:22px; border-radius:5px; background:#3f4d2c; border:1px solid #56663a;
+  background-image:repeating-linear-gradient(45deg,rgba(150,182,96,.35) 0 1px,transparent 1px 5px)}
+.sw-crater{width:22px; height:22px; border-radius:50%; background:#241f1c; border:1px solid rgba(232,150,86,.5)}
+</style>
 </head>
 <body>
   <div id="stage">
@@ -80,6 +132,9 @@
         <button class="btn ghost" id="btnChallenge" data-i18n="chBtn">🎯 Sfide</button>
         <button class="btn ghost" id="btnChronicle" data-i18n="chronicleBtn">📜 Diario</button>
       </div>
+      <div class="row">
+        <button class="btn ghost" id="btnLegend" data-i18n="legendBtn">🧭 Legenda</button>
+      </div>
       <label class="ctl"><span data-i18n="timeSpeed">Velocità del tempo</span> <b id="vSpeed">1×</b>
         <input type="range" id="rSpeed" min="0" max="8" step="1" value="1"></label>
     </div>
@@ -102,6 +157,7 @@
         <button class="btn" id="mEvo" data-i18n="evoBtn">📊 Evoluzione</button>
         <button class="btn" id="mEvents" data-i18n="eventsBtn">⚡ Eventi</button>
         <button class="btn" id="mChallenge" data-i18n="chBtn">🎯 Sfide</button>
+        <button class="btn" id="mLegend" data-i18n="legendBtn">🧭 Legenda</button>
       </div>
       <p class="foot" data-i18n="footer">Pubblicato su GitHub Pages · si salva da solo nel browser</p>
       <p class="foot"><a href="about.html" data-i18n="aboutLink">Scopri il progetto →</a></p>
@@ -232,6 +288,9 @@
         <div class="gbar"><span data-i18n="tDisperse">Dispersione</span><div class="track"><div class="fill" id="bgDisperse" style="background:linear-gradient(90deg,#5a8a2e,#c98be0)"></div></div></div>
         <div class="gbar"><span data-i18n="tHusbandry">Allevamento</span><div class="track"><div class="fill" id="bgHusbandry" style="background:linear-gradient(90deg,#5a8a2e,#e08b8b)"></div></div></div>
       </div>
+      <p class="insp-sub" data-i18n="inspL3">Utensili, fuoco, segni, tecniche, terra</p>
+      <p class="l3-hint" data-i18n="inspL3Hint">A sinistra il gene ereditato, a destra quello che questo corpo ha davvero adesso.</p>
+      <div class="l3-list" id="inspL3"></div>
       <p class="insp-sub" data-i18n="inspVoice">Voce (3 canali di segnale)</p>
       <div id="inspVoice" class="voice-row">
         <div class="vchan"><span>CH0</span><div class="vtrack"><div class="vfill" id="vc0"></div></div></div>
@@ -261,18 +320,21 @@
         <div class="ev-rec"><div class="k" data-i18n="recLin">Stirpi vive</div><div class="v" id="recLin">0</div></div>
         <div class="ev-rec"><div class="k" data-i18n="recSpecies">Specie</div><div class="v" id="recSpecies">0</div></div>
         <div class="ev-rec"><div class="k" data-i18n="recShares">Condivisioni</div><div class="v" id="recShares">0</div></div>
-        <div class="ev-rec"><div class="k" data-i18n="recDialect">Divergenza dialetti</div><div class="v" id="recDialect">0</div></div>
+        <div class="ev-rec"><div class="k" data-i18n="recDialect">Divergenza dialetti</div><div class="v" id="recDialect">0</div><div class="h" data-i18n="recDialectH"></div></div>
         <div class="ev-rec"><div class="k" data-i18n="recVillages">Villaggi</div><div class="v" id="recVillages">0</div></div>
         <div class="ev-rec"><div class="k" data-i18n="recTribes">Coalizioni</div><div class="v" id="recTribes">0</div></div>
         <div class="ev-rec"><div class="k" data-i18n="recTrades">Scambi</div><div class="v" id="recTrades">0</div></div>
         <div class="ev-rec"><div class="k" data-i18n="recThefts">Furti</div><div class="v" id="recThefts">0</div></div>
         <div class="ev-rec"><div class="k" data-i18n="recPunish">Punizioni</div><div class="v" id="recPunish">0</div></div>
-        <div class="ev-rec"><div class="k" data-i18n="recCulture">Quota culturale</div><div class="v" id="recCulture">0</div></div>
-        <div class="ev-rec"><div class="k" data-i18n="recCracked">Gusci aperti</div><div class="v" id="recCracked">0</div></div>
-        <div class="ev-rec"><div class="k" data-i18n="recBurns">Incendi</div><div class="v" id="recBurns">0</div></div>
-        <div class="ev-rec"><div class="k" data-i18n="recMarks">Divergenza dei segni</div><div class="v" id="recMarks">0</div></div>
-        <div class="ev-rec"><div class="k" data-i18n="recTech">Tecniche possedute</div><div class="v" id="recTech">0</div></div>
-        <div class="ev-rec"><div class="k" data-i18n="recTerra">Terreno migliorato</div><div class="v" id="recTerra">0</div></div>
+        <div class="ev-rec"><div class="k" data-i18n="recCulture">Quota culturale</div><div class="v" id="recCulture">0</div><div class="h" data-i18n="recCultureH"></div></div>
+      </div>
+      <p class="insp-sub" data-i18n="evoL3">Pietre, fuoco, segni, tecniche, terra</p>
+      <div class="ev-records">
+        <div class="ev-rec"><div class="k" data-i18n="recCracked">Gusci aperti</div><div class="v" id="recCracked">0</div><div class="h" data-i18n="recCrackedH"></div></div>
+        <div class="ev-rec"><div class="k" data-i18n="recBurns">Incendi</div><div class="v" id="recBurns">0</div><div class="h" data-i18n="recBurnsH"></div></div>
+        <div class="ev-rec"><div class="k" data-i18n="recMarks">Divergenza dei segni</div><div class="v" id="recMarks">0</div><div class="h" data-i18n="recMarksH"></div></div>
+        <div class="ev-rec"><div class="k" data-i18n="recTech">Tecniche possedute</div><div class="v" id="recTech">0</div><div class="h" data-i18n="recTechH"></div></div>
+        <div class="ev-rec span2"><div class="k" data-i18n="recTerra">Terreno lavorato</div><div class="v" id="recTerra">0</div><div class="h" data-i18n="recTerraH"></div></div>
       </div>
       <p class="insp-sub" data-i18n="evoGenChart">Generazione media nel tempo</p>
       <canvas id="evGen"></canvas>
@@ -345,6 +407,90 @@
       <h3 data-i18n="chronicleTitle">Diario</h3>
       <div id="chronList"></div>
       <div class="row"><button class="btn primary" id="chronClose" data-i18n="close">Chiudi</button></div>
+    </div>
+  </div>
+
+  <!-- LEGEND: what the world-layer visuals of the level-3 mechanics mean.
+       Every swatch colour below is copied from the module that draws it, so the
+       legend and the canvas cannot drift apart silently. -->
+  <div class="overlay" id="legend">
+    <div class="card">
+      <p class="eyebrow" data-i18n="legendEyebrow">Cosa stai guardando</p>
+      <h3 data-i18n="legendTitle">Legenda</h3>
+      <p class="lead" data-i18n="legendLead">I segni che compaiono sul terreno, e cosa sono davvero.</p>
+
+      <p class="insp-sub" data-i18n="lgTools">Utensili</p>
+      <div class="lg-list">
+        <div class="lg-item">
+          <span class="lg-sw"><i class="sw-shell"></i></span>
+          <span class="lg-tx"><b data-i18n="lgShell">Frutto corazzato</b><span data-i18n="lgShellD"></span></span>
+        </div>
+        <div class="lg-item">
+          <span class="lg-sw"><i class="sw-stone"></i></span>
+          <span class="lg-tx"><b data-i18n="lgStone">Pietra in mano</b><span data-i18n="lgStoneD"></span></span>
+        </div>
+      </div>
+
+      <p class="insp-sub" data-i18n="lgFire">Fuoco</p>
+      <div class="lg-list">
+        <div class="lg-item">
+          <span class="lg-sw"><i class="sw-flame"></i></span>
+          <span class="lg-tx"><b data-i18n="lgFlame">Fronte di fiamma</b><span data-i18n="lgFlameD"></span></span>
+        </div>
+        <div class="lg-item">
+          <span class="lg-sw"><i class="sw-scar"></i></span>
+          <span class="lg-tx"><b data-i18n="lgScar">Terra bruciata</b><span data-i18n="lgScarD"></span></span>
+        </div>
+        <div class="lg-item">
+          <span class="lg-sw"><i class="sw-ash"></i></span>
+          <span class="lg-tx"><b data-i18n="lgAsh">Cenere matura</b><span data-i18n="lgAshD"></span></span>
+        </div>
+      </div>
+
+      <p class="insp-sub" data-i18n="lgMarks">Segni</p>
+      <div class="lg-list">
+        <div class="lg-item">
+          <span class="lg-sw lg-glyphs"><b style="color:#78d6b2">▲</b><b style="color:#e27abe">✕</b><b style="color:#7ea8ee">◎</b></span>
+          <span class="lg-tx"><b data-i18n="lgGlyph">Tre segni</b><span data-i18n="lgGlyphD"></span></span>
+        </div>
+      </div>
+
+      <p class="insp-sub" data-i18n="lgTech">Tecniche</p>
+      <div class="netlegend lg-caps">
+        <span><i style="background:#ec923e"></i><span data-i18n="capFire">Custodia del fuoco</span></span>
+        <span><i style="background:#94c878"></i><span data-i18n="capPres">Conservazione del cibo</span></span>
+        <span><i style="background:#bccae4"></i><span data-i18n="capReach">Portata</span></span>
+        <span><i style="background:#b08ee2"></i><span data-i18n="capVoid">Traversata del vuoto</span></span>
+      </div>
+      <div class="lg-list">
+        <div class="lg-item">
+          <span class="lg-sw lg-pips"><i style="background:#ec923e"></i><i style="background:#94c878"></i><i style="background:#b08ee2"></i></span>
+          <span class="lg-tx"><b data-i18n="lgPips">Puntini sopra un corpo</b><span data-i18n="lgPipsD"></span></span>
+        </div>
+        <div class="lg-item">
+          <span class="lg-sw"><i class="sw-ghost"></i></span>
+          <span class="lg-tx"><b data-i18n="lgGhost">Anello che si allarga</b><span data-i18n="lgGhostD"></span></span>
+        </div>
+        <div class="lg-item">
+          <span class="lg-sw"><i class="sw-vring"></i></span>
+          <span class="lg-tx"><b data-i18n="lgVillRing">Archi attorno a un villaggio</b><span data-i18n="lgVillRingD"></span></span>
+        </div>
+      </div>
+
+      <p class="insp-sub" data-i18n="lgTerra">Terra</p>
+      <div class="lg-list">
+        <div class="lg-item">
+          <span class="lg-sw"><i class="sw-tilled"></i></span>
+          <span class="lg-tx"><b data-i18n="lgTilled">Terreno lavorato</b><span data-i18n="lgTilledD"></span></span>
+        </div>
+        <div class="lg-item">
+          <span class="lg-sw"><i class="sw-crater"></i></span>
+          <span class="lg-tx"><b data-i18n="lgCrater">Cratere</b><span data-i18n="lgCraterD"></span></span>
+        </div>
+      </div>
+
+      <p class="lg-note" data-i18n="legendNote"></p>
+      <div class="row"><button class="btn primary" id="legendClose" data-i18n="close">Chiudi</button></div>
     </div>
   </div>
 
