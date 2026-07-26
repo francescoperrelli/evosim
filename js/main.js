@@ -4,12 +4,14 @@ import { resize, draw, drawCharts, updateHUD } from './render.js';
 import { step, seed, loadLocal, saveLocal } from './world.js';
 import { applyLang, refreshMenu, refreshInspector, refreshEvolution, refreshChallenge, refreshChronicle, show, showTour } from './ui.js';
 import { I18N, setLang } from './i18n.js';
+import { audioTick } from './audio.js';
 
 /* ---------- loop ---------- */
 let saveCounter = 0;
 function frame(){
   if(S.running){ for(let i = 0; i < S.stepsPerFrame; i++) step(); }
   draw(); drawCharts(); updateHUD(); refreshInspector(); refreshEvolution(); refreshChallenge(); refreshChronicle();
+  audioTick();
   if(S.running && ++saveCounter >= 180){ saveCounter = 0; saveLocal(); }
   requestAnimationFrame(frame);
 }

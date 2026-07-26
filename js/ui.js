@@ -5,7 +5,7 @@ import { seed, saveLocal, hasSave, loadLocal, clearLocal, snapshot, restore, met
 import { makeCreature, randomGenome } from './genome.js';
 import { drawNetwork, drawEvolution, selectedThought } from './render.js';
 import { CHALLENGES, startChallenge, stopChallenge } from './challenges.js';
-import { initAudio, setMusic, setSfx, musicOn, sfxMeteor, sfxWin, sfxLose } from './audio.js';
+import { initAudio, setMusic, setSfx, musicOn, sfxMeteor, sfxWin, sfxLose, setMusicVol, setSfxVol, suspendAudio, resumeAudio } from './audio.js';
 import { listSlots, saveSlot, loadSlot, deleteSlot } from './saves.js';
 import { I18N, t, setLang, getLang } from './i18n.js';
 
@@ -35,7 +35,7 @@ export function refreshMenu(){
 function syncControls(){
   const set = (id, val) => { const e = el(id); if(e){ e.value = val; e.dispatchEvent(new Event('input')); } };
   set('rFood', P.foodRate); set('rMut', Math.round(P.mut * 100));
-  [['tPred','predatorsOn'],['tOmni','omnivoresOn'],['tFlock','flocksOn'],['tTerr','terrOn'],['tMimic','mimicOn'],['tSeason','seasonsOn'],['tDay','dayNightOn'],['tBubbles','bubblesOn'],['tPher','pherOn'],['tCulture','cultureOn'],['tLearn','learnOn'],['tNests','nestsOn'],['tPlagues','plaguesOn'],['tMigrate','migrateOn'],['tHoard','hoardOn'],['tBuild','buildOn'],['tDisp','dispOn'],['tHusband','husbandOn']]
+  [['tPred','predatorsOn'],['tOmni','omnivoresOn'],['tFlock','flocksOn'],['tTerr','terrOn'],['tMimic','mimicOn'],['tSeason','seasonsOn'],['tDay','dayNightOn'],['tBubbles','bubblesOn'],['tPher','pherOn'],['tCulture','cultureOn'],['tLearn','learnOn'],['tNests','nestsOn'],['tPlagues','plaguesOn'],['tMigrate','migrateOn'],['tHoard','hoardOn'],['tBuild','buildOn'],['tDisp','dispOn'],['tHusband','husbandOn'],['tStars','starsOn'],['tLights','lightsOn'],['tFx','fxOn'],['tStable','stableOn']]
     .forEach(([id, k]) => { const e = el(id); if(e) e.checked = P[k]; });
 }
 
@@ -76,6 +76,7 @@ const ensureSpecies = (type, count, min) => {
 bindToggle('tPred', 'predatorsOn', on => { if(!on) S.creatures = S.creatures.filter(c => c.type !== 'carn'); else ensureSpecies('carn', P.carnStart, 25); });
 bindToggle('tOmni', 'omnivoresOn', on => { if(!on) S.creatures = S.creatures.filter(c => c.type !== 'omni'); else ensureSpecies('omni', P.omniStart, 20); });
 bindToggle('tFlock', 'flocksOn'); bindToggle('tTerr', 'terrOn'); bindToggle('tMimic', 'mimicOn'); bindToggle('tSeason', 'seasonsOn'); bindToggle('tDay', 'dayNightOn'); bindToggle('tBubbles', 'bubblesOn'); bindToggle('tPher', 'pherOn'); bindToggle('tCulture', 'cultureOn'); bindToggle('tLearn', 'learnOn'); bindToggle('tNests', 'nestsOn'); bindToggle('tPlagues', 'plaguesOn'); bindToggle('tMigrate', 'migrateOn'); bindToggle('tHoard', 'hoardOn'); bindToggle('tBuild', 'buildOn'); bindToggle('tDisp', 'dispOn'); bindToggle('tHusband', 'husbandOn');
+bindToggle('tStars', 'starsOn'); bindToggle('tLights', 'lightsOn'); bindToggle('tFx', 'fxOn'); bindToggle('tStable', 'stableOn');
 
 el('btnSave').onclick = () => toast(saveLocal() ? t('saved') : t('noStore'));
 el('btnOpt').onclick = () => { updateSeedUI(); show('options'); };
@@ -117,6 +118,10 @@ window.addEventListener('pointerdown', initAudio);   // browsers require a gestu
 el('btnAudio').onclick = () => { const on = !musicOn(); setMusic(on); el('btnAudio').textContent = on ? '🔊' : '🔇'; const t2 = el('tMusic'); if(t2) t2.checked = on; };
 el('tMusic').onchange = function(){ setMusic(this.checked); el('btnAudio').textContent = this.checked ? '🔊' : '🔇'; };
 el('tSfx').onchange = function(){ setSfx(this.checked); };
+el('rVolM').oninput = function(){ setMusicVol(+this.value / 100); el('vVolM').textContent = this.value + '%'; };
+el('rVolS').oninput = function(){ setSfxVol(+this.value / 100); el('vVolS').textContent = this.value + '%'; };
+// free the audio graph while the tab is in the background
+document.addEventListener('visibilitychange', () => { if(document.hidden) suspendAudio(); else resumeAudio(); });
 
 /* ---------- save slots ---------- */
 function buildSlotList(){
