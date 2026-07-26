@@ -8,7 +8,12 @@ export const P = {
   omniReproE:140, omniStartE:85, omniMaxAge:2800,
   carnReproE:255, carnStartE:150, carnMaxAge:3200,
   seasonLength:3600, dayLength:1400, sexSel:1.4, planetCount:4, dispThresh:0.5, herdBrain:8, husbandThresh:0.06,
-  predatorsOn:true, omnivoresOn:true, flocksOn:true, terrOn:true, mimicOn:true, seasonsOn:true, dayNightOn:true, bubblesOn:true, pherOn:true, cultureOn:true, learnOn:true, nestsOn:true, plaguesOn:false, migrateOn:true, hoardOn:true, buildOn:true, dispOn:true, husbandOn:true
+  predatorsOn:true, omnivoresOn:true, flocksOn:true, terrOn:true, mimicOn:true, seasonsOn:true, dayNightOn:true, bubblesOn:true, pherOn:true, cultureOn:true, learnOn:true, nestsOn:true, plaguesOn:false, migrateOn:true, hoardOn:true, buildOn:true, dispOn:true, husbandOn:true,
+  // presentation + stability switches
+  stableOn:true,      // density-dependent damping of the boom-bust cycle
+  starsOn:true,       // starfield / nebula in the void
+  lightsOn:true,      // real directional lighting instead of a flat night wash
+  fxOn:true           // particles, birth/death animations, motion trails
 };
 
 // Per-species configuration. `hunts` = types this species preys on.
@@ -66,7 +71,7 @@ export const S = {
   popHist: [], traitHist: [], evoHist: [], ornHist: [], behHist: [], dataLog: [],
   records: { oldestAge: 0, maxKids: 0, maxGen: 0 },
   selected: null, tool: 'plant',        // 'plant' | 'inspect' | 'meteor' | 'rock' | 'water'
-  drought: 0, effects: [], rocks: [], water: [], biomes: [], nests: [], caches: [], shelters: [], planets: [], colonized: [],
+  drought: 0, effects: [], parts: [], flights: [], rocks: [], water: [], biomes: [], nests: [], caches: [], shelters: [], planets: [], colonized: [],
   challenge: null, shares: 0, packKills: 0, tamedEver: false,
   chronicle: [], chronPrev: null,
   // emergent-lexicon meter: how each of the 3 signal channels correlates with
