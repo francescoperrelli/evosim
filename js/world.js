@@ -311,24 +311,43 @@ export function speciesCount(){
 // the productive "sunlit" latitude drifts north/south across the year, so where
 // food is richest moves with the season — herds that follow it end up migrating
 export function solarPeakY(tick){ return S.worldH * (0.5 - 0.34 * Math.cos(seasonInfo(tick).phase * TAU2)); }
-export function spawnFood(n){
+// place one plant, biased toward fertile ground (best of three tries) and toward
+// the sunlit band; `pi` restricts it to one planet, -1 means anywhere
+function dropFood(pi, mig, yPeak, band2){
+  const hasP = S.planets.length > 0;
+  let bx = 0, by = 0, bf = -1;
+  for(let t = 0; t < 3; t++){
+    let x, y;
+    if(hasP){ const pp = planetPoint(pi < 0 ? undefined : pi); x = pp.x; y = pp.y; } else { x = rnd(6, S.worldW - 6); y = rnd(6, S.worldH - 6); }
+    let f = fertilityAt(x, y);
+    if(mig){ const dy = y - yPeak; f *= 1 + 1.3 * Math.exp(-(dy * dy) / band2); }   // richer near the sunlit band (total food unchanged)
+    if(f > bf){ bf = f; bx = x; by = y; } }
+  S.food.push({ x: bx, y: by });
+}
+export function spawnFood(n, bulk){
   const pf = S.planets.length || 1;                     // each planet gets its own food budget
-  n *= pf;
   const cap = P.maxFood * pf;
-  const k = Math.floor(n) + (rand() < (n % 1) ? 1 : 0);
   const mig = P.migrateOn && P.seasonsOn;
   const yPeak = mig ? solarPeakY(S.tick) : 0, band2 = mig ? (S.worldH * 0.26) ** 2 : 1;
-  const hasP = S.planets.length > 0;
-  for(let i = 0; i < k && S.food.length < cap; i++){
-    let bx = 0, by = 0, bf = -1;
-    for(let t = 0; t < 3; t++){
-      let x, y;
-      if(hasP){ const pp = planetPoint(); x = pp.x; y = pp.y; } else { x = rnd(6, S.worldW - 6); y = rnd(6, S.worldH - 6); }
-      let f = fertilityAt(x, y);
-      if(mig){ const dy = y - yPeak; f *= 1 + 1.3 * Math.exp(-(dy * dy) / band2); }   // richer near the sunlit band (total food unchanged)
-      if(f > bf){ bf = f; bx = x; by = y; } }
-    S.food.push({ x: bx, y: by });
+  if(P.stableOn !== false && !bulk && S.planets.length){
+    // logistic regrowth: vegetation reseeds from the crop already standing and slows
+    // as it approaches the planet's carrying capacity. A flat spawn rate lets food
+    // pile up while grazers are scarce, banking the fuel for the next population
+    // explosion; growing logistically the standing crop saturates instead, and a
+    // stripped world recovers gradually from the surviving stand plus seed rain.
+    const std = new Array(S.planets.length).fill(0);
+    for(const f of S.food){ const pi = planetIndexAt(f.x, f.y); if(pi >= 0) std[pi]++; }
+    for(let i = 0; i < S.planets.length; i++){
+      const u = clamp(std[i] / P.maxFood, 0, 1);
+      const r = n * (0.14 + 3.8 * u * (1 - u));         // wind-blown seed rain + logistic growth
+      const k = Math.floor(r) + (rand() < (r % 1) ? 1 : 0);
+      for(let j = 0; j < k && std[i] < P.maxFood; j++){ dropFood(i, mig, yPeak, band2); std[i]++; }
+    }
+    return;
   }
+  n *= pf;
+  const k = Math.floor(n) + (rand() < (n % 1) ? 1 : 0);
+  for(let i = 0; i < k && S.food.length < cap; i++) dropFood(-1, mig, yPeak, band2);
 }
 
 function founder(type, planetIdx){ const pp = planetPoint(planetIdx); const c = makeCreature(pp.x, pp.y, type, randomGenome(type), 0); c.lineage = c.id; return c; }
@@ -353,7 +372,7 @@ export function seed(seedVal){
     if(P.omnivoresOn) for(let i = 0; i < os; i++) S.creatures.push(founder('omni', pl));
     if(P.predatorsOn) for(let i = 0; i < cs; i++) S.creatures.push(founder('carn', pl));
   }
-  spawnFood(P.maxFood * 0.6 | 0);
+  spawnFood(P.maxFood * 0.6 | 0, true);   // the founding standing crop is placed outright, not grown
 }
 
 // build a spatial hash: array of buckets, each bucket an array of items
@@ -370,6 +389,9 @@ function buildGrid(items, cols, rows){
 
 export function step(){
   S.tick++;
+  // every stabilising feedback below is gated on this, so the old undamped
+  // Lotka-Volterra boom-and-bust world stays reachable by switching it off
+  const stab = P.stableOn !== false;
   const si = seasonInfo(S.tick);
   const seasonSig = Math.sin(si.phase * TAU2);
   const migPeakY = (P.migrateOn && P.seasonsOn) ? S.worldH * (0.5 - 0.34 * Math.cos(si.phase * TAU2)) : -1;
@@ -416,6 +438,7 @@ export function step(){
     const matAge = P[cfg.maxAge] * 0.16;                                  // grow to adult size over the first ~16% of life
     c.rad = g.size * clamp(0.45 + 0.55 * (c.age / matAge), 0.45, 1);
     if(c.alert > 0) c.alert--;
+    if(c.fed > 0) c.fed--;                                                // still handling/digesting its last kill
     const gcx = clamp(Math.floor(c.x / CELL), 0, cols - 1), gcy = clamp(Math.floor(c.y / CELL), 0, rows - 1);
 
     const sp = Math.hypot(c.vx, c.vy);
@@ -433,6 +456,10 @@ export function step(){
     const canHerdNow = P.husbandOn && hunts.length && (g.husbandry || 0) >= P.husbandThresh && g.brain.nh >= P.herdBrain && c.energy >= P[cfg.reproE] * 0.22;
     const herdCap = canHerdNow ? Math.max(1, Math.round((g.husbandry || 0) * HERD_CAP)) : 0;
     let herdRoom = canHerdNow ? Math.max(0, herdCap - (c.herd || 0)) : 0;
+    // a grazer with a full gut stops grazing: uneaten plants are left standing, so
+    // the summer surplus accumulates as a crop the herd can live off in winter
+    // instead of being stripped the moment it grows
+    const full = stab && cfg.eatsPlants && c.energy > P[cfg.reproE] * 1.15;
     const mateReadyE = P[cfg.reproE] * 0.85;
     const fSense = (cfg.eatsPlants && P.mimicOn) ? senseSq * (1 - 0.3 * g.camo) * (1 - 0.3 * g.camo) : senseSq;
 
@@ -495,7 +522,7 @@ export function step(){
           }
         }
         // food in this cell
-        if(cfg.eatsPlants){
+        if(cfg.eatsPlants && !full){
           const fb = fgrid[idx];
           if(fb) for(let bi = 0; bi < fb.length; bi++){
             const f = fb[bi]; const dx = f.x - c.x, dy = f.y - c.y, d = dx * dx + dy * dy;
@@ -545,7 +572,10 @@ export function step(){
     // instinct prior
     let ix = 0, iy = 0;
     if(thrHas){ const d = Math.sqrt(thrD) || 1; ix -= thrx / d * 1.6; iy -= thry / d * 1.6; }
-    if(preyRef){ const d = Math.sqrt(preyD) || 1; ix += preyx / d * 1.4; iy += preyy / d * 1.4; }
+    // a hunter still working through its last kill has no appetite for the chase,
+    // so it stops searching for prey and (if it can) grazes instead
+    const chase = preyRef && !(stab && c.fed > 0);
+    if(chase){ const d = Math.sqrt(preyD) || 1; ix += preyx / d * 1.4; iy += preyy / d * 1.4; }
     else if(cfg.eatsPlants && bfRef){ const d = Math.sqrt(bfD) || 1; ix += bfx / d; iy += bfy / d; }
     if(P.flocksOn && cfg.social && cnt){
       const s = g.sociality;
@@ -628,7 +658,12 @@ export function step(){
     if(P.pherOn) pherDeposit(c, c.energy > P[cfg.reproE] * 0.5 ? 0.6 : 0.2);
 
     const sigCost = (Math.abs(c.sig[0]) + Math.abs(c.sig[1]) + Math.abs(c.sig[2])) * 0.012;   // honest signalling costs
-    c.energy -= metabolism(c) * (P.seasonsOn && si.idx === 3 ? 1.15 : 1) + sigCost;
+    let burn = metabolism(c) * (P.seasonsOn && si.idx === 3 ? 1.15 : 1) + sigCost;
+    // metabolic depression: a starving animal winds down into torpor instead of
+    // burning at full rate, so a shortage thins a population along a gradient
+    // rather than killing a whole cohort in the same handful of ticks
+    if(stab) burn *= 0.42 + 0.58 * clamp(c.energy / (P[cfg.reproE] * 0.3), 0, 1);
+    c.energy -= burn;
     // husbandry's renewable yield: a tended herd gives a steady trickle of sustenance
     // (milk, eggs, wool) without killing — the sustainable payoff that makes farming
     // beat boom-and-bust hunting, and lets the trait be selected upward
@@ -693,16 +728,24 @@ export function step(){
         c.energy -= 0.02;    // the effort of shepherding
       } else {
         let killP = 1 / (1 + 0.12 * (preyRef.groupSize || 0));
+        // type-II functional response: a predator that has just fed is busy handling
+        // and digesting, so its kill rate saturates at a ceiling instead of rising
+        // with prey density — satiation is what stops predators eating their prey out
+        if(stab && c.fed > 0) killP *= 0.10;
         // a juvenile sheltering at a nest of its kind is harder to pick off
         const preyMat = P[TYPES[preyRef.type].maxAge] * 0.16;
         if(P.nestsOn && preyRef.age < preyMat && nestShelter(preyRef)) killP *= 0.45;
+        // prey refuge: deep inside a home site of its own kind even an adult is
+        // largely out of reach. A refuge holding some fraction of the prey is the
+        // classic reason predation cannot run a prey population to extinction.
+        else if(stab && P.nestsOn && nestShelter(preyRef)) killP *= 0.22;
         if(P.buildOn && shelterProtect(preyRef)) killP *= 0.25;   // safe inside its family's built shelter
         if(P.husbandOn && preyRef.owner && preyRef.owner !== c.id) killP *= 0.28;   // another herder guards its flock
         const ownHarvest = ownStock;
         // culls its OWN herd when starving, or when hungry and the herd can spare one
         const mayTake = !ownHarvest || starving || (hungry && (c.herd || 0) >= 4);
         if(inReach && mayTake && rand() < killP){
-          preyRef.dead = true; S.predations++;
+          preyRef.dead = true; S.predations++; c.fed = 130;
           const packBonus = 1 + 0.25 * Math.min(cnt, 3);     // hunting near allies pays off
           c.energy += P.preyEnergy * cfg.preyEff * packBonus * (ownHarvest ? 1.15 : 1);   // culled livestock yields a little more
           if(P.learnOn && c.plast) learn(g.brain, c.plast, _out, 0.2);    // reinforce a successful hunt
@@ -711,7 +754,19 @@ export function step(){
         }
       }
     }
-    if(c.age > matAge && c.energy >= P[cfg.reproE] && creatures.length + newborns.length < P.maxPop * (S.planets.length || 1)){
+    // density-dependent reproduction: breeding into a crowded patch demands more
+    // reserve, because the young must compete locally for the same ground. This is
+    // the negative feedback that levels a boom off while its food still stands,
+    // instead of letting it overshoot and starve — and each animal reads only its
+    // own patch, so it needs no global population supervisor.
+    // Crowding is measured as how many bodies of any kind share this grid cell,
+    // not how many neighbours of its own kind are in sense range: a headcount of
+    // kin is a signal evolution can dodge by spacing out or growing less social,
+    // whereas the ground itself is finite and cannot be evaded.
+    const cellB = cgrid[gcy * cols + gcx];
+    const dd = stab ? clamp((cellB ? cellB.length : 1) / 4, 0, 2) : 0;
+    const reproE = P[cfg.reproE] * (1 + 1.8 * dd * dd);
+    if(c.age > matAge && c.energy >= reproE && creatures.length + newborns.length < P.maxPop * (S.planets.length || 1)){
       if(g.sexual > 0.5){
         // sexual: needs a ready mate in contact; offspring recombines both parents
         if(mateRef && !mateRef.dead && mateRef.matedTick !== S.tick){
