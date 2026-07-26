@@ -4,6 +4,10 @@ import { P, S, seasonInfo, dayInfo, clampCam, minZoom } from './state.js';
 import { NIN, NOUT, MAX_NH } from './nn.js';
 import { dialectStats, solarPeakY } from './world.js';
 import * as flora from './flora.js';
+import * as village from './village.js';
+import * as property from './property.js';
+import * as trade from './trade.js';
+import * as tribe from './tribe.js';
 import { speciesName } from './phylo.js';
 import { t } from './i18n.js';
 
@@ -772,6 +776,15 @@ export function draw(){
       for(let g = 0; g < tufts; g++){ const ang = g / tufts * TAU, tx = sh.x + Math.cos(ang) * sh.r, ty = sh.y + Math.sin(ang) * sh.r;
         wctx.beginPath(); wctx.arc(tx, ty, sh.r * 0.16, 0, TAU); wctx.fill(); }
     }
+  }
+  // level-2 world layers. Each module draws its own; the view object is the
+  // only thing they share, and it is read-only to them.
+  {
+    const view = { z, vis, x0: vx0, y0: vy0, x1: vx1, y1: vy1 };
+    if(P.villageOn) village.drawWorld(wctx, view);
+    if(P.tradeOn) trade.drawWorld(wctx, view);
+    if(P.tribeOn) tribe.drawWorld(wctx, view);
+    if(P.propertyOn) property.drawWorld(wctx, view);
   }
   // caches — stored-food piles built by hoarders (size grows with the stock)
   if(P.hoardOn && S.caches.length){

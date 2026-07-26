@@ -35,7 +35,8 @@ export function refreshMenu(){
 function syncControls(){
   const set = (id, val) => { const e = el(id); if(e){ e.value = val; e.dispatchEvent(new Event('input')); } };
   set('rFood', P.foodRate); set('rMut', Math.round(P.mut * 100));
-  [['tPred','predatorsOn'],['tOmni','omnivoresOn'],['tFlock','flocksOn'],['tTerr','terrOn'],['tMimic','mimicOn'],['tSeason','seasonsOn'],['tDay','dayNightOn'],['tBubbles','bubblesOn'],['tPher','pherOn'],['tCulture','cultureOn'],['tLearn','learnOn'],['tNests','nestsOn'],['tPlagues','plaguesOn'],['tMigrate','migrateOn'],['tHoard','hoardOn'],['tBuild','buildOn'],['tDisp','dispOn'],['tHusband','husbandOn'],['tStars','starsOn'],['tLights','lightsOn'],['tFx','fxOn'],['tStable','stableOn'],['tLifeHist','lifeHistOn'],['tEvolv','evolvOn'],['tFlora','floraOn'],['tSpecies','speciesOn']]
+  [['tPred','predatorsOn'],['tOmni','omnivoresOn'],['tFlock','flocksOn'],['tTerr','terrOn'],['tMimic','mimicOn'],['tSeason','seasonsOn'],['tDay','dayNightOn'],['tBubbles','bubblesOn'],['tPher','pherOn'],['tCulture','cultureOn'],['tLearn','learnOn'],['tNests','nestsOn'],['tPlagues','plaguesOn'],['tMigrate','migrateOn'],['tHoard','hoardOn'],['tBuild','buildOn'],['tDisp','dispOn'],['tHusband','husbandOn'],['tStars','starsOn'],['tLights','lightsOn'],['tFx','fxOn'],['tStable','stableOn'],['tLifeHist','lifeHistOn'],['tEvolv','evolvOn'],['tFlora','floraOn'],['tSpecies','speciesOn'],
+  ['tVillage','villageOn'],['tLabour','labourOn'],['tProperty','propertyOn'],['tCultureV','cultureVertOn'],['tTrade','tradeOn'],['tTribe','tribeOn']]
     .forEach(([id, k]) => { const e = el(id); if(e) e.checked = P[k]; });
 }
 
@@ -78,6 +79,8 @@ bindToggle('tOmni', 'omnivoresOn', on => { if(!on) S.creatures = S.creatures.fil
 bindToggle('tFlock', 'flocksOn'); bindToggle('tTerr', 'terrOn'); bindToggle('tMimic', 'mimicOn'); bindToggle('tSeason', 'seasonsOn'); bindToggle('tDay', 'dayNightOn'); bindToggle('tBubbles', 'bubblesOn'); bindToggle('tPher', 'pherOn'); bindToggle('tCulture', 'cultureOn'); bindToggle('tLearn', 'learnOn'); bindToggle('tNests', 'nestsOn'); bindToggle('tPlagues', 'plaguesOn'); bindToggle('tMigrate', 'migrateOn'); bindToggle('tHoard', 'hoardOn'); bindToggle('tBuild', 'buildOn'); bindToggle('tDisp', 'dispOn'); bindToggle('tHusband', 'husbandOn');
 bindToggle('tStars', 'starsOn'); bindToggle('tLights', 'lightsOn'); bindToggle('tFx', 'fxOn'); bindToggle('tStable', 'stableOn');
 bindToggle('tLifeHist', 'lifeHistOn'); bindToggle('tEvolv', 'evolvOn'); bindToggle('tFlora', 'floraOn'); bindToggle('tSpecies', 'speciesOn');
+  bindToggle('tVillage', 'villageOn'); bindToggle('tLabour', 'labourOn'); bindToggle('tProperty', 'propertyOn');
+  bindToggle('tCultureV', 'cultureVertOn'); bindToggle('tTrade', 'tradeOn'); bindToggle('tTribe', 'tribeOn');
 
 el('btnSave').onclick = () => toast(saveLocal() ? t('saved') : t('noStore'));
 el('btnOpt').onclick = () => { updateSeedUI(); show('options'); };

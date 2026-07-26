@@ -19,7 +19,14 @@ export const P = {
   evolvOn:true,       // evolvable mutation rate + gene/neuron duplication
   floraOn:true,       // plant genomes: chemical defence vs. herbivore detoxification
   speciesOn:true,     // reproductive isolation -> speciation + phylogeny
-  specThresh:0.42     // genetic distance above which two lineages stop interbreeding
+  specThresh:0.42,    // genetic distance above which two lineages stop interbreeding
+  // level-2 civilisation mechanics
+  villageOn:true,     // co-located shelters coalesce into maintained settlements
+  labourOn:true,      // polyethism: forager / guard / nurse roles inside a settlement
+  propertyOn:true,    // raiding a granary vs. respecting it, and punishing raiders
+  cultureVertOn:true, // parents teach children what they learned, with a fidelity gene
+  tradeOn:true,       // a second resource (minerals) and exchange between neighbours
+  tribeOn:true        // group markers, coalitions and intergroup conflict
 };
 
 // Per-species configuration. `hunts` = types this species preys on.
@@ -83,6 +90,13 @@ export const S = {
   // phylogeny: species records maintained by phylo.js, read by the tree view.
   // Each record: { id, parent, born, died, n, peak, type, hue, cx, cy }
   phylo: [], speciesN: 0,
+  // level-2 civilisation state, each owned by its own module
+  villages: [],       // village.js: settlements grown from clustered shelters
+  minerals: [],       // trade.js: the second resource
+  trades: 0,          // trade.js: running count of completed exchanges
+  tribes: [],         // tribe.js: coalition records
+  culture: null,      // culture.js: cumulative-culture bookkeeping
+  thefts: 0, punishments: 0,   // property.js: running counts
   // emergent-lexicon meter: how each of the 3 signal channels correlates with
   // context (threat / prey / food / crowd), measured live from the population
   lex: null,

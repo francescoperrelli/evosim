@@ -5,6 +5,11 @@ import { P, S, TYPES, PREDATORS, BRAIN_W, INNATE_W, NEIGH_R2, SEP_R2, CELL, SAVE
 import { randomGenome, mutateGenome, crossover, makeCreature, metabolism, lifeHistory } from './genome.js';
 import * as flora from './flora.js';
 import * as phylo from './phylo.js';
+import * as village from './village.js';
+import * as property from './property.js';
+import * as culture from './culture.js';
+import * as trade from './trade.js';
+import * as tribe from './tribe.js';
 import { brainForward, getHidden, learn, NIN, NOUT, NCHAN, IN_HEARD, OUT_SIG, migrateBrain, brainLenOld, blendToward } from './nn.js';
 import { evalChallenge } from './challenges.js';
 
@@ -368,6 +373,7 @@ export function seed(seedVal){
   S.chronicle = []; S.chronPrev = null; S.lex = newLex(); S.dialect = {};
   S.rocks = []; S.water = []; S.drought = 0; S.effects = []; S.challenge = null; S.shares = 0; S.packKills = 0; S.nests = []; S.caches = []; S.shelters = []; S.colonized = []; S.tamedEver = false;
   phylo.phyloReset(); flora.floraReset();
+  village.villageReset(); property.propertyReset(); culture.cultureReset(); trade.tradeReset(); tribe.tribeReset();
   buildPlanets(P.planetCount);
   generateBiomes();
   pherInit();
@@ -444,6 +450,8 @@ export function step(){
     // r/K life history: a fast lineage matures early, breeds cheaply and dies young;
     // a slow one invests in a long-lived body and a few well-provisioned offspring
     const lh = lifeHistory(g);
+    // division of labour: a specialist's body is tuned for the one job it does
+    const re = village.roleEffect(c);
     const matAge = P[cfg.maxAge] * 0.16 * lh.matMult;                     // grow to adult size over the first ~16% of life
     c.rad = g.size * clamp(0.45 + 0.55 * (c.age / matAge), 0.45, 1);
     if(c.alert > 0) c.alert--;
@@ -502,6 +510,12 @@ export function step(){
             // kin food-sharing: a well-fed altruist gives energy to a starving relative nearby
             if(d < 900 && o.lineage === c.lineage && c.energy > P[cfg.reproE] * 0.7 && o.energy < P[cfg.reproE] * 0.35 && rand() < g.altruism * 0.08){
               c.energy -= 8; o.energy += 6; S.shares++;
+            }
+            // a stranger whose markings read as the wrong tribe is met with hostility
+            // rather than help, if this body cares about markings at all
+            else if(P.tribeOn && d < 900 && o.lineage !== c.lineage && tribe.aggression(c, o) > 0){
+              const f = tribe.aggression(c, o);
+              c.energy -= 1.2 * f; o.energy -= 4.5 * f;   // a fight costs the aggressor too
             }
             // reciprocal altruism: help a NON-kin neighbour in need — unless they've taken without giving back
             else if(d < 900 && o.lineage !== c.lineage && g.reciprocity > 0.05 && c.energy > P[cfg.reproE] * 0.7 && o.energy < P[cfg.reproE] * 0.3){
@@ -667,7 +681,8 @@ export function step(){
     if(P.pherOn) pherDeposit(c, c.energy > P[cfg.reproE] * 0.5 ? 0.6 : 0.2);
 
     const sigCost = (Math.abs(c.sig[0]) + Math.abs(c.sig[1]) + Math.abs(c.sig[2])) * 0.012;   // honest signalling costs
-    let burn = metabolism(c) * (P.seasonsOn && si.idx === 3 ? 1.15 : 1) + sigCost;
+    let burn = metabolism(c) * re.metaMul * (P.seasonsOn && si.idx === 3 ? 1.15 : 1) + sigCost;
+    trade.gather(c);   // pick up any of the second resource underfoot
     // metabolic depression: a starving animal winds down into torpor instead of
     // burning at full rate, so a shortage thins a population along a gradient
     // rather than killing a whole cohort in the same handful of ticks
@@ -715,8 +730,13 @@ export function step(){
       }
       if(c.energy < P[cfg.reproE] * 0.32){
         // only kin draw from the family granary (so hoarding pays via kin selection, not free-riders)
-        for(let ci2 = 0; ci2 < S.caches.length; ci2++){ const ca = S.caches[ci2]; if(ca.lineage !== c.lineage || ca.amount <= 0) continue;
-          if((ca.x - c.x) ** 2 + (ca.y - c.y) ** 2 < 52 * 52){ const take = Math.min(ca.amount, 16); ca.amount -= take; c.energy += take; break; } }
+        for(let ci2 = 0; ci2 < S.caches.length; ci2++){ const ca = S.caches[ci2]; if(ca.amount <= 0) continue;
+          const kin = ca.lineage === c.lineage;
+          // kin draw by right; anyone else only if property.js says they will
+          if(!kin && !(P.propertyOn && property.mayTake(c, ca))) continue;
+          if((ca.x - c.x) ** 2 + (ca.y - c.y) ** 2 < 52 * 52){ const take = Math.min(ca.amount, 16); ca.amount -= take; c.energy += take;
+            if(!kin) property.onTake(c, ca, take);
+            break; } }
       }
     }
     // niche construction II: prey build a shelter (a thicket refuge) of their lineage,
@@ -753,6 +773,7 @@ export function step(){
         // classic reason predation cannot run a prey population to extinction.
         else if(stab && P.nestsOn && nestShelter(preyRef)) killP *= 0.22;
         if(P.buildOn && shelterProtect(preyRef)) killP *= 0.25;   // safe inside its family's built shelter
+        if(P.villageOn) killP *= village.defence(preyRef);        // a settlement defends its own, and its guards do the defending
         if(P.husbandOn && preyRef.owner && preyRef.owner !== c.id) killP *= 0.28;   // another herder guards its flock
         const ownHarvest = ownStock;
         // culls its OWN herd when starving, or when hungry and the herd can spare one
@@ -783,7 +804,7 @@ export function step(){
     // several small young, the K end on one large one (stochastic rounding keeps
     // fractional clutches meaningful without biasing the mean)
     const clutch = Math.max(1, Math.floor(lh.clutch) + (rand() < (lh.clutch % 1) ? 1 : 0));
-    if(c.age > matAge && c.energy >= reproE && creatures.length + newborns.length < P.maxPop * (S.planets.length || 1)){
+    if(c.age > matAge && c.energy >= reproE && (!P.tradeOn || trade.canBreed(c)) && creatures.length + newborns.length < P.maxPop * (S.planets.length || 1)){
       if(g.sexual > 0.5){
         // sexual: needs a ready mate in contact; offspring recombines both parents
         if(mateRef && !mateRef.dead && mateRef.matedTick !== S.tick){
@@ -793,11 +814,13 @@ export function step(){
             c.energy *= 0.6; mateRef.energy *= 0.6;
             c.matedTick = S.tick; mateRef.matedTick = S.tick;
             for(let ki = 0; ki < clutch; ki++){
-              const ch = makeCreature((c.x + mateRef.x) / 2, (c.y + mateRef.y) / 2, c.type, crossover(g, mateRef.g), Math.max(c.gen, mateRef.gen) + 1);
+              const cg = crossover(g, mateRef.g);
+              if(P.cultureVertOn) culture.inherit(c, cg);   // and what the parent learned, not only what it was born with
+              const ch = makeCreature((c.x + mateRef.x) / 2, (c.y + mateRef.y) / 2, c.type, cg, Math.max(c.gen, mateRef.gen) + 1);
               confineBirth(ch, c.x, c.y);
               ch.energy = childE / clutch; ch.lineage = c.lineage; ch.parent = c.id; ch.anc = ancestryOf(c); ch.sp = c.sp; if(cfg.terr){ ch.homeX = ch.x; ch.homeY = ch.y; }
               imitateNearby(ch, c, gcx, gcy);
-              c.kids++; mateRef.kids++;
+              c.kids++; mateRef.kids++; if(P.tradeOn) trade.payBreed(c);
               newborns.push(ch); if(ch.gen > S.maxGen) S.maxGen = ch.gen;
             }
             if(c.kids > S.records.maxKids) S.records.maxKids = c.kids;
@@ -808,11 +831,13 @@ export function step(){
         c.energy *= 0.5;
         const share = c.energy / clutch;
         for(let ki = 0; ki < clutch; ki++){
-          const ch = makeCreature(c.x + rnd(-6, 6), c.y + rnd(-6, 6), c.type, mutateGenome(g), c.gen + 1);
+          const cg = mutateGenome(g);
+          if(P.cultureVertOn) culture.inherit(c, cg);
+          const ch = makeCreature(c.x + rnd(-6, 6), c.y + rnd(-6, 6), c.type, cg, c.gen + 1);
           confineBirth(ch, c.x, c.y);
           ch.energy = share; ch.lineage = c.lineage; ch.parent = c.id; ch.anc = ancestryOf(c); ch.sp = c.sp; if(cfg.terr){ ch.homeX = c.x; ch.homeY = c.y; }
           imitateNearby(ch, c, gcx, gcy);
-          c.kids++;
+          c.kids++; if(P.tradeOn) trade.payBreed(c);
           newborns.push(ch); if(ch.gen > S.maxGen) S.maxGen = ch.gen;
         }
         if(c.kids > S.records.maxKids) S.records.maxKids = c.kids;
@@ -850,6 +875,12 @@ export function step(){
 
   if(P.floraOn !== false) flora.floraTick();
   if(P.speciesOn !== false) phylo.phyloTick();
+  // level-2 civilisation modules, each gated on its own switch
+  if(P.villageOn) village.villageTick(); else if(S.villages.length) S.villages.length = 0;
+  if(P.propertyOn) property.propertyTick();
+  if(P.cultureVertOn) culture.cultureTick();
+  if(P.tradeOn){ trade.mineralTick(); trade.tradeTick(); } else if(S.minerals.length) S.minerals.length = 0;
+  if(P.tribeOn) tribe.tribeTick(); else if(S.tribes.length) S.tribes.length = 0;
 
   if(S.tick % 6 === 0){
     let hn = 0, cn = 0, on = 0, camo = 0, acu = 0, sx = 0, tot = 0, genSum = 0, brainSum = 0, ornSum = 0;
@@ -900,26 +931,31 @@ export function step(){
 /* ---------- save / load ---------- */
 export function snapshot(){
   return {
-    v: 10, tick: S.tick, predations: S.predations, maxGen: S.maxGen, ID: S.ID, seed: S.seed,
+    v: 11, tick: S.tick, predations: S.predations, maxGen: S.maxGen, ID: S.ID, seed: S.seed,
     worldW: S.worldW, worldH: S.worldH,
     params: { foodRate: P.foodRate, mut: P.mut, predatorsOn: P.predatorsOn, omnivoresOn: P.omnivoresOn,
               flocksOn: P.flocksOn, terrOn: P.terrOn, mimicOn: P.mimicOn, seasonsOn: P.seasonsOn,
               pherOn: P.pherOn, cultureOn: P.cultureOn, learnOn: P.learnOn, nestsOn: P.nestsOn, plaguesOn: P.plaguesOn, migrateOn: P.migrateOn, hoardOn: P.hoardOn, buildOn: P.buildOn, dispOn: P.dispOn, husbandOn: P.husbandOn,
-              lifeHistOn: P.lifeHistOn, evolvOn: P.evolvOn, floraOn: P.floraOn, speciesOn: P.speciesOn },
+              lifeHistOn: P.lifeHistOn, evolvOn: P.evolvOn, floraOn: P.floraOn, speciesOn: P.speciesOn,
+              villageOn: P.villageOn, labourOn: P.labourOn, propertyOn: P.propertyOn, cultureVertOn: P.cultureVertOn, tradeOn: P.tradeOn, tribeOn: P.tribeOn },
     creatures: S.creatures.map(c => ({
       x: +c.x.toFixed(1), y: +c.y.toFixed(1), t: c.type,
       e: +c.energy.toFixed(1), a: c.age, gn: c.gen, id: c.id, hx: +c.homeX.toFixed(1), hy: +c.homeY.toFixed(1), ow: c.owner || 0, sp: c.sp || 0,
+      vl: c.vill || 0, rl: c.role || 0, mn: +(c.min || 0).toFixed(1), tb: c.tribe || 0,
       g: [+c.g.speed.toFixed(3), +c.g.sense.toFixed(1), +c.g.size.toFixed(2), +c.g.hue.toFixed(1),
           +c.g.sociality.toFixed(2), +c.g.camo.toFixed(2), +c.g.territoriality.toFixed(2),
           +c.g.territoryR.toFixed(1), +c.g.acuity.toFixed(2), +c.g.sexual.toFixed(2), +c.g.diet.toFixed(3),
           +c.g.shape.toFixed(2), +c.g.pattern.toFixed(2), +c.g.altruism.toFixed(2),
           +(c.g.ornament || 0).toFixed(2), +(c.g.preference || 0).toFixed(2), +(c.g.resist || 0).toFixed(2), +(c.g.reciprocity || 0).toFixed(2), +(c.g.migrate || 0).toFixed(2), +(c.g.hoard || 0).toFixed(2), +(c.g.build || 0).toFixed(2), +(c.g.disperse || 0).toFixed(2), +(c.g.husbandry || 0).toFixed(2),
-          +(c.g.pace === undefined ? 0.5 : c.g.pace).toFixed(2), +(c.g.mutRate === undefined ? 0.5 : c.g.mutRate).toFixed(3), +(c.g.detox || 0).toFixed(2)],
+          +(c.g.pace === undefined ? 0.5 : c.g.pace).toFixed(2), +(c.g.mutRate === undefined ? 0.5 : c.g.mutRate).toFixed(3), +(c.g.detox || 0).toFixed(2),
+          +(c.g.civic || 0).toFixed(2), +(c.g.caste || 0).toFixed(2), +(c.g.raid || 0).toFixed(2), +(c.g.respect || 0).toFixed(2), +(c.g.fidelity || 0).toFixed(2), +(c.g.trade || 0).toFixed(2), +(c.g.tribal || 0).toFixed(2)],
       b: { nh: c.g.brain.nh, w: c.g.brain.w.map(x => +x.toFixed(3)) }
     })),
     food: S.food.map(flora.packPlant),
     phylo: (S.phylo || []).map(r => ({ id: r.id, parent: r.parent, born: r.born, died: r.died, n: r.n, peak: r.peak, type: r.type, hue: +(r.hue || 0).toFixed(1) })),
     speciesN: S.speciesN || 0,
+    villages: village.packVillages(), minerals: trade.packMinerals(),
+    trades: S.trades || 0, thefts: S.thefts || 0, punishments: S.punishments || 0,
     rocks: S.rocks.map(r => [+r.x.toFixed(1), +r.y.toFixed(1), +r.r.toFixed(1)]),
     water: S.water.map(w => [+w.x.toFixed(1), +w.y.toFixed(1), +w.r.toFixed(1)]),
     biomes: S.biomes.map(bm => [+bm.x.toFixed(0), +bm.y.toFixed(0), +bm.r.toFixed(0), +bm.fert.toFixed(2)]),
@@ -931,12 +967,13 @@ export function snapshot(){
 }
 
 export function restore(s){
-  if(!s || (s.v !== 8 && s.v !== 9 && s.v !== 10)) return false;
+  if(!s || (s.v !== 8 && s.v !== 9 && s.v !== 10 && s.v !== 11)) return false;
   if(s.worldW){ S.worldW = s.worldW; S.worldH = s.worldH; }
   S.creatures = s.creatures.map(o => ({
     id: o.id, x: o.x, y: o.y, vx: 0, vy: 0, type: (o.t === 'carn' || o.t === 'omni' || o.t === 'herb') ? o.t : 'herb',
     energy: o.e, age: o.a, gen: o.gn, dead: false, homeX: (o.hx || o.x), homeY: (o.hy || o.y),
     mem: [0, 0], matedTick: -1, lineage: o.id, kids: 0, act: null, sick: 0, pathogen: null, immune: 0, ledger: [], carry: 0, parent: 0, anc: [], sig: [0, 0, 0], rad: o.g[2], alert: 0, groupSize: 0, owner: o.ow || 0, tamedTick: -1, herd: 0, sp: o.sp || 0,
+    vill: o.vl || 0, role: o.rl || 0, grudge: 0, stolen: 0, min: o.mn || 0, tribe: o.tb || 0, culture: 0,
     g: { speed: o.g[0], sense: o.g[1], size: o.g[2], hue: o.g[3], sociality: o.g[4], camo: o.g[5],
          territoriality: o.g[6], territoryR: o.g[7], acuity: o.g[8],
          sexual: o.g[9] !== undefined ? o.g[9] : 0.5,
@@ -952,13 +989,23 @@ export function restore(s){
          pace: o.g[23] !== undefined ? o.g[23] : 0.5,
          mutRate: o.g[24] !== undefined ? o.g[24] : 0.5,
          detox: o.g[25] !== undefined ? o.g[25] : 0.05,
+         civic: o.g[26] !== undefined ? o.g[26] : 0.1,
+         caste: o.g[27] !== undefined ? o.g[27] : 0.15,
+         raid: o.g[28] !== undefined ? o.g[28] : 0.1,
+         respect: o.g[29] !== undefined ? o.g[29] : 0.1,
+         fidelity: o.g[30] !== undefined ? o.g[30] : 0.15,
+         trade: o.g[31] !== undefined ? o.g[31] : 0.1,
+         tribal: o.g[32] !== undefined ? o.g[32] : 0.1,
          // migrate single-channel (v8) brains up to the three-channel layout
          brain: o.b.w.length === brainLenOld(o.b.nh) ? migrateBrain(o.b.nh, o.b.w) : { nh: o.b.nh, w: o.b.w.slice() } }
   }));
   S.food = s.food.map(flora.unpackPlant);
   phylo.phyloReset(); flora.floraReset();
+  village.villageReset(); property.propertyReset(); culture.cultureReset(); trade.tradeReset(); tribe.tribeReset();
   S.phylo = (s.phylo || []).map(r => ({ id: r.id, parent: r.parent || 0, born: r.born || 0, died: r.died || 0, n: r.n || 0, peak: r.peak || 0, type: r.type || 'herb', hue: r.hue || 0, cx: 0, cy: 0, g: null }));
   S.speciesN = s.speciesN || S.phylo.length;
+  village.unpackVillages(s.villages || []); trade.unpackMinerals(s.minerals || []);
+  S.trades = s.trades || 0; S.thefts = s.thefts || 0; S.punishments = s.punishments || 0;
   S.rocks = (s.rocks || []).map(a => ({ x: a[0], y: a[1], r: a[2] }));
   S.water = (s.water || []).map(a => ({ x: a[0], y: a[1], r: a[2] }));
   S.biomes = (s.biomes || []).map(a => ({ x: a[0], y: a[1], r: a[2], fert: a[3] }));

@@ -19,6 +19,13 @@ export function randomGenome(type){
     // mutRate: this lineage's own mutability, itself heritable and evolvable
     // detox: capacity to neutralise plant chemical defences
     pace: rnd(0.3, 0.7), mutRate: rnd(0.4, 0.6), detox: rnd(0, 0.15),
+    // level-2: civic (upkeep of shared works), caste (how strongly a body
+    // specialises into one job), raid (taking what is not yours), respect
+    // (leaving it alone, and paying to punish those who don't), fidelity
+    // (how faithfully what you learned reaches your children), trade
+    // (willingness to exchange), tribal (how much a stranger's markings matter)
+    civic: rnd(0, 0.25), caste: rnd(0, 0.3), raid: rnd(0, 0.2), respect: rnd(0, 0.25),
+    fidelity: rnd(0, 0.3), trade: rnd(0, 0.25), tribal: rnd(0, 0.2),
     sexual: cfg.sexual ? 1 : 0, brain: randomBrain()
   };
 }
@@ -130,6 +137,13 @@ export function mutateGenome(g){
     // drift outrun it entirely.
     mutRate: clamp((g.mutRate === undefined ? 0.5 : g.mutRate) + gauss() * m * 0.5, 0.02, 1),
     detox: clamp((g.detox === undefined ? 0.05 : g.detox) + gauss() * m * 1.3, 0, 1),
+    civic: clamp((g.civic === undefined ? 0.1 : g.civic) + gauss() * m * 1.3, 0, 1),
+    caste: clamp((g.caste === undefined ? 0.15 : g.caste) + gauss() * m * 1.3, 0, 1),
+    raid: clamp((g.raid === undefined ? 0.1 : g.raid) + gauss() * m * 1.3, 0, 1),
+    respect: clamp((g.respect === undefined ? 0.1 : g.respect) + gauss() * m * 1.3, 0, 1),
+    fidelity: clamp((g.fidelity === undefined ? 0.15 : g.fidelity) + gauss() * m * 1.3, 0, 1),
+    trade: clamp((g.trade === undefined ? 0.1 : g.trade) + gauss() * m * 1.3, 0, 1),
+    tribal: clamp((g.tribal === undefined ? 0.1 : g.tribal) + gauss() * m * 1.3, 0, 1),
     sexual: cfg.sexual ? 1 : 0,
     brain: mutateBrain(g.brain, sc)
   };
@@ -150,7 +164,10 @@ export function crossover(ga, gb){
     acuity: pk(ga.acuity, gb.acuity), diet: pk(ga.diet, gb.diet),
     shape: pk(ga.shape, gb.shape), pattern: pk(ga.pattern, gb.pattern), altruism: pk(ga.altruism, gb.altruism),
     ornament: sp.ornament, preference: sp.preference, resist: pk(ga.resist, gb.resist), reciprocity: pk(ga.reciprocity, gb.reciprocity), migrate: pk(ga.migrate, gb.migrate), hoard: pk(ga.hoard, gb.hoard), build: pk(ga.build, gb.build), disperse: pk(ga.disperse, gb.disperse), husbandry: pk(ga.husbandry, gb.husbandry),
-    pace: pk(ga.pace, gb.pace), mutRate: pk(ga.mutRate, gb.mutRate), detox: pk(ga.detox, gb.detox), brain: crossBrain(ga.brain, gb.brain)
+    pace: pk(ga.pace, gb.pace), mutRate: pk(ga.mutRate, gb.mutRate), detox: pk(ga.detox, gb.detox),
+    civic: pk(ga.civic, gb.civic), caste: pk(ga.caste, gb.caste), raid: pk(ga.raid, gb.raid), respect: pk(ga.respect, gb.respect),
+    fidelity: pk(ga.fidelity, gb.fidelity), trade: pk(ga.trade, gb.trade), tribal: pk(ga.tribal, gb.tribal),
+    brain: crossBrain(ga.brain, gb.brain)
   };
   return mutateGenome(base);
 }
@@ -165,6 +182,12 @@ export function makeCreature(x, y, type, genome, gen){
     lineage: 0, kids: 0, act: null, sick: 0, pathogen: null, immune: 0, ledger: [], carry: 0, parent: 0, anc: [], sig: [0, 0, 0],
     rad: genome.size * 0.45, alert: 0, groupSize: 0,
     sp: 0,                             // species id assigned by phylo.js
+    // level-2 per-body state, owned by the modules named in the comments
+    vill: 0, role: 0,                  // village.js: settlement id, job within it
+    grudge: 0, stolen: 0,              // property.js: punishment pressure, energy taken from others
+    min: 0,                            // trade.js: minerals held
+    tribe: 0,                          // tribe.js: coalition id
+    culture: 0,                        // culture.js: how much of this brain was taught rather than inherited
     owner: 0, tamedTick: -1, herd: 0   // owner: id of the herder tending this creature as livestock; herd: livestock a herder tends
   };
 }
@@ -185,6 +208,15 @@ export function metabolism(c){
   // 0.425/0.254 at 0.044 (no rank overlap), 0.369/0.327 at 0.09 (effect gone,
   // the liver is priced out before the toxins can select for it). 0.044 it is.
   if(g.detox && P.floraOn && cfg.eatsPlants) m += g.detox * 0.044;
+  // Level-2 upkeep. Each of these is gated on its own switch so that turning a
+  // mechanic off removes its cost as well as its benefit, and none of them is a
+  // free trait: paying for the commons, carrying a specialised body, keeping
+  // watch on your neighbours' honesty and teaching your young all cost energy.
+  if(g.civic && P.villageOn) m += g.civic * 0.010;
+  if(g.caste && P.labourOn) m += g.caste * 0.008;
+  if(g.respect && P.propertyOn) m += g.respect * 0.009;
+  if(g.fidelity && P.cultureVertOn) m += g.fidelity * 0.010;
+  if(g.tribal && P.tribeOn) m += g.tribal * 0.008;
   // Rate of living: a fast life history is a hot one. Growing up in half the time
   // and breeding on a shallow reserve is bought with a higher mass-specific
   // metabolic rate — and the same hot metabolism is why the fast body wears out
