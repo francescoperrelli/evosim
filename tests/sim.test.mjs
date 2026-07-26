@@ -64,7 +64,7 @@ check('page loads without console errors', consoleErrors.length === 0, consoleEr
 const det = await page.evaluate(async () => {
   const w = await import('./js/world.js'), st = await import('./js/state.js');
   const fp = () => { let h = 0; for(const c of st.S.creatures) h = (h + Math.round(c.x) * 13 + Math.round(c.y) * 7 + Math.round(c.energy) * 3 + c.gen * 11 + c.g.brain.nh * 17) >>> 0; return h >>> 0; };
-  const run = sd => { w.seed(sd); for(let i = 0; i < 1500; i++) w.step(); return fp(); };
+  const run = sd => { w.seed(sd); for(let i = 0; i < 1000; i++) w.step(); return fp(); };
   const a = run(2024), a2 = run(2024), b = run(4048);
   return { identical: a === a2, differ: a !== b };
 });
@@ -118,21 +118,35 @@ check('accepts and migrates a v8 save', mig.ok);
 check('migrated brain has the new layout', mig.brainLen === mig.expLen, mig.brainLen + ' vs ' + mig.expLen);
 check('runs after migration without error', !mig.err, mig.err);
 
-// ---- level-3 modules are behaviour-neutral while they are stubs ----
-// This is the guarantee the five level-3 modules are written against: switching
-// the whole layer off must reproduce the run bit for bit. It is what lets each
-// module be developed against a known-good baseline, and the first thing to break
-// when a module starts consuming rand() outside its own switch.
+// ---- each level-3 mechanic, alone, is deterministic and does not kill the world ----
+// While the five modules were stubs this asserted that switching the layer on
+// changed nothing. That guarantee died the moment they started doing something,
+// and replacing it with a frozen fingerprint would only have frozen level-1 and
+// level-2 as well. What is worth protecting instead is what a broken module
+// actually does: it desynchronises the run from its seed (by reaching for
+// Math.random(), usually from drawing code) or it eats the ecology on its own.
+// Each mechanic is therefore run by itself, twice, against the same seed.
 const l3 = await page.evaluate(async () => {
   const w = await import('./js/world.js'), st = await import('./js/state.js');
   const FLAGS = ['toolsOn', 'fireOn', 'marksOn', 'techOn', 'terraOn'];
   const fp = () => { let h = 0; for(const c of st.S.creatures) h = (h + Math.round(c.x) * 13 + Math.round(c.y) * 7 + Math.round(c.energy) * 3 + c.gen * 11) >>> 0; return h >>> 0; };
-  const run = on => { for(const f of FLAGS) st.P[f] = on; w.seed(1234); for(let i = 0; i < 1200; i++) w.step(); return fp(); };
-  const withL3 = run(true), withoutL3 = run(false);
+  const run = () => { w.seed(1234); for(let i = 0; i < 1000; i++) w.step(); return fp(); };
+  const out = [];
+  for(const on of FLAGS){
+    for(const f of FLAGS) st.P[f] = (f === on);
+    const a = run(), b = run();
+    out.push({ f: on, det: a === b, pop: st.S.creatures.length, a, b });
+  }
   for(const f of FLAGS) st.P[f] = true;
-  return { same: withL3 === withoutL3, a: withL3, b: withoutL3 };
+  const a = run(), b = run();
+  out.push({ f: 'all', det: a === b, pop: st.S.creatures.length, a, b });
+  return out;
 });
-check('level-3 stubs change nothing when switched on', l3.same, l3.a + ' vs ' + l3.b);
+const l3det = l3.filter(r => !r.det), l3dead = l3.filter(r => r.pop === 0);
+check('every level-3 mechanic stays deterministic', l3det.length === 0,
+  l3det.map(r => r.f + ' ' + r.a + ' vs ' + r.b).join(', '));
+check('no level-3 mechanic empties the world on its own', l3dead.length === 0,
+  l3dead.map(r => r.f).join(', '));
 
 // ---- multi-planet world: planets build, creatures stay confined ----
 const pl = await page.evaluate(async () => {

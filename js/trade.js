@@ -390,8 +390,7 @@ const _sellers = [];
 // module, so the import is a cycle; it is safe because both are hoisted function
 // declarations and neither is called at module-evaluation time.
 //
-// import { ledgerScore as _ledgerScore, ledgerBump as _ledgerBump } from './world.js';
-let _ledgerScore = null, _ledgerBump = null;
+import { ledgerScore as _ledgerScore, ledgerBump as _ledgerBump } from './world.js';
 // Threshold for refusing to deal. A body only reaches -3 by having been given to
 // repeatedly without reciprocating, so this is "you have taken from me three times
 // and never paid it back", not a general suspicion of strangers.

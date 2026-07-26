@@ -115,8 +115,8 @@ function pherUpdate(){
 // Each creature keeps a tiny ledger of recent non-kin partners: a negative score
 // means "I gave and they never gave back" (a cheat, cut off); >= 0 means they've
 // reciprocated or are still unknown (cooperate). Bounded memory, evicted LRU.
-function ledgerScore(c, id){ const L = c.ledger; for(let i = 0; i < L.length; i++) if(L[i].id === id) return L[i].s; return 0; }
-function ledgerBump(c, id, d){
+export function ledgerScore(c, id){ const L = c.ledger; for(let i = 0; i < L.length; i++) if(L[i].id === id) return L[i].s; return 0; }
+export function ledgerBump(c, id, d){
   const L = c.ledger;
   for(let i = 0; i < L.length; i++){ if(L[i].id === id){ L[i].s = clamp(L[i].s + d, -4, 4); L[i].t = S.tick; return; } }
   if(L.length >= 5){ let old = 0; for(let i = 1; i < L.length; i++) if(L[i].t < L[old].t) old = i; L.splice(old, 1); }
@@ -670,6 +670,15 @@ export function step(){
         const dd = (ca.x - c.x) ** 2 + (ca.y - c.y) ** 2; if(dd < bd){ bd = dd; bc = ca; } }
       if(bc){ const dd = Math.sqrt(bd) || 1; ix += (bc.x - c.x) / dd * 0.8; iy += (bc.y - c.y) / dd * 0.8; }
     }
+    // and a hungry body that can see somebody *else's* granary is pulled toward it
+    // the same way. property.js used to walk these bodies itself, which made raiding
+    // the one appetite in the world that could not be overruled by a threat or by
+    // hunger for anything else. It is a steering force now, like every other.
+    if(P.propertyOn && P.hoardOn && !thrHas && S.caches.length && property.seekHungry(c, P[cfg.reproE])){
+      const tg = property.seekTarget(c);
+      if(tg){ const dd = Math.hypot(tg.x - c.x, tg.y - c.y) || 1;
+        ix += (tg.x - c.x) / dd * property.SEEK_W; iy += (tg.y - c.y) / dd * property.SEEK_W; }
+    }
 
     // livestock are kept close to their herder (the herd coheres, and stays under
     // the herder's protection) — the shepherded animals drift back if they stray
@@ -679,8 +688,16 @@ export function step(){
         if(hd > 40){ const s = Math.min(1, hd / 160); ix += hx / hd * s * 1.1; iy += hy / hd * s * 1.1; } }
     }
 
-    // combine brain + instinct
-    let dx = _out[0] * BRAIN_W + ix * INNATE_W, dy = _out[1] * BRAIN_W + iy * INNATE_W;
+    // combine brain + instinct.
+    // The brain's inputs are egocentric — every bearing it is given is measured
+    // against the body's own heading — so its two motor outputs are a turn, not a
+    // compass direction. They have to be rotated back into world frame by that same
+    // heading before they are added to the innate pull, or the brain is answering a
+    // question in one coordinate system and being obeyed in another. It was the
+    // second for a long time, which is why lifetime learning had no measurable
+    // effect: nothing a body learned could be expressed as movement.
+    const bx = _out[0] * hx - _out[1] * hy, by = _out[0] * hy + _out[1] * hx;
+    let dx = bx * BRAIN_W + ix * INNATE_W, dy = by * BRAIN_W + iy * INNATE_W;
     if(dx * dx + dy * dy < 1e-4){ dx = rnd(-1, 1); dy = rnd(-1, 1); }
     const dl = Math.hypot(dx, dy) || 1;
     const spd = g.speed * re.speedMul;                       // a forager runs, a nurse does not
