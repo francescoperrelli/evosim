@@ -445,13 +445,15 @@ export function step(){
     const c = creatures[ci];
     if(c.dead) continue;
     c.age++;
-    const g = c.g, cfg = TYPES[c.type], senseSq = g.sense * g.sense;
+    // division of labour comes first because it reshapes the body: a specialist's
+    // sense radius has to be settled before anything is scanned with it, which is
+    // why this call sits above the sense/speed reads rather than below them
+    const re = village.roleEffect(c);
+    const g = c.g, cfg = TYPES[c.type], sense = g.sense * re.senseMul, senseSq = sense * sense;
     const preds = PREDATORS[c.type], hunts = cfg.hunts;
     // r/K life history: a fast lineage matures early, breeds cheaply and dies young;
     // a slow one invests in a long-lived body and a few well-provisioned offspring
     const lh = lifeHistory(g);
-    // division of labour: a specialist's body is tuned for the one job it does
-    const re = village.roleEffect(c);
     const matAge = P[cfg.maxAge] * 0.16 * lh.matMult;                     // grow to adult size over the first ~16% of life
     c.rad = g.size * clamp(0.45 + 0.55 * (c.age / matAge), 0.45, 1);
     if(c.alert > 0) c.alert--;
@@ -556,7 +558,7 @@ export function step(){
     }
 
     // egocentric inputs
-    const inv = 1 / g.sense;
+    const inv = 1 / sense;   // the caste's effective radius, so brain inputs keep their scale
     const ego = (dx, dy, i) => { _in[i] = (dx * hx + dy * hy) * inv; _in[i + 1] = (-dx * hy + dy * hx) * inv; };
     if(bfRef){ ego(bfx, bfy, 0); _in[2] = 1 - Math.sqrt(bfD) * inv; } else { _in[0] = _in[1] = _in[2] = 0; }
     if(preyRef){ ego(preyx, preyy, 3); _in[5] = 1 - Math.sqrt(preyD) * inv; } else { _in[3] = _in[4] = _in[5] = 0; }
@@ -655,7 +657,8 @@ export function step(){
     let dx = _out[0] * BRAIN_W + ix * INNATE_W, dy = _out[1] * BRAIN_W + iy * INNATE_W;
     if(dx * dx + dy * dy < 1e-4){ dx = rnd(-1, 1); dy = rnd(-1, 1); }
     const dl = Math.hypot(dx, dy) || 1;
-    c.vx = dx / dl * g.speed; c.vy = dy / dl * g.speed;
+    const spd = g.speed * re.speedMul;                       // a forager runs, a nurse does not
+    c.vx = dx / dl * spd; c.vy = dy / dl * spd;
     const wf = S.water.length ? waterFactor(c.x, c.y) : 1;   // water slows movement
     const ox = c.x, oy = c.y;                                // last in-planet position (for the void barrier)
     c.x += c.vx * wf; c.y += c.vy * wf;

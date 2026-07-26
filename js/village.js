@@ -429,12 +429,12 @@ export function defence(c){
 // commits, and every multiplier below is scaled by it, so caste ~ 0 is a generalist
 // with a generalist's body whatever role it was nominally assigned.
 //
-// NOTE (measured, and it matters for reading the caste numbers): world.js currently
-// applies only `metaMul` — it reads g.speed and g.sense before roleEffect() is
-// called, so speedMul/senseMul are computed and thrown away. They are returned
-// honestly anyway so the day world.js wires them up nothing here has to change.
-// The consequence is that today a specialist's whole *physiological* trade-off runs
-// through its burn rate: the forager's lean body is cheap, the guard's is not.
+// NOTE: all three multipliers are live. world.js calls roleEffect() at the top of
+// the per-body pass, above the sense and speed reads, so senseMul widens the scan
+// radius (and the brain's egocentric normalisation with it, or the inputs would
+// silently change scale) and speedMul scales the step. The caste figures recorded
+// above were measured when only metaMul was applied and are therefore a floor, not
+// a current reading — a specialist now trades speed and vision as well as burn rate.
 const _re = { speedMul: 1, senseMul: 1, metaMul: 1 };
 export function roleEffect(c){
   if(!P.villageOn || !P.labourOn || !c.vill) return NEUTRAL_ROLE;

@@ -99,9 +99,17 @@ export function lifeHistory(g){
   };
 }
 
+// Mutational step size of the level-2 social genes. Everything else in this file
+// steps by gauss() * m * 1.3, which at the default P.mut = 0.08 means a child
+// differs from its parent by about 0.10 on a 0..1 scale — a tenth of the whole
+// range, every single generation. See the note above metabolism() for what that
+// does to a gene's ability to be selected at all. P.l2Mut overrides it for sweeps.
+const L2_MUT = 1.3;
+
 // Mutate a genome. Diet mutates first; the band (and its hue/mode) follows.
 export function mutateGenome(g){
   const sc = mutScale(g), m = P.mut * sc;
+  const m2 = m * (P.l2Mut === undefined ? L2_MUT : P.l2Mut);   // see the note on L2_MUT
   const diet = clamp((g.diet === undefined ? 0.15 : g.diet) + gauss() * m * 0.45, 0, 1);
   const cfg = TYPES[typeOf(diet)];
   return {
@@ -137,13 +145,13 @@ export function mutateGenome(g){
     // drift outrun it entirely.
     mutRate: clamp((g.mutRate === undefined ? 0.5 : g.mutRate) + gauss() * m * 0.5, 0.02, 1),
     detox: clamp((g.detox === undefined ? 0.05 : g.detox) + gauss() * m * 1.3, 0, 1),
-    civic: clamp((g.civic === undefined ? 0.1 : g.civic) + gauss() * m * 1.3, 0, 1),
-    caste: clamp((g.caste === undefined ? 0.15 : g.caste) + gauss() * m * 1.3, 0, 1),
-    raid: clamp((g.raid === undefined ? 0.1 : g.raid) + gauss() * m * 1.3, 0, 1),
-    respect: clamp((g.respect === undefined ? 0.1 : g.respect) + gauss() * m * 1.3, 0, 1),
-    fidelity: clamp((g.fidelity === undefined ? 0.15 : g.fidelity) + gauss() * m * 1.3, 0, 1),
-    trade: clamp((g.trade === undefined ? 0.1 : g.trade) + gauss() * m * 1.3, 0, 1),
-    tribal: clamp((g.tribal === undefined ? 0.1 : g.tribal) + gauss() * m * 1.3, 0, 1),
+    civic: clamp((g.civic === undefined ? 0.1 : g.civic) + gauss() * m2, 0, 1),
+    caste: clamp((g.caste === undefined ? 0.15 : g.caste) + gauss() * m2, 0, 1),
+    raid: clamp((g.raid === undefined ? 0.1 : g.raid) + gauss() * m2, 0, 1),
+    respect: clamp((g.respect === undefined ? 0.1 : g.respect) + gauss() * m2, 0, 1),
+    fidelity: clamp((g.fidelity === undefined ? 0.15 : g.fidelity) + gauss() * m2, 0, 1),
+    trade: clamp((g.trade === undefined ? 0.1 : g.trade) + gauss() * m2, 0, 1),
+    tribal: clamp((g.tribal === undefined ? 0.1 : g.tribal) + gauss() * m2, 0, 1),
     sexual: cfg.sexual ? 1 : 0,
     brain: mutateBrain(g.brain, sc)
   };
@@ -192,6 +200,51 @@ export function makeCreature(x, y, type, genome, gen){
   };
 }
 
+// ---------------------------------------------------------------------------
+// HOW BIG DOES A FITNESS DIFFERENCE HAVE TO BE BEFORE THIS SIMULATION CAN SELECT
+// ON IT? Measured, because all five level-2 module authors independently reported
+// their gene reading as drift and it was worth finding out whether that was their
+// tuning or something structural.
+//
+// The clean test is a gene that does nothing at all and is charged a pure,
+// unconditional, always-paid cost: cultureVertOn with P.cultureGain = 0 makes
+// `fidelity` functionless, every other level-2 flag off leaves it the only gene
+// paying, and P.l2Cost scales the coefficient. 4 seeds x 12000 ticks, sampled
+// every 200 after 3500. Founding mean 0.15.
+//
+//   l2Cost   coefficient   fidelity mean +- sd   mean pop
+//      0       (free)        0.228 +- 0.027        344
+//      1        0.010        0.231 +- 0.029        311
+//      3        0.030        0.226 +- 0.024        337
+//      6        0.060        0.246 +- 0.040        284
+//     10        0.100        0.207 +- 0.044        274
+//     20        0.200        0.199 +- 0.036        300
+//     50        0.500        0.143 +- 0.016        225
+//    100        1.000        0.097 +- 0.021        254
+//
+// Read it honestly. A cost of 0.100 — twice what any level-2 line charges, and
+// enough to knock a fifth off the population — does not move the gene outside one
+// between-seed sd. The gene only starts responding at 0.5, which is ten times the
+// baseMeta of a herbivore and roughly a third of its whole energy budget.
+//
+// So the threshold is not a tuning detail, it is a property of the architecture:
+// a 0..1 behavioural gene here is selectable only when its consequence is tens of
+// percent of the body's energy budget. A few percent is drift, and no run length a
+// player will ever sit through changes that. Slowing the mutational step does not
+// rescue it either — at P.l2Mut = 0.35 the free arm stops climbing (0.153, i.e.
+// the diffusion is gone) but the costed arm sits at 0.147, because removing the
+// noise does not create a signal that was never there.
+//
+// The one level-2 gene that IS cleanly selected is `raid`, and the reason is the
+// shape of its payoff rather than its size: a raider eats what it takes, now, and
+// keeps all of it. Every gene that failed — civic, respect, trade, tribal,
+// fidelity — pays for a public good whose benefit is spread over neighbours who
+// mostly do not carry it. That is the free-rider problem behaving exactly as the
+// theory says it should, and it is a result rather than a bug. What the theory
+// also says is that public-goods genes are rescued by assortment, not by bigger
+// numbers, so the honest lever is making village and coalition payoffs flow to
+// co-carriers rather than to whoever happens to be standing nearby.
+// ---------------------------------------------------------------------------
 export function metabolism(c){
   const g = c.g, cfg = TYPES[c.type];
   let m = cfg.baseMeta + (g.speed * g.speed) * 0.05 + ((c.rad || g.size) * 0.012) + (g.sense * 0.0016);
@@ -212,11 +265,21 @@ export function metabolism(c){
   // mechanic off removes its cost as well as its benefit, and none of them is a
   // free trait: paying for the commons, carrying a specialised body, keeping
   // watch on your neighbours' honesty and teaching your young all cost energy.
-  if(g.civic && P.villageOn) m += g.civic * 0.010;
-  if(g.caste && P.labourOn) m += g.caste * 0.008;
-  if(g.respect && P.propertyOn) m += g.respect * 0.009;
-  if(g.fidelity && P.cultureVertOn) m += g.fidelity * 0.010;
-  if(g.tribal && P.tribeOn) m += g.tribal * 0.008;
+  // P.l2Cost is a research knob, not a game setting: it scales every line below at
+  // once. It exists because "is this gene selected or is it drifting?" is a question
+  // about the size of a fitness differential relative to mutational noise, and the
+  // only way to answer it is to sweep the differential. Default 1.
+  const l2 = P.l2Cost === undefined ? 1 : P.l2Cost;
+  if(g.civic && P.villageOn) m += g.civic * 0.010 * l2;
+  if(g.caste && P.labourOn) m += g.caste * 0.008 * l2;
+  if(g.respect && P.propertyOn) m += g.respect * 0.009 * l2;
+  if(g.fidelity && P.cultureVertOn) m += g.fidelity * 0.010 * l2;
+  if(g.tribal && P.tribeOn) m += g.tribal * 0.008 * l2;
+  // trade.js charged this itself until now, which made it the one level-2 gene
+  // priced outside the common line. P.tradeNoExchange is that module's drift
+  // control and has to suspend the cost as well as the payoff, or the control arm
+  // is a pure-cost arm and measures the wrong thing.
+  if(g.trade && P.tradeOn && !P.tradeNoExchange) m += g.trade * 0.006 * l2;
   // Rate of living: a fast life history is a hot one. Growing up in half the time
   // and breeding on a shallow reserve is bought with a higher mass-specific
   // metabolic rate — and the same hot metabolism is why the fast body wears out

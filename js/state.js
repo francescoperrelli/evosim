@@ -24,6 +24,7 @@ export const P = {
   villageOn:true,     // co-located shelters coalesce into maintained settlements
   labourOn:true,      // polyethism: forager / guard / nurse roles inside a settlement
   propertyOn:true,    // raiding a granary vs. respecting it, and punishing raiders
+  propertyPunish:true,// the second-order half of it: whether respecters pay to punish raiders
   cultureVertOn:true, // parents teach children what they learned, with a fidelity gene
   tradeOn:true,       // a second resource (minerals) and exchange between neighbours
   tribeOn:true        // group markers, coalitions and intergroup conflict

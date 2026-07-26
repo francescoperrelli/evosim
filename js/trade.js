@@ -138,8 +138,10 @@ const K = {
   tradeR: 90,         // how far a deal reaches
   priceF: 0.09,       // price of one ration, as a fraction of the buyer's reproE
   keep: 0.9,          // fraction of the price that reaches the seller (the rest is the cost of dealing)
-  meet: 0.6,          // per-step deal chance for a willing pair, scaled by min(trade gene)
-  carry: 0.006        // energy/step upkeep of a full `trade` gene
+  meet: 0.6           // per-step deal chance for a willing pair, scaled by min(trade gene)
+  // the upkeep of the `trade` gene used to live here as K.carry; it now sits on
+  // the common level-2 line in genome.js's metabolism(), where its five siblings
+  // are charged, and is suspended by P.tradeNoExchange exactly as it was here
 };
 
 // ---------------------------------------------------------------------------
@@ -310,9 +312,9 @@ export function tradeReset(){ S.minerals = []; S.trades = 0; _gGain = null; _gDe
 // altruism is involved. The `trade` gene only says how readily a body deals —
 // both parties must be willing, so the pair rate is min(a, b).
 //
-// The gene is not free: carrying it costs upkeep every step (the other level-2
-// genes are charged the same way in genome.js's metabolism(); `trade` has no line
-// there, so the charge lives here instead). Without a cost the gene is a free
+// The gene is not free: carrying it costs upkeep every step, charged on the common
+// level-2 line in genome.js's metabolism() alongside its five siblings, and gated
+// on P.tradeNoExchange there so the control arm stays neutral. Without a cost the gene is a free
 // lunch and rises everywhere including in worlds with nothing to trade, which
 // makes the whole measurement meaningless.
 //
@@ -337,10 +339,7 @@ export function tradeTick(){
   const C = S.creatures, n = C.length;
   if(!n) return;
   const off = P.tradeNoExchange;
-  if(!off && K.carry > 0){
-    for(let i = 0; i < n; i++){ const c = C[i]; const t = c.g.trade; if(t) c.energy -= t * K.carry; }
-  }
-  if(off) return;
+  if(off) return;                        // upkeep included: see the note on K above
 
   // A bucket grid holding only the *buyers* — bodies with spare energy and no ore.
   // Grid the smaller side and scan from the sellers, so the pass costs one sweep
