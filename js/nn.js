@@ -65,24 +65,69 @@ function sections(b){
     B2: w.slice(nh * NIN + nh + nh * NOUT)
   };
 }
+// Growing the brain by one hidden neuron.
+//
+// Inventing a neuron from scratch (the `else` branch) drops a random function
+// into a working circuit, so it is almost always harmful the moment it appears
+// and selection removes it before it can ever be refined. Real genomes do not
+// gain parts that way: they gain them by DUPLICATION, and the duplicate is
+// retained precisely because it changes nothing at first.
+//
+// So with evolvability on we copy an existing neuron instead. What is copied is
+// the thing that took selection a long time to build: the duplicate's INCOMING
+// weights and bias are inherited from its template, so it already computes a
+// feature the lineage has been rewarded for detecting. What it does not inherit
+// is a voice — its outgoing weights start at ~0, so it is silent on arrival and
+// the circuit behaves exactly as it did before. The lineage pays only the
+// metabolic cost of the extra unit, so selection has no reason to remove it, and
+// a single later mutation on one outgoing weight recruits a ready-made detector
+// to a new job. That is what makes duplicates a cheaper source of function than
+// invention: the `else` branch has to random-walk a whole 20-dimensional input
+// filter into something meaningful, which essentially never happens.
+//
+// The template is deliberately left untouched. Sharing the output between the
+// twins instead (halving the original's outgoing weights, the classic dosage
+// model) is also exactly neutral on arrival, but it was measurably WORSE than
+// random invention here — a redundant twin adds no new feature to a hidden layer,
+// and every later deletion of one twin tears the shared function in half.
 function addNeuron(b){
   const s = sections(b);
+  if(P.evolvOn){
+    const j = rand() * b.nh | 0;                 // the template neuron
+    const newW1 = new Array(NIN), newW2 = new Array(NOUT);
+    for(let i = 0; i < NIN; i++) newW1[i] = s.W1[j * NIN + i] + gauss() * 0.03;   // inherit the evolved feature detector
+    for(let k = 0; k < NOUT; k++) newW2[k] = gauss() * 0.02;                      // but arrive silent
+    return { nh: b.nh + 1, w: [...s.W1, ...newW1, ...s.B1, s.B1[j] + gauss() * 0.03, ...s.W2, ...newW2, ...s.B2] };
+  }
   const newW1 = []; for(let i = 0; i < NIN; i++) newW1.push(gauss() * 0.2);
   const newW2 = []; for(let k = 0; k < NOUT; k++) newW2.push(gauss() * 0.2);
   return { nh: b.nh + 1, w: [...s.W1, ...newW1, ...s.B1, gauss() * 0.2, ...s.W2, ...newW2, ...s.B2] };
 }
+// A deletion falls where it falls: it takes out an arbitrary neuron, not the most
+// recently acquired one. Always deleting the last one made loss the exact inverse
+// of gain, so every duplicate was the next deletion's first target and nothing new
+// ever survived long enough to diverge.
 function removeNeuron(b){
-  const nh = b.nh, s = sections(b);
-  return { nh: nh - 1, w: [...s.W1.slice(0, (nh - 1) * NIN), ...s.B1.slice(0, nh - 1), ...s.W2.slice(0, (nh - 1) * NOUT), ...s.B2] };
+  const nh = b.nh, s = sections(b), j = rand() * nh | 0;
+  const W1 = s.W1.slice(0, j * NIN).concat(s.W1.slice((j + 1) * NIN));
+  const B1 = s.B1.slice(0, j).concat(s.B1.slice(j + 1));
+  const W2 = s.W2.slice(0, j * NOUT).concat(s.W2.slice((j + 1) * NOUT));
+  return { nh: nh - 1, w: [...W1, ...B1, ...W2, ...s.B2] };
 }
 
-export function mutateBrain(b){
+// `scale` is the parent's own mutability (genome.js passes mutScale(g)). The brain
+// is part of the phenotype like any other organ, so a mutator lineage must garble
+// its circuits as readily as its body — otherwise a high mutation rate would be a
+// free option, adaptive under change with no deleterious load to purge it under
+// stasis. Structural mutation (gaining or losing a neuron) scales with it too.
+export function mutateBrain(b, scale){
+  const sc = scale === undefined ? 1 : scale;
   let nb;
   const r = rand();
-  if(r < 0.05 && b.nh < MAX_NH) nb = addNeuron(b);
-  else if(r < 0.09 && b.nh > MIN_NH) nb = removeNeuron(b);
+  if(r < 0.05 * sc && b.nh < MAX_NH) nb = addNeuron(b);
+  else if(r < 0.09 * sc && b.nh > MIN_NH) nb = removeNeuron(b);
   else nb = { nh: b.nh, w: b.w.slice() };
-  const m = P.mut, w = nb.w;
+  const m = P.mut * sc, w = nb.w;
   for(let i = 0; i < w.length; i++) w[i] = clamp(w[i] + gauss() * m * 0.6, -5, 5);
   return nb;
 }

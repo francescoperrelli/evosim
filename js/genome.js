@@ -25,22 +25,76 @@ export function randomGenome(type){
 
 // Per-genome mutation scale. With evolvability off every lineage mutates at the
 // global rate; with it on, `mutRate` scales each lineage's own step size, so the
-// mutation rate is itself under selection.
+// mutation rate is itself under selection — second-order selection, since the
+// gene has no effect of its own and can only be selected through the quality of
+// the mutations it produces in the rest of the genome.
+//
+// The mapping is exponential rather than linear because a mutation rate is a
+// rate: real mutators differ from wild-type by factors, not by increments. A
+// linear map also makes the gene nearly neutral at its top end (0.9 -> 0.95
+// barely changes anything) so it silts up there by drift; on a log scale the
+// selective gradient is the same everywhere along the axis. 0.5 is exactly the
+// global rate, so switching the mechanic on does not shift the average.
+const MUT_SPAN = 1.8;                 // e^(±0.9): ~0.41x at one end, ~2.46x at the other
 export function mutScale(g){
   if(!P.evolvOn) return 1;
   const r = g.mutRate === undefined ? 0.5 : g.mutRate;
-  return 0.25 + 1.75 * r;
+  return Math.exp(MUT_SPAN * (r - 0.5));
 }
 
-// Life history derived from the `pace` gene. Neutral (all 1, single offspring)
-// while the mechanic is off, so the caller can apply it unconditionally.
+// Life history derived from the `pace` gene: the r/K axis, the oldest trade-off
+// in demography. Nothing here is a free lunch — every gain on one side is paid
+// for on another, and which side pays best depends entirely on how the world
+// kills you.
+//
+//   pace -> 0  (r): mature early, breed on a shallow reserve, split it among
+//                   many small young, die young. Wins where mortality is high
+//                   and indiscriminate, because a body is unlikely to survive
+//                   long enough for any investment in it to be repaid.
+//   pace -> 1  (K): mature late, hoard a deep reserve, spend it all on one
+//                   well-provisioned offspring, live long. Wins at carrying
+//                   capacity, where a juvenile's starting energy decides whether
+//                   it survives the competition its parents have already lost to.
+//
+// The one thing this axis cannot lean on is clutch size. world.js charges the
+// parent a flat half of its reserve per breeding event however many young come out
+// of it, and it shields a starving body by cutting its burn rate, so extra eggs are
+// very nearly free and poorly provisioned ones rarely starve. Left to run, that
+// arithmetic beats every other term and `pace` collapses to 0 in every world
+// (measured: benign settled at 0.22 with a wide clutch swing). Charging the eggs
+// back through the breeding threshold does not fix it either — a per-egg surcharge
+// steep enough to matter makes the threshold U-shaped in `pace`, which pins the
+// gene to the middle everywhere (also measured: 0.51 vs 0.54).
+//
+// So the clutch swing is kept deliberately narrow, and the weight of the trade-off
+// sits on the three things world.js does price honestly: age at maturity, lifespan,
+// and the reserve a body must hold before it can breed at all. Those are precisely
+// the terms whose value depends on how likely you are to be killed by something
+// other than your own economics — which is what makes the regime, and not the
+// arithmetic, decide the winner.
+//
+// Neutral values while the mechanic is off, so the caller can apply it blindly.
+const NEUTRAL_LH = { clutch: 1, invest: 1, matMult: 1, ageMult: 1, reproMult: 1 };
 export function lifeHistory(g){
-  return { clutch: 1, invest: 1, matMult: 1, ageMult: 1, reproMult: 1 };
+  if(!P.lifeHistOn) return NEUTRAL_LH;
+  const p = g.pace === undefined ? 0.5 : g.pace, q = 1 - p;
+  const clutch = 1 + 0.7 * q * q;                       // 1.7 young at the r end, 1 at the K end
+  return {
+    clutch,
+    invest: 1,
+    // maturity and lifespan carry the widest swing on purpose: they are the two
+    // terms whose value depends entirely on extrinsic mortality. Growing up slowly
+    // and living long are nearly free where nothing hunts you and close to suicidal
+    // where something does, so this is where the regime does its sorting.
+    matMult: 0.50 + 1.00 * p,                          // age at maturity: 0.5x .. 1.5x
+    ageMult: 0.55 + 0.90 * p,                          // lifespan: 0.55x .. 1.45x
+    reproMult: 0.62 + 0.60 * p + 0.25 * (clutch - 1)   // reserve demanded: 0.80x at the r end .. 1.22x at the K end, and still one ration per extra egg
+  };
 }
 
 // Mutate a genome. Diet mutates first; the band (and its hue/mode) follows.
 export function mutateGenome(g){
-  const m = P.mut * mutScale(g);
+  const sc = mutScale(g), m = P.mut * sc;
   const diet = clamp((g.diet === undefined ? 0.15 : g.diet) + gauss() * m * 0.45, 0, 1);
   const cfg = TYPES[typeOf(diet)];
   return {
@@ -67,11 +121,17 @@ export function mutateGenome(g){
     disperse: clamp((g.disperse === undefined ? 0.05 : g.disperse) + gauss() * m * 1.3, 0, 1),
     husbandry: clamp((g.husbandry === undefined ? 0.05 : g.husbandry) + gauss() * m * 1.3, 0, 1),
     pace: clamp((g.pace === undefined ? 0.5 : g.pace) + gauss() * m * 1.3, 0, 1),
-    // the mutability gene mutates by its own rate — second-order selection
-    mutRate: clamp((g.mutRate === undefined ? 0.5 : g.mutRate) + gauss() * m * 0.9, 0.02, 1),
+    // The mutability gene mutates by its own rate — a mutator makes mutator and
+    // non-mutator offspring alike, which is what lets the trait sweep with the
+    // beneficial mutations it happens to generate and then be dragged back down
+    // once the lineage sits on an optimum and every further mutation costs.
+    // The step is deliberately smaller than the other genes': the gene has no
+    // direct phenotype, so selection on it is weak and a large step would let
+    // drift outrun it entirely.
+    mutRate: clamp((g.mutRate === undefined ? 0.5 : g.mutRate) + gauss() * m * 0.5, 0.02, 1),
     detox: clamp((g.detox === undefined ? 0.05 : g.detox) + gauss() * m * 1.3, 0, 1),
     sexual: cfg.sexual ? 1 : 0,
-    brain: mutateBrain(g.brain)
+    brain: mutateBrain(g.brain, sc)
   };
 }
 
@@ -119,5 +179,19 @@ export function metabolism(c){
   if(g.disperse) m += g.disperse * 0.012;    // dispersal tech (space-faring machinery) is costly to build and carry
   if(g.husbandry && g.brain.nh >= P.herdBrain) m += g.husbandry * 0.012;   // husbandry only expresses (and costs) in brainy lineages
   if(g.detox && P.floraOn && cfg.eatsPlants) m += g.detox * 0.011;         // a detoxifying liver costs upkeep, so it only pays where plants fight back
+  // Rate of living: a fast life history is a hot one. Growing up in half the time
+  // and breeding on a shallow reserve is bought with a higher mass-specific
+  // metabolic rate — and the same hot metabolism is why the fast body wears out
+  // young. This is the one term that stops the r end being a free lunch, because it
+  // is the only cost of a fast life that is charged every single tick: an early
+  // maturity and a shallow breeding threshold both pay off immediately, while the
+  // shortened lifespan that is supposed to balance them costs almost nothing in a
+  // world where fewer than one herbivore in ten lives long enough to die of old age.
+  // It scales the whole upkeep rather than adding a flat charge, so it stays
+  // proportionate for a carnivore's hotter body as much as a herbivore's, and so
+  // that it bites hardest exactly where net income is thinnest — a saturated world,
+  // which is where K strategists are supposed to win. Centred on pace 0.5, so
+  // switching the mechanic on leaves the average creature's upkeep untouched.
+  if(P.lifeHistOn) m *= 1 + (0.5 - (g.pace === undefined ? 0.5 : g.pace)) * 0.75;
   return m;
 }
