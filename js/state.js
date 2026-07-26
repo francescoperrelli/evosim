@@ -27,7 +27,13 @@ export const P = {
   propertyPunish:true,// the second-order half of it: whether respecters pay to punish raiders
   cultureVertOn:true, // parents teach children what they learned, with a fidelity gene
   tradeOn:true,       // a second resource (minerals) and exchange between neighbours
-  tribeOn:true        // group markers, coalitions and intergroup conflict
+  tribeOn:true,       // group markers, coalitions and intergroup conflict
+  // level-3 technology mechanics
+  toolsOn:true,       // rocks carried and used to open what a bare mouth cannot
+  fireOn:true,        // burning ground: a cost now against fertility much later
+  marksOn:true,       // marks that carry content, and the conventions they settle into
+  techOn:true,        // capabilities acquired from neighbours, kept at a price, lost when untaught
+  terraOn:true        // improving the ground, and what diverged planets do when they meet again
 };
 
 // Per-species configuration. `hunts` = types this species preys on.
@@ -91,6 +97,12 @@ export const S = {
   // phylogeny: species records maintained by phylo.js, read by the tree view.
   // Each record: { id, parent, born, died, n, peak, type, hue, cx, cy }
   phylo: [], speciesN: 0,
+  // level-3 technology state, each owned by its own module
+  shells: [], cracked: 0,        // tools.js: hard-shelled food, and openings counted
+  fires: [], scars: [], burns: 0,// fire.js: burning fronts, the ground they left, ignitions counted
+  marks: [],                     // marks.js: deposits that carry content
+  techPeak: 0,                   // tech.js: deepest any lineage has ever reached
+  terra: [],                     // terra.js: patches of improved ground
   // level-2 civilisation state, each owned by its own module
   villages: [],       // village.js: settlements grown from clustered shelters
   minerals: [],       // trade.js: the second resource

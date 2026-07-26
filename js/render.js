@@ -8,6 +8,11 @@ import * as village from './village.js';
 import * as property from './property.js';
 import * as trade from './trade.js';
 import * as tribe from './tribe.js';
+import * as tools from './tools.js';
+import * as fire from './fire.js';
+import * as marks from './marks.js';
+import * as tech from './tech.js';
+import * as terra from './terra.js';
 import { speciesName } from './phylo.js';
 import { t } from './i18n.js';
 
@@ -777,14 +782,21 @@ export function draw(){
         wctx.beginPath(); wctx.arc(tx, ty, sh.r * 0.16, 0, TAU); wctx.fill(); }
     }
   }
-  // level-2 world layers. Each module draws its own; the view object is the
-  // only thing they share, and it is read-only to them.
+  // level-2 and level-3 world layers. Each module draws its own; the view object
+  // is the only thing they share, and it is read-only to them.
   {
     const view = { z, vis, x0: vx0, y0: vy0, x1: vx1, y1: vy1 };
+    // ground-altering layers draw first, so bodies and structures sit on top of
+    // them: a burn scar is terrain, not scenery laid over the village
+    if(P.terraOn) terra.drawWorld(wctx, view);
+    if(P.fireOn) fire.drawWorld(wctx, view);
     if(P.villageOn) village.drawWorld(wctx, view);
     if(P.tradeOn) trade.drawWorld(wctx, view);
     if(P.tribeOn) tribe.drawWorld(wctx, view);
     if(P.propertyOn) property.drawWorld(wctx, view);
+    if(P.marksOn) marks.drawWorld(wctx, view);
+    if(P.toolsOn) tools.drawWorld(wctx, view);
+    if(P.techOn) tech.drawWorld(wctx, view);
   }
   // caches — stored-food piles built by hoarders (size grows with the stock)
   if(P.hoardOn && S.caches.length){

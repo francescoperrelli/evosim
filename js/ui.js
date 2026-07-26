@@ -1,6 +1,8 @@
 // UI: overlays, controls, menu, language, inspect mode, creature inspector
 import { el, rnd, clamp } from './utils.js';
 import { cultureIndex } from './culture.js';
+import { markIndex } from './marks.js';
+import { techIndex } from './tech.js';
 import { P, S, LANG_KEY, screenToWorld, zoomAt, clampCam } from './state.js';
 import { seed, saveLocal, hasSave, loadLocal, clearLocal, snapshot, restore, meteor, startDrought, startEpidemic, addRock, addWater, clearTerrain, speciesCount, dialectStats, logEvent } from './world.js';
 import { makeCreature, randomGenome } from './genome.js';
@@ -37,7 +39,8 @@ function syncControls(){
   const set = (id, val) => { const e = el(id); if(e){ e.value = val; e.dispatchEvent(new Event('input')); } };
   set('rFood', P.foodRate); set('rMut', Math.round(P.mut * 100));
   [['tPred','predatorsOn'],['tOmni','omnivoresOn'],['tFlock','flocksOn'],['tTerr','terrOn'],['tMimic','mimicOn'],['tSeason','seasonsOn'],['tDay','dayNightOn'],['tBubbles','bubblesOn'],['tPher','pherOn'],['tCulture','cultureOn'],['tLearn','learnOn'],['tNests','nestsOn'],['tPlagues','plaguesOn'],['tMigrate','migrateOn'],['tHoard','hoardOn'],['tBuild','buildOn'],['tDisp','dispOn'],['tHusband','husbandOn'],['tStars','starsOn'],['tLights','lightsOn'],['tFx','fxOn'],['tStable','stableOn'],['tLifeHist','lifeHistOn'],['tEvolv','evolvOn'],['tFlora','floraOn'],['tSpecies','speciesOn'],
-  ['tVillage','villageOn'],['tLabour','labourOn'],['tProperty','propertyOn'],['tPunish','propertyPunish'],['tCultureV','cultureVertOn'],['tTrade','tradeOn'],['tTribe','tribeOn']]
+  ['tVillage','villageOn'],['tLabour','labourOn'],['tProperty','propertyOn'],['tPunish','propertyPunish'],['tCultureV','cultureVertOn'],['tTrade','tradeOn'],['tTribe','tribeOn'],
+  ['tTools','toolsOn'],['tFire','fireOn'],['tMarks','marksOn'],['tTech','techOn'],['tTerra','terraOn']]
     .forEach(([id, k]) => { const e = el(id); if(e) e.checked = P[k]; });
 }
 
@@ -82,6 +85,8 @@ bindToggle('tStars', 'starsOn'); bindToggle('tLights', 'lightsOn'); bindToggle('
 bindToggle('tLifeHist', 'lifeHistOn'); bindToggle('tEvolv', 'evolvOn'); bindToggle('tFlora', 'floraOn'); bindToggle('tSpecies', 'speciesOn');
   bindToggle('tVillage', 'villageOn'); bindToggle('tLabour', 'labourOn'); bindToggle('tProperty', 'propertyOn'); bindToggle('tPunish', 'propertyPunish');
   bindToggle('tCultureV', 'cultureVertOn'); bindToggle('tTrade', 'tradeOn'); bindToggle('tTribe', 'tribeOn');
+  bindToggle('tTools', 'toolsOn'); bindToggle('tFire', 'fireOn'); bindToggle('tMarks', 'marksOn');
+  bindToggle('tTech', 'techOn'); bindToggle('tTerra', 'terraOn');
 
 el('btnSave').onclick = () => toast(saveLocal() ? t('saved') : t('noStore'));
 el('btnOpt').onclick = () => { updateSeedUI(); show('options'); };
@@ -407,6 +412,12 @@ export function refreshEvolution(){
   el('recThefts').textContent = S.thefts;
   el('recPunish').textContent = S.punishments;
   el('recCulture').textContent = Math.round(cultureIndex() * 100);
+  // the level-3 counters, on the same terms: each module owns its number
+  el('recCracked').textContent = S.cracked || 0;
+  el('recBurns').textContent = S.burns || 0;
+  el('recMarks').textContent = Math.round(markIndex() * 100);
+  el('recTech').textContent = Math.round(techIndex() * 100);
+  el('recTerra').textContent = (S.terra || []).length;
   drawEvolution();
 }
 

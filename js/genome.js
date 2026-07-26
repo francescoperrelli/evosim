@@ -26,6 +26,11 @@ export function randomGenome(type){
     // (willingness to exchange), tribal (how much a stranger's markings matter)
     civic: rnd(0, 0.25), caste: rnd(0, 0.3), raid: rnd(0, 0.2), respect: rnd(0, 0.25),
     fidelity: rnd(0, 0.3), trade: rnd(0, 0.25), tribal: rnd(0, 0.2),
+    // level-3: tool (carry a rock and use it), pyro (set fire to the ground), mark
+    // (leave a mark that carries content rather than mere intensity), techApt (how
+    // readily a capability is picked up from a neighbour that already holds it),
+    // terra (improve the fertility of the ground you stand on, at your own expense)
+    tool: rnd(0, 0.2), pyro: rnd(0, 0.15), mark: rnd(0, 0.2), techApt: rnd(0, 0.25), terra: rnd(0, 0.15),
     sexual: cfg.sexual ? 1 : 0, brain: randomBrain()
   };
 }
@@ -104,6 +109,11 @@ export function lifeHistory(g){
 // differs from its parent by about 0.10 on a 0..1 scale — a tenth of the whole
 // range, every single generation. See the note above metabolism() for what that
 // does to a gene's ability to be selected at all. P.l2Mut overrides it for sweeps.
+//
+// The level-3 genes use the same step for the same reason: they are the same kind
+// of object — a 0..1 behavioural dial whose consequence is a few percent of an
+// energy budget — so the measurement below applies to them unchanged, and a sweep
+// of P.l2Mut has to move them together or it is not measuring the class.
 const L2_MUT = 1.3;
 
 // Mutate a genome. Diet mutates first; the band (and its hue/mode) follows.
@@ -152,6 +162,11 @@ export function mutateGenome(g){
     fidelity: clamp((g.fidelity === undefined ? 0.15 : g.fidelity) + gauss() * m2, 0, 1),
     trade: clamp((g.trade === undefined ? 0.1 : g.trade) + gauss() * m2, 0, 1),
     tribal: clamp((g.tribal === undefined ? 0.1 : g.tribal) + gauss() * m2, 0, 1),
+    tool: clamp((g.tool === undefined ? 0.1 : g.tool) + gauss() * m2, 0, 1),
+    pyro: clamp((g.pyro === undefined ? 0.08 : g.pyro) + gauss() * m2, 0, 1),
+    mark: clamp((g.mark === undefined ? 0.1 : g.mark) + gauss() * m2, 0, 1),
+    techApt: clamp((g.techApt === undefined ? 0.12 : g.techApt) + gauss() * m2, 0, 1),
+    terra: clamp((g.terra === undefined ? 0.08 : g.terra) + gauss() * m2, 0, 1),
     sexual: cfg.sexual ? 1 : 0,
     brain: mutateBrain(g.brain, sc)
   };
@@ -175,6 +190,8 @@ export function crossover(ga, gb){
     pace: pk(ga.pace, gb.pace), mutRate: pk(ga.mutRate, gb.mutRate), detox: pk(ga.detox, gb.detox),
     civic: pk(ga.civic, gb.civic), caste: pk(ga.caste, gb.caste), raid: pk(ga.raid, gb.raid), respect: pk(ga.respect, gb.respect),
     fidelity: pk(ga.fidelity, gb.fidelity), trade: pk(ga.trade, gb.trade), tribal: pk(ga.tribal, gb.tribal),
+    tool: pk(ga.tool, gb.tool), pyro: pk(ga.pyro, gb.pyro), mark: pk(ga.mark, gb.mark),
+    techApt: pk(ga.techApt, gb.techApt), terra: pk(ga.terra, gb.terra),
     brain: crossBrain(ga.brain, gb.brain)
   };
   return mutateGenome(base);
@@ -196,7 +213,12 @@ export function makeCreature(x, y, type, genome, gen){
     min: 0,                            // trade.js: minerals held
     tribe: 0,                          // tribe.js: coalition id
     culture: 0,                        // culture.js: how much of this brain was taught rather than inherited
-    owner: 0, tamedTick: -1, herd: 0   // owner: id of the herder tending this creature as livestock; herd: livestock a herder tends
+    owner: 0, tamedTick: -1, herd: 0,  // owner: id of the herder tending this creature as livestock; herd: livestock a herder tends
+    // level-3 per-body state, owned by the modules named in the comments
+    rock: 0,                           // tools.js: the rock in its hands (0 = empty handed)
+    tech: 0,                           // tech.js: bitmask of the capabilities it holds
+    mark: 0,                           // marks.js: content of the last mark it read
+    terra: 0                           // terra.js: ground it has improved in its life
   };
 }
 
@@ -280,6 +302,15 @@ export function metabolism(c){
   // control and has to suspend the cost as well as the payoff, or the control arm
   // is a pure-cost arm and measures the wrong thing.
   if(g.trade && P.tradeOn && !P.tradeNoExchange) m += g.trade * 0.006 * l2;
+  // No level-3 line here, and that is deliberate rather than an omission. Every
+  // level-2 gene is a standing disposition whose cost is paid whether or not the
+  // occasion arises, so it belongs on the always-charged line. The level-3 genes
+  // are not: carrying a rock costs only while a rock is carried, keeping a fire
+  // costs only while one burns, holding a technique costs only while it is held.
+  // Each module charges its own conditional cost at the moment the behaviour
+  // happens. Do not add a flat per-gene charge here to "make it costly" — that
+  // prices the disposition instead of the act, and it is exactly the shape of cost
+  // the sweep below shows cannot be selected on anyway.
   // Rate of living: a fast life history is a hot one. Growing up in half the time
   // and breeding on a shallow reserve is bought with a higher mass-specific
   // metabolic rate — and the same hot metabolism is why the fast body wears out

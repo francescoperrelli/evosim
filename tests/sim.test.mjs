@@ -94,8 +94,8 @@ const rt = await page.evaluate(async () => {
   let err = null; try{ for(let i = 0; i < 100; i++) w.step(); }catch(e){ err = e.message; }
   return { v: snap.v, gLen: snap.creatures[0] ? snap.creatures[0].g.length : 0, ok, err, hasSeed: snap.seed !== undefined };
 });
-check('snapshot is versioned (v11)', rt.v === 11);
-check('genome serialises 33 fields', rt.gLen === 33, 'len=' + rt.gLen);
+check('snapshot is versioned (v12)', rt.v === 12);
+check('genome serialises 38 fields', rt.gLen === 38, 'len=' + rt.gLen);
 check('snapshot records the seed', rt.hasSeed);
 check('restore + step runs without error', rt.ok && !rt.err, rt.err);
 
@@ -117,6 +117,22 @@ const mig = await page.evaluate(async () => {
 check('accepts and migrates a v8 save', mig.ok);
 check('migrated brain has the new layout', mig.brainLen === mig.expLen, mig.brainLen + ' vs ' + mig.expLen);
 check('runs after migration without error', !mig.err, mig.err);
+
+// ---- level-3 modules are behaviour-neutral while they are stubs ----
+// This is the guarantee the five level-3 modules are written against: switching
+// the whole layer off must reproduce the run bit for bit. It is what lets each
+// module be developed against a known-good baseline, and the first thing to break
+// when a module starts consuming rand() outside its own switch.
+const l3 = await page.evaluate(async () => {
+  const w = await import('./js/world.js'), st = await import('./js/state.js');
+  const FLAGS = ['toolsOn', 'fireOn', 'marksOn', 'techOn', 'terraOn'];
+  const fp = () => { let h = 0; for(const c of st.S.creatures) h = (h + Math.round(c.x) * 13 + Math.round(c.y) * 7 + Math.round(c.energy) * 3 + c.gen * 11) >>> 0; return h >>> 0; };
+  const run = on => { for(const f of FLAGS) st.P[f] = on; w.seed(1234); for(let i = 0; i < 1200; i++) w.step(); return fp(); };
+  const withL3 = run(true), withoutL3 = run(false);
+  for(const f of FLAGS) st.P[f] = true;
+  return { same: withL3 === withoutL3, a: withL3, b: withoutL3 };
+});
+check('level-3 stubs change nothing when switched on', l3.same, l3.a + ' vs ' + l3.b);
 
 // ---- multi-planet world: planets build, creatures stay confined ----
 const pl = await page.evaluate(async () => {
