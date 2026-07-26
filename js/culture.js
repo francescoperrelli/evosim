@@ -90,6 +90,11 @@ const TEACH_GAIN = 8;
 // before selection could react and would simply drown the genetic brain. 0.8 is
 // about two genetic weight sd's: a lesson can dominate a weight, never erase it.
 const T_CAP = 0.8;
+// Ceiling on the lesson's RMS as a fraction of the child's own germline weight
+// scale. See "THE AMPLITUDE CONFOUND" below: this is what stops `fidelity` from
+// secretly being a volume knob. P.cultureRel overrides it; set it huge to recover
+// the pre-fix behaviour for a paired control.
+const T_REL = 0.25;
 // How often the culture meter is recomputed. The sweep is the only per-step cost
 // this module has and it is O(pop * nh * NOUT) with the paired control doubling
 // it; at every 6 ticks (the cadence of world.js's own population meters) it cost
@@ -156,6 +161,48 @@ export function inherit(parent, childGenome){
     const lesson = (pt ? pt[i] : 0) + (pl ? pl[i] * gain : 0);
     t[i] = clamp(f * lesson, -T_CAP, T_CAP);
   }
+  // -------------------------------------------------------------------------
+  // THE AMPLITUDE CONFOUND, AND THE ONE PART OF FINDING 3 THAT IS FIXABLE HERE.
+  //
+  // Finding 3 in the tuning log says high fidelity is actively harmful and that
+  // it is the taught offset, not its metabolic price, doing the harm: pinned at
+  // f=0.9, income 0.4704+-0.0204 and pop 202+-88, against 0.5513+-0.0325 and
+  // 378+-32 for an arm paying the identical metabolic charge but teaching
+  // nothing. The mechanism is right there in the recursion t' = f*(t + gain*p):
+  // it is a geometric series with ratio f, so its fixed point is gain*|p|/(1-f).
+  // At f=0.9 that is ten times the one-generation lesson and taught rms reaches
+  // 0.376 against a genetic weight scale of ~0.45. The brain is overwritten.
+  //
+  // So `fidelity` was not measuring what its name says. It was doing two jobs at
+  // once: how much of the parent's CONTENT survives (faithfulness, the thing the
+  // mechanic is about) and how LOUD the accumulated lesson is (amplitude, an
+  // artefact of the series). Amplitude is monotonically damaging past a low
+  // optimum, so the amplitude job buries the faithfulness job and the gene reads
+  // as weak stabilising selection toward 0.227 no matter what the content is
+  // worth. That is a confound in the instrument, not a fact about the world.
+  //
+  // Fixing it means bounding the lesson's SIZE while leaving its DIRECTION
+  // untouched, which is exactly what a uniform rescale does and exactly what the
+  // per-component clamp at T_CAP does not: clamping components changes the
+  // direction of any vector that hits the cap, i.e. it corrupts the content of
+  // precisely the loudest lessons. The bound is relative to the child's own
+  // germline weight scale rather than absolute, because "a nudge" only means
+  // anything next to the weights being nudged, and nh varies across the
+  // population. At T_REL 0.25 a fully-faithful lineage's accumulated lesson can
+  // reach a quarter of its genetic weight scale and no further: enough to change
+  // behaviour, never enough to erase the genome underneath it.
+  //
+  // NOT a way of making culture "stronger" — it is strictly a cap, so it can only
+  // ever reduce a taught offset. It removes the amplitude channel from fidelity
+  // and leaves the faithfulness channel, which is the only one worth measuring.
+  const rel = P.cultureRel === undefined ? T_REL : P.cultureRel;
+  if(rel > 0 && rel < 1e6){
+    let ww = 0, tt = 0;
+    for(let i = 0; i < n; i++){ const a = w[off + i]; ww += a * a; tt += t[i] * t[i]; }
+    const lim = Math.sqrt(ww / n) * rel, mag = Math.sqrt(tt / n);
+    if(mag > lim && mag > 1e-9){ const s = lim / mag; for(let i = 0; i < n; i++) t[i] *= s; }
+  }
+  // -------------------------------------------------------------------------
   // CONTROL ARM (off in normal play): teach random content of the same magnitude
   // at the same fidelity. If the world does not care which of these it gets, then
   // teaching is moving bandwidth and not competence.
@@ -312,6 +359,32 @@ export function cultureIndex(){ return S.culture ? S.culture.idx : 0; }
 //    substrate that carries nothing can only transmit nothing. Do not read any
 //    number produced by this module as evidence of transmitted COMPETENCE until
 //    that is fixed.
+//
+//    THE EXACT FIX, which is one line and is NOT in this module's ownership.
+//    world.js:580 builds every spatial input in the body's heading frame:
+//        const ego = (dx,dy,i) => { _in[i] = (dx*hx+dy*hy)*inv; _in[i+1] = (-dx*hy+dy*hx)*inv; };
+//    with (hx,hy) the unit heading from world.js:482. world.js:683 then spends the
+//    motor outputs in WORLD frame:
+//        let dx = _out[0]*BRAIN_W + ix*INNATE_W, dy = _out[1]*BRAIN_W + iy*INNATE_W;
+//    The two frames differ by the body's own rotation, which changes every step, so
+//    the map from "food is 30 degrees to my left" to "accelerate north-east" is a
+//    different map at every heading. No fixed weight matrix can represent it, and
+//    learn() is therefore chasing a target that moves as fast as the body turns.
+//    That is why zeroing plast, tripling it, and replacing it with 10x noise all
+//    give the same income to three decimal places. Rotate the output back with the
+//    same basis and the mapping becomes stationary:
+//        const bx = _out[0]*hx - _out[1]*hy, by = _out[0]*hy + _out[1]*hx;
+//        let dx = bx*BRAIN_W + ix*INNATE_W, dy = by*BRAIN_W + iy*INNATE_W;
+//    hx/hy are already in scope at that point (world.js:482, same loop body; the
+//    hx/hy at world.js:678 are a different, nested block scope and are unaffected).
+//    _out[0]/_out[1] are read nowhere else, so nothing else changes. This WILL move
+//    every evolved brain's behaviour and must be measured as a world change, not
+//    slipped in: existing weights were selected under the broken map.
+//    The second half — BRAIN_W 0.7 against INNATE_W 1.25 on a hand-written instinct
+//    vector that already points at the food — is a state.js number. Even a perfect
+//    brain is outvoted by instinct; without raising BRAIN_W above INNATE_W (or
+//    gating the instinct prior by a gene) the rotation fix buys headroom, not
+//    behaviour. Both are needed, and neither is mine to make.
 //
 // 2. TEACH_GAIN = 1 IS A NO-OP. plast's equilibrium rms is 0.011 against a ~0.45
 //    genetic weight scale, so an unamplified lesson perturbs a weight by ~2%.

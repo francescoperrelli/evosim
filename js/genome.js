@@ -266,6 +266,85 @@ export function makeCreature(x, y, type, genome, gen){
 // also says is that public-goods genes are rescued by assortment, not by bigger
 // numbers, so the honest lever is making village and coalition payoffs flow to
 // co-carriers rather than to whoever happens to be standing nearby.
+//
+// ---------------------------------------------------------------------------
+// THE ASSORTMENT RESULT. That lever was then built and measured, and it does not
+// work either. This is the honest write-up.
+//
+// WHAT WAS BUILT (all behind P.assortOn, default off, so the shipped world is
+// bit-identical to the world without it):
+//   * village.js — defFor(v, lineage) replaces v.def. A village's walls and watch
+//     are kept in PER-LINEAGE buckets (v.lstr / v.lwat / v.lpop); a body is
+//     sheltered in proportion to what its own lineage built and to that lineage's
+//     share of the village. A free rider standing inside somebody else's stockade
+//     gets nothing. This is the exact Hamilton fix: the theorem that kills `civic`
+//     un-assorted is that strengthening a public good raises the free rider's
+//     payoff by precisely as much as the contributor's, and per-lineage defence
+//     is what breaks that equality.
+//   * property.js — a witness polices a granary of its own lineage at 1.8x and a
+//     stranger's at 0.35x, sized so the OVERALL punishment rate is close to the
+//     un-assorted arm (assortment must redirect policing, not raise its volume).
+//   * tribe.js — coalition strength is the sum of its members' `tribal` weights
+//     instead of a head count, and raid spoils are split among nearby coalition
+//     mates weighted by `tribal` instead of going whole to the attacker.
+//
+// MEASURED, 3 seeds (11/23/37) x 6000 ticks, sampled every 200 after t=2400, all
+// six level-2 flags on. Every arm reports the four target genes alongside the five
+// FUNCTIONLESS level-3 genes (tool/pyro/mark/techApt/terra), which mutate with the
+// same m2 step and are clamped the same way, so each run carries its own drift
+// yardstick and between-seed noise cancels. Control pool mean is the mean of the
+// five. "null" is the drift control: assortment on, every payoff channel removed
+// (propertyPunish off, tribeRate 0, village defStr/defWatch/nurse/thatch 0) while
+// the genes still mutate, still pay metabolism and still assign roles.
+//
+//   arm     civic          caste          respect        tribal         ctrl pool
+//   base    0.203+-0.006   0.202+-0.051   0.191+-0.024   0.165+-0.032   0.158
+//   assort  0.160+-0.011   0.188+-0.023   0.183+-0.027   0.145+-0.027   0.156
+//   null    0.180+-0.029   0.176+-0.012   0.185+-0.011   0.151+-0.048   0.147
+//
+//   gene minus control pool:      base      assort      null (= drift)
+//     civic                      +0.045     +0.004     +0.033
+//     caste                      +0.044     +0.032     +0.029
+//     respect                    +0.033     +0.027     +0.038
+//     tribal                     +0.007     -0.011     +0.004
+//     fidelity                   +0.019     +0.022     +0.035
+//     trade                      -0.004     +0.020     +0.005
+//     raid                       +0.032     -0.002     +0.027
+//
+// VERDICT: no. Read the third column. Every excess a target gene shows over the
+// control pool is reproduced, at the same size, in the arm where its benefit has
+// been deleted — which is the definition of drift. Assortment does not raise a
+// single one; `civic`, the gene the village fix was designed for, goes DOWN
+// (+0.045 -> +0.004), and the exact matched-founding-mean pairs behave the same
+// way: civic vs techApt (both founded at 0.125) is +0.030 un-assorted, -0.012
+// assorted and +0.011 in the drift control — the sign is not even stable.
+//
+// It is not free, either. Turning assortment on costs 21% of the population
+// (277+-40 -> 220+-39), halves raiding (5252+-2042 -> 2665+-1804 fights) and cuts
+// punishments 45% (474+-64 -> 261+-8), because a payoff that only reaches
+// co-carriers is a smaller payoff and fewer bodies find it worth acting on. So the
+// mechanism is left in the tree, exercised by P.assortOn, and OFF by default.
+//
+// WHY IT FAILS, as far as the numbers say. Assortment needs relatedness within the
+// beneficiary group to exceed c/b. This world's lineages are ~4-8 bodies inside a
+// village of 20-40, so the within-village co-carrier fraction is a third at best,
+// while c/b for these genes is order 1 because b is itself only a few percent of
+// an energy budget (the l2Cost sweep above). Multiplying a benefit that is already
+// below the selection threshold by r < 1/3 moves it further below it. Assortment
+// is the right theory; it cannot rescue a benefit this small. The binding
+// constraint remains the one the sweep found — consequences here are a few percent
+// of a body's energy, and a few percent is drift.
+//
+// THE TRIBE MODULE'S REQUEST, SETTLED. tribe.js asked for the `tribal` upkeep
+// coefficient (0.008) to be raised "roughly an order of magnitude" so the gene
+// would respond. Measured at 0.08 with assortment on (P.tribalCoef, 3 seeds x
+// 6000 ticks): tribal 0.156+-0.020 against 0.145+-0.027 at 0.008, with the
+// matched controls at tool 0.147 / mark 0.144 — a shift of +0.010 inside a
+// between-seed sd of 0.02-0.03, i.e. nothing. It is also the wrong sign to want: a
+// bigger coefficient is a bigger COST, so if it did anything it would select
+// against `tribal`. This is the l2Cost sweep repeating itself on a second gene.
+// REJECTED; shipped coefficient stays 0.008. The request was reasonable and the
+// answer is a measurement, not a preference.
 // ---------------------------------------------------------------------------
 export function metabolism(c){
   const g = c.g, cfg = TYPES[c.type];
@@ -296,7 +375,12 @@ export function metabolism(c){
   if(g.caste && P.labourOn) m += g.caste * 0.008 * l2;
   if(g.respect && P.propertyOn) m += g.respect * 0.009 * l2;
   if(g.fidelity && P.cultureVertOn) m += g.fidelity * 0.010 * l2;
-  if(g.tribal && P.tribeOn) m += g.tribal * 0.008 * l2;
+  // P.tribalCoef exists only to settle a specific request from the tribe module
+  // ("0.008 is too small for `tribal` to be under any selection at all; that
+  // coefficient needs to be roughly an order of magnitude larger"). It is a
+  // research knob on one line, in the same spirit as l2Cost. The answer it gives is
+  // recorded in THE ASSORTMENT RESULT below; the shipped value is 0.008.
+  if(g.tribal && P.tribeOn) m += g.tribal * (P.tribalCoef === undefined ? 0.008 : P.tribalCoef) * l2;
   // trade.js charged this itself until now, which made it the one level-2 gene
   // priced outside the common line. P.tradeNoExchange is that module's drift
   // control and has to suspend the cost as well as the payoff, or the control arm
