@@ -15,7 +15,7 @@ import { I18N, t, setLang, getLang } from './i18n.js';
 /* ---------- overlays ---------- */
 function show(id){ el(id).classList.add('show'); }
 function hide(id){ el(id).classList.remove('show'); }
-function hideAll(){ ['menu','tutorial','options','inspector','evolution','events','genealogy','challenges','slots','chronicle'].forEach(hide); }
+function hideAll(){ ['menu','tutorial','options','inspector','evolution','events','genealogy','challenges','slots','chronicle','legend'].forEach(hide); }
 export { show };
 
 let toastT = null;
@@ -190,6 +190,12 @@ function buildChronicle(){
   }
   chronTopTick = S.chronicle[0].tick;
 }
+/* ---------- legend: what the level-3 world layers look like ---------- */
+const openLegend = () => show('legend');
+el('btnLegend').onclick = openLegend;
+el('mLegend').onclick = openLegend;
+el('legendClose').onclick = () => hide('legend');
+
 el('btnChronicle').onclick = () => {
   chronTopTick = S.chronicle.length ? S.chronicle[0].tick : -1;   // nothing flashes on first open
   buildChronicle(); lastChronLen = S.chronicle.length; show('chronicle');
@@ -241,6 +247,7 @@ const TOUR = [
   { icon: '🧭', t: 'tour2t', b: 'tour2b' },
   { icon: '🔍', t: 'tour3t', b: 'tour3b' },
   { icon: '🧬', t: 'tour4t', b: 'tour4b' },
+  { icon: '🪨', t: 'tour6t', b: 'tour6b' },   // the level-3 layers, before the chronicle step closes the tour
   { icon: '📜', t: 'tour5t', b: 'tour5b' }
 ];
 let tourStep = 0;
@@ -355,6 +362,86 @@ function selectAt(mx, my){
   if(best){ S.selected = best; show('inspector'); refreshInspector(); }
 }
 
+/* ---------- inspector: the level-3 layers ----------
+   For each of the five newer mechanics: the inherited gene on the left, and on
+   the right what this particular body is carrying right now — the thing none of
+   the existing surfaces showed. Values mirrored from the owning modules; the
+   comment on each constant names the file it was copied from, because ui.js must
+   not import private module internals and must never touch the sim's rand(). */
+
+// tech.js: bit order FIRE=1, PRES=2, REACH=4, VOID=8, and its COL palette.
+const TECH_CAPS = [
+  { key: 'capFire',  col: '#ec923e' },
+  { key: 'capPres',  col: '#94c878' },
+  { key: 'capReach', col: '#bccae4' },
+  { key: 'capVoid',  col: '#b08ee2' }
+];
+// marks.js: one shape per glyph, in the hue that module draws it with. The glyph
+// carries no fixed meaning — which one stands for what is the lineage's
+// convention — so this is deliberately shown as a shape and never as a word.
+const MARK_GLYPHS = [
+  { ch: '▲', col: '#78d6b2' },
+  { ch: '✕', col: '#e27abe' },
+  { ch: '◎', col: '#7ea8ee' }
+];
+const PYRO_THRESH = 0.18, PYRO_BRAIN = 8;   // fire.js: the gene floor and the brain gate
+const MARK_G = 3;                            // marks.js: rot(c) = floor(g.mark * G)
+
+const dim = s => `<span class="dim">${s}</span>`;
+const l3Bar = v => `<div class="track"><div class="fill" style="width:${clamp(v, 0, 1) * 100}%"></div></div>`;
+const l3Conv = on => `<div class="conv">${[0, 1, 2].map(i => `<i class="${i === on ? 'on' : ''}"></i>`).join('')}</div>`;
+
+function l3Row(label, meter, state, on){
+  return `<div class="l3-row${on ? '' : ' off'}"><span>${t(label)}</span>${meter}` +
+         `<span class="st">${on ? state : dim(t('l3Off'))}</span></div>`;
+}
+
+// refreshInspector() runs every frame, so the rows are only rebuilt when
+// something in them actually changed. The signature covers everything rendered.
+let _l3sig = '';
+function buildL3(c){
+  const g = c.g;
+  const sig = [c.id, getLang(), +P.toolsOn, +P.fireOn, +P.marksOn, +P.techOn, +P.terraOn,
+    Math.round((c.rock || 0) * 100), c.mark | 0, c.tech | 0, Math.round((c.terra || 0) * 100)].join(',');
+  if(sig === _l3sig) return;
+  _l3sig = sig;
+  const out = [];
+
+  // tools: the carry is the whole mechanic, so say plainly whether it is carrying
+  const rock = c.rock || 0;
+  out.push(l3Row('tTool', l3Bar(g.tool || 0),
+    rock > 0 ? `🪨 ${t('l3Rock')} ${dim(Math.round(rock * 100) + '%')}` : dim(t('l3RockNone')),
+    P.toolsOn));
+
+  // fire: nothing persists on the body, so report the two gates the gene has to
+  // clear before it expresses at all — that is the honest per-body fact here
+  const canLight = (g.pyro || 0) >= PYRO_THRESH && g.brain.nh >= PYRO_BRAIN;
+  out.push(l3Row('tPyro', l3Bar(g.pyro || 0),
+    canLight ? `🔥 ${t('l3CanLight')}` : dim(t('l3NoLight')), P.fireOn));
+
+  // marks: g.mark is ONLY the convention dial, so it is drawn as a choice of one
+  // in three and never as a "how much it writes" bar
+  const rot = Math.min(MARK_G - 1, Math.floor((g.mark || 0) * MARK_G));
+  const read = (c.mark | 0) - 1;
+  const gl = read >= 0 && read < MARK_G ? MARK_GLYPHS[read] : null;
+  out.push(l3Row('tMark', l3Conv(rot),
+    (gl ? `${t('l3MarkRead')}<span class="glyph" style="color:${gl.col}">${gl.ch}</span> · ` : dim(t('l3MarkNone')) + ' · ') +
+    dim(t('l3Conv').replace('{n}', rot + 1)), P.marksOn));
+
+  // tech: name what it holds, in the pip colours drawn over its head
+  const mask = c.tech | 0;
+  const held = TECH_CAPS.filter((_, i) => mask & (1 << i))
+    .map(cp => `<span class="cap" style="background:${cp.col}"></span>${t(cp.key)}`).join(' · ');
+  out.push(l3Row('tTechApt', l3Bar(g.techApt || 0), held || dim(t('l3TechNone')), P.techOn));
+
+  // terra: ground this body has improved in its own life
+  const tr = c.terra || 0;
+  out.push(l3Row('tTerraG', l3Bar(g.terra || 0),
+    tr > 0.005 ? t('l3Terra').replace('{n}', tr.toFixed(2)) : dim(t('l3TerraNone')), P.terraOn));
+
+  el('inspL3').innerHTML = out.join('');
+}
+
 const barPct = (v, lo, hi) => clamp((v - lo) / (hi - lo), 0, 1) * 100;
 export function refreshInspector(){
   if(!el('inspector').classList.contains('show')) return;
@@ -384,6 +471,7 @@ export function refreshInspector(){
   el('bgBuild').style.width = ((g.build || 0) * 100) + '%';
   { const bd = el('bgDisperse'); if(bd) bd.style.width = ((g.disperse || 0) * 100) + '%'; }
   { const bh = el('bgHusbandry'); if(bh) bh.style.width = ((g.husbandry || 0) * 100) + '%'; }
+  buildL3(c);
   // live "voice": each channel's current output as a centre-anchored bar
   const CHCOL = ['#e6a578', '#78c8e6', '#aa8ce6'], sg = c.sig || [0, 0, 0];
   for(let k = 0; k < 3; k++){
