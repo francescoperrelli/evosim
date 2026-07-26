@@ -3,6 +3,8 @@ import { clamp, TAU, el } from './utils.js';
 import { P, S, seasonInfo, dayInfo, clampCam, minZoom } from './state.js';
 import { NIN, NOUT, MAX_NH } from './nn.js';
 import { dialectStats, solarPeakY } from './world.js';
+import * as flora from './flora.js';
+import { speciesName } from './phylo.js';
 import { t } from './i18n.js';
 
 const world = el('world'), wctx = world.getContext('2d');
@@ -56,6 +58,9 @@ function glow(rgb){
   return (GLOW[rgb] = cv);
 }
 function blitGlow(ctx, rgb, x, y, r, a){ ctx.globalAlpha = a; ctx.drawImage(glow(rgb), x - r, y - r, r * 2, r * 2); ctx.globalAlpha = 1; }
+// plants grouped by quantised flora style, reused between frames so drawing the
+// crop stays a handful of fills however many plant chemistries are in play
+const FBUCK = new Map();
 // a wobbly closed blob — deterministic from `sd`, so rocks and pools keep their shape
 function blob(ctx, x, y, r, n, sd, wob){
   ctx.beginPath();
@@ -780,9 +785,35 @@ export function draw(){
     }
   }
   // plants (one path, one fill — there can be ~900 of them)
-  wctx.fillStyle = '#4a8a37'; wctx.beginPath();
-  for(const f of S.food){ if(!vis(f.x, f.y, 3)) continue; wctx.moveTo(f.x + 2.1, f.y); wctx.arc(f.x, f.y, 2.1, 0, TAU); }
-  wctx.fill();
+  if(!flag('floraOn')){
+    wctx.fillStyle = '#4a8a37'; wctx.beginPath();
+    for(const f of S.food){ if(!vis(f.x, f.y, 3)) continue; wctx.moveTo(f.x + 2.1, f.y); wctx.arc(f.x, f.y, 2.1, 0, TAU); }
+    wctx.fill();
+  } else {
+    // With evolving flora, a plant's colour and size advertise its chemistry —
+    // a defended plant is a different-looking plant. Styles are quantised into
+    // a handful of buckets so the whole crop is still a few fills, not one per
+    // plant: the herbivores can tell them apart, the GPU need not.
+    for(const b of FBUCK.values()) b.n = 0;
+    for(const f of S.food){
+      if(!vis(f.x, f.y, 4)) continue;
+      const st = flora.plantStyle(f);
+      const hq = Math.round((st.hue || 0) / 7), sq = Math.round((st.sat || 0) / 8),
+            lq = Math.round((st.light || 0) / 6), rq = Math.round((st.r || 2.1) / 0.35);
+      const key = ((hq * 20 + sq) * 20 + lq) * 24 + rq;
+      let b = FBUCK.get(key);
+      if(!b) FBUCK.set(key, b = { n: 0, r: 2.1, col: '#4a8a37', xs: [], ys: [] });
+      if(!b.n){ b.r = rq * 0.35; b.col = `hsl(${hq * 7} ${sq * 8}% ${lq * 6}%)`; }
+      b.xs[b.n] = f.x; b.ys[b.n] = f.y; b.n++;
+    }
+    for(const b of FBUCK.values()){
+      if(!b.n) continue;
+      wctx.fillStyle = b.col; wctx.beginPath();
+      for(let i = 0; i < b.n; i++){ wctx.moveTo(b.xs[i] + b.r, b.ys[i]); wctx.arc(b.xs[i], b.ys[i], b.r, 0, TAU); }
+      wctx.fill();
+    }
+    if(FBUCK.size > 96) for(const [k, b] of FBUCK) if(!b.n) FBUCK.delete(k);
+  }
   // husbandry: faint tethers from livestock to their herder, plus a collar ring
   if(P.husbandOn){
     let herders = null;
@@ -996,6 +1027,182 @@ export function updateHUD(){
   }
 }
 
+/* ---------- the tree of life ---------- */
+// A spindle phylogram of S.phylo: time runs left to right, every species is a
+// tapered body that begins where it split from its mother, swells with the
+// numbers it reached and either ends in a point (extinct) or in a live cap
+// whose thickness is how many of it are alive right now. It is the record of
+// what this world actually did — the branchings are speciation events that
+// happened, not a summary of the current population.
+let _phCv;
+function phyloCanvas(){
+  const found = el('evPhylo');
+  if(found) return found;
+  if(_phCv !== undefined) return _phCv;
+  const card = el('evolution') && el('evolution').querySelector('.card');
+  if(!card) return (_phCv = null);
+  const cap = document.createElement('p');
+  cap.className = 'insp-sub';
+  const lbl = t('evoPhylo');
+  cap.textContent = lbl === 'evoPhylo' ? 'Albero filogenetico (l’albero della vita)' : lbl;
+  const cv = document.createElement('canvas');
+  cv.id = 'evPhylo';
+  cv.style.cssText = 'width:100%;display:block;height:196px;background:#0c120c;border:1px solid var(--line);border-radius:9px;margin:6px 0 2px';
+  const anchor = card.querySelector('.row');
+  card.insertBefore(cap, anchor); card.insertBefore(cv, anchor);
+  return (_phCv = cv);
+}
+
+const PH_MAX = 42;                                  // rows the panel can still resolve
+const smooth = u => u * u * (3 - 2 * u);
+// A daughter is drawn immediately below its mother, depth first, so a clade
+// reads as one contiguous block of the canvas rather than scattered stripes.
+function phyloRows(recs){
+  const byId = new Map(); for(const r of recs) byId.set(r.id, r);
+  // when there are more records than rows, keep what mattered: everything alive,
+  // then the extinct lineages that were numerous or long-lived, then whatever
+  // ancestors those need so their branches have something to hang from
+  let show = recs;
+  if(recs.length > PH_MAX){
+    const score = r => (r.died ? 0.35 : 3) * (r.peak || 1) * Math.log(2 + ((r.died || S.tick) - r.born));
+    const keep = new Set();
+    for(const r of recs.slice().sort((a, b) => score(b) - score(a))){ if(keep.size >= PH_MAX) break; keep.add(r.id); }
+    for(const id of [...keep]){ let p = byId.get(id), n = 0; while(p && p.parent && !keep.has(p.parent) && n++ < 24){ keep.add(p.parent); p = byId.get(p.parent); } }
+    show = recs.filter(r => keep.has(r.id));
+  }
+  const kids = new Map(), shown = new Set(show.map(r => r.id));
+  for(const r of show){
+    const p = shown.has(r.parent) ? r.parent : 0;
+    let a = kids.get(p); if(!a) kids.set(p, a = []); a.push(r);
+  }
+  for(const a of kids.values()) a.sort((x, y) => x.born - y.born || x.id - y.id);
+  const rows = [], seen = new Set();
+  const walk = pid => { const a = kids.get(pid); if(!a) return; for(const r of a){ if(seen.has(r.id)) continue; seen.add(r.id); rows.push(r); walk(r.id); } };
+  walk(0);
+  for(const r of show) if(!seen.has(r.id)){ seen.add(r.id); rows.push(r); }   // safety: orphaned by a graft
+  return rows;
+}
+
+function drawPhylo(){
+  const cv = phyloCanvas(); if(!cv) return;
+  const recs = S.phylo || [];
+  const rows = recs.length ? phyloRows(recs) : [];
+  const N = rows.length;
+  // the panel grows with the tree: a run with forty lineages needs more paper
+  // than a run with four, and squeezing them would make the branches unreadable
+  const want = clamp(Math.round(40 + N * 15), 132, 660) + 'px';
+  if(cv.style.height !== want) cv.style.height = want;
+  const ctx = cv.getContext('2d'), d = fitChart(cv, ctx), w = d.w, h = d.h;
+  ctx.clearRect(0, 0, w, h); ctx.fillStyle = CH_BG; ctx.fillRect(0, 0, w, h);
+  if(!N){
+    const em = t('evoPhyloEmpty');
+    ctx.fillStyle = '#6a746a'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(em === 'evoPhyloEmpty' ? 'Nessuna specie ancora' : em, w / 2, h / 2);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    return;
+  }
+  let live = 0; for(const r of recs) if(!r.died) live++;
+
+  const top = 17, bot = h - 14;
+  const rowH = (bot - top) / N, labels = rowH >= 10;
+  const gut = labels ? 56 : 8;
+  const x0 = PAD + 4, x1 = w - PAD - gut;
+  let tMin = Infinity, peakMax = 1;
+  for(const r of recs){ if(r.born < tMin) tMin = r.born; if(r.peak > peakMax) peakMax = r.peak; }
+  const tMax = Math.max(S.tick, tMin + 1);
+  const span = Math.max(1, tMax - tMin);
+  const xs = t2 => x0 + (x1 - x0) * clamp((t2 - tMin) / span, 0, 1);
+  const rowY = i => top + rowH * (i + 0.5);
+  const maxHalf = Math.min(rowH * 0.36, 9);
+
+  // deep time behind the tree, and the present as a hard edge on the right
+  ctx.strokeStyle = CH_GRID; ctx.lineWidth = 1; ctx.beginPath();
+  for(let i = 1; i < 6; i++){ const x = Math.round(x0 + (x1 - x0) * i / 6) + 0.5; ctx.moveTo(x, top - 8); ctx.lineTo(x, bot + 2); }
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(198,216,190,.14)'; ctx.beginPath();
+  ctx.moveTo(Math.round(x1) + 0.5, top - 8); ctx.lineTo(Math.round(x1) + 0.5, bot + 2); ctx.stroke();
+
+  const yOf = new Map();
+  for(let i = 0; i < N; i++) yOf.set(rows[i].id, rowY(i));
+
+  // branches first, so the connectors sit behind the bodies they join. A daughter
+  // leaves her mother's flank at the tick she stopped interbreeding with her, so
+  // the joint is drawn as a square elbow: it is a real event at a real date, not
+  // a smooth blend of one population into another.
+  for(let i = 0; i < N; i++){
+    const r = rows[i], py = yOf.get(r.parent);
+    if(py === undefined) continue;
+    const bx = xs(r.born), y = rowY(i), jx = bx - 5;
+    const dir = y > py ? 1 : -1, cr = Math.min(4.5, Math.abs(y - py) * 0.45);
+    ctx.strokeStyle = `hsla(${r.hue | 0} 38% 60% / .55)`; ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.moveTo(bx - 12, py);
+    ctx.lineTo(jx - cr, py);
+    ctx.quadraticCurveTo(jx, py, jx, py + dir * cr);
+    ctx.lineTo(jx, y - dir * cr);
+    ctx.quadraticCurveTo(jx, y, jx + cr, y);
+    ctx.lineTo(bx + 1.5, y);
+    ctx.stroke();
+    ctx.fillStyle = `hsla(${r.hue | 0} 48% 72% / .7)`;
+    ctx.beginPath(); ctx.arc(bx - 12, py, 1.4, 0, TAU); ctx.fill();
+  }
+
+  // The bodies. Every lineage emerges from a point, swells with the numbers it
+  // actually reached, and ends either in a live cap as thick as its standing
+  // population or — if it died — back in a point, with a bar for the last death.
+  for(let i = 0; i < N; i++){
+    const r = rows[i], y = rowY(i), dead = !!r.died;
+    const a = xs(r.born), b = Math.max(a + 3, xs(dead ? r.died : tMax));
+    const L = b - a;
+    // area, not width, carries abundance — but even a rare lineage keeps a body,
+    // otherwise the small species read as ruled lines instead of as animals
+    const half = Math.max(1.5, maxHalf * Math.sqrt(clamp((r.peak || 1) / peakMax, 0.02, 1)));
+    const endF = dead ? 0 : clamp((r.n || 0) / (r.peak || 1), 0.2, 1);
+    const lead = Math.min(11, L * 0.38), tail = dead ? Math.min(15, L * 0.42) : 0;
+    const spine = 0.5;
+    const env = x => {
+      const eIn = smooth(clamp((x - a) / lead, 0, 1));
+      const eOut = dead ? smooth(clamp((b - x) / tail, 0, 1)) : 1;
+      const ab = dead ? 1 : 1 + (endF - 1) * smooth(clamp(((x - a) / L - 0.35) / 0.65, 0, 1));
+      return spine + (half - spine) * eIn * eOut * ab;
+    };
+    const n = Math.max(10, Math.min(40, Math.round(L / 3)));
+    ctx.beginPath();
+    for(let k = 0; k <= n; k++){ const x = a + L * k / n; k ? ctx.lineTo(x, y - env(x)) : ctx.moveTo(x, y - env(x)); }
+    for(let k = n; k >= 0; k--){ const x = a + L * k / n; ctx.lineTo(x, y + env(x)); }
+    ctx.closePath();
+    const g = ctx.createLinearGradient(a, 0, b, 0);
+    if(dead){
+      g.addColorStop(0, `hsla(${r.hue | 0} 18% 44% / .5)`);
+      g.addColorStop(1, `hsla(${r.hue | 0} 8% 30% / .3)`);
+      ctx.fillStyle = g; ctx.fill();
+      ctx.strokeStyle = `hsla(${r.hue | 0} 12% 52% / .32)`; ctx.lineWidth = 0.8; ctx.stroke();
+      ctx.strokeStyle = 'rgba(190,200,186,.28)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(b + 1.5, y - 2.8); ctx.lineTo(b + 1.5, y + 2.8); ctx.stroke();
+    } else {
+      g.addColorStop(0, `hsla(${r.hue | 0} 42% 34% / .75)`);
+      g.addColorStop(0.5, `hsla(${r.hue | 0} 56% 47% / .9)`);
+      g.addColorStop(1, `hsla(${r.hue | 0} 68% 58% / .98)`);
+      ctx.fillStyle = g; ctx.fill();
+      ctx.strokeStyle = `hsla(${r.hue | 0} 72% 70% / .45)`; ctx.lineWidth = 0.8; ctx.stroke();
+    }
+    if(labels && !dead){
+      ctx.font = '9px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = `hsla(${r.hue | 0} 48% 74% / .92)`;
+      ctx.fillText(speciesName(r), x1 + 5, y);
+    }
+  }
+
+  // scale: where the tree starts, where "now" is, and how much of it is still alive
+  ctx.font = '9px ui-monospace,SFMono-Regular,Menlo,monospace'; ctx.textBaseline = 'bottom'; ctx.fillStyle = CH_TXT;
+  ctx.textAlign = 'left'; ctx.fillText('t ' + fmtN(tMin), x0, h - 3);
+  ctx.textAlign = 'right'; ctx.fillText(fmtN(tMax), x1, h - 3);
+  ctx.fillStyle = 'rgba(196,212,188,.5)';
+  ctx.fillText(live + ' ●   ' + (recs.length - live) + ' †', x1, top - 8);
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+}
+
 /* ---------- evolution panel charts ---------- */
 export function drawEvolution(){
   const H = S.evoHist; const pad = PAD;
@@ -1086,6 +1293,7 @@ export function drawEvolution(){
       }
     }
   }
+  drawPhylo();
   // dialects: one swatch per dominant lineage, coloured by its accent vector.
   // Distinct colours = distinct accents (how each lineage vocalises when relaxed).
   cv = el('evDialect'); if(cv){
