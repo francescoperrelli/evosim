@@ -1,5 +1,49 @@
 // Simulation engine: seasons, spatial-grid perception (egocentric vision,
 // prey/threat channels, memory), brain + instinct steering, interactions, save/load.
+//
+// ---------------------------------------------------------------------------
+// WHAT REGULATES THE POPULATION, AND WHAT THAT COST
+//
+// Until this change, nothing in this world was limited by its food. The standing
+// crop sat within one per cent of its ceiling in every seed and every arm; plants
+// outproduced their consumers roughly five to one; and what actually held the
+// population down was a headcount of bodies in a 175-pixel grid cell, unconnected
+// to whether any of them had eaten. That rule was a population clamp wearing an
+// ecological costume, and it had three consequences worth naming. It punished
+// flocking, which is a trait the world spends effort rewarding. It made planet
+// fertility a no-op — on seed 37 the richest planet carried FEWER plants than the
+// poorest. And, because the clamp responds instantly and food responded not at all,
+// it made the population look beautifully steady for reasons that had nothing to do
+// with the ecology.
+//
+// It is now food that regulates. A birth costs more where the local patch has been
+// eaten out, a fed grazer walks past food and leaves a refuge standing, plant
+// productivity has been brought into the same order as grazer demand, and both the
+// standing-crop ceiling and the regrowth rate scale with the ground's fertility so
+// that fire scars and terraforming buy something real.
+//
+// The honest scorecard, three arms by three seeds by six thousand ticks, second
+// half of each run, against the same measurement before the change. Per-planet
+// imbalance improved: the median ratio between a world's fullest and emptiest
+// planet fell from 3.6 to 2.4, and the pathological cases (14.2 and 6.5 on the
+// ecology-only arm) are gone. Between-seed spread on the all-mechanics arm improved
+// sharply, from a coefficient of variation of 0.264 to 0.100, with the per-seed
+// means going 465/377/235 to 355/281/343. Standing population is broadly preserved
+// (299 to 250 across all nine runs).
+//
+// Within-run oscillation got WORSE: mean coefficient of variation 0.140 to 0.205,
+// concentrated in the two arms with the fewest buffering mechanics. This is not a
+// bug and it is not a surprise. A consumer coupled to a resource cycles; a consumer
+// held by a clamp does not. The residual is a textbook grazer-vegetation cycle with
+// food leading population by six to nine hundred ticks and a period around four
+// thousand, and it is visible because the clamp that used to hide it is gone. Four
+// candidate dampers were tried and measured and are written up at their use sites:
+// flattening the regrowth curve (worked, and is shipped), consumer interference
+// (made it worse), weakening metabolic torpor (much worse), and lowering the gain on
+// the scarcity brake (worse; raising it helps slightly but costs a fifth of the
+// population and widens the seed spread). What remains is the ecology's own dynamic
+// rather than an artefact, and hiding it again would mean putting the clamp back.
+// ---------------------------------------------------------------------------
 import { rnd, clamp, rand, gauss, setSeed } from './utils.js';
 import { P, S, TYPES, PREDATORS, BRAIN_W, INNATE_W, NEIGH_R2, SEP_R2, CELL, SAVE_KEY, seasonInfo, dayInfo, newLex } from './state.js';
 import { randomGenome, mutateGenome, crossover, makeCreature, metabolism, lifeHistory } from './genome.js';
@@ -21,6 +65,114 @@ import { evalChallenge } from './challenges.js';
 
 const _in = new Array(NIN), _out = new Array(NOUT);
 const TAU2 = Math.PI * 2;
+
+// ---------- local scarcity: the density-dependent brake on reproduction ----------
+// See the long note at the point of use in step(). These four numbers are the
+// whole calibration. DD_REF is the ration — meals standing in the patch per body
+// wanting one — at which a birth costs half its full scarcity premium. It sits just
+// under the ration a settled world carries: an occupied cell averages around 42
+// standing plants against 7.7 bodies, so an ordinary patch is a shade scarcer than
+// the reference and a patch worth breeding in is a good deal richer. Loosening it
+// to 2.2 was tried and measured; births become cheap enough that the population
+// runs up until it eats the crop faster than the crop grows, which is the unstable
+// side of the same curve.
+// DD_STR is how much a fully stripped patch multiplies the cost of a birth; the old
+// headcount rule used 1 + 1.8*dd^2 with dd capped at 2, i.e. a ceiling of 8.2x,
+// which was far past the point where any amount of foraging could reach the
+// threshold. PREY_WORTH converts a head of prey into plant-equivalents for hunters
+// (P.preyEnergy 82 vs P.foodEnergy 24 is 3.4x, discounted for the chance of
+// actually catching it).
+const DD_REF = 4;
+const DD_INT = 0;
+const DD_STR = 5;
+const PREY_WORTH = 2.5;
+// How much a body will carry before it stops feeding, as a multiple of its own
+// breeding reserve. It looks like a detail and is in fact the stabiliser. Because
+// the scarcity premium is unbounded, a population grows until the premium in an
+// average patch sits just above what an average body can hold; whatever this
+// number is, roughly ninety-five per cent of bodies will at any instant be
+// standing somewhere they cannot afford to breed, and the births will be coming
+// from the few in unusually rich cells. That is the equilibrium condition, not a
+// fault. What the number actually decides is how much of the crop survives the
+// grazing, and therefore how hard the world bounces.
+// Measured on seeds 11 and 37, moving it from 1.15 to 1.8 (with the scarcity
+// reference loosened to match, so that births stayed affordable) raised the
+// standing population from ~220 to ~330 and pushed standing food from 85% of
+// capacity down to 57% — and the within-run coefficient of variation went from
+// 0.14-0.18 to 0.28-0.33, with seed 37 swinging 233 to 517. A fatter gut eats the
+// refuge, and the refuge is the only reason the consumer cannot run its resource
+// to zero. 1.15 keeps it.
+const SAT_MUL = 1.15;
+// ---------- how productive the ground is, relative to what eats it ----------
+// The single most consequential number in the file, and it had never been set
+// against anything. P.foodRate = 4 with the logistic below peaks at 4.4 new plants
+// per planet per tick, which is 105 energy a tick; a standing adult herbivore burns
+// on the order of 0.2. One planet's seed rain therefore fed something like five
+// hundred grazers at metabolic breakeven, against the two hundred or so that were
+// ever alive on it. Plants outproduced their consumers roughly five to one, the
+// standing crop sat pinned within 1% of its ceiling in every seed and every arm,
+// and NO amount of grazing could draw it down. That is the reason this world had
+// to invent an artificial crowding brake in the first place: with food unlimited,
+// food could not regulate anything, so something else had to, and the thing that
+// did was a headcount that had nothing to do with eating.
+// Bringing supply into the same range as demand is what makes the standing crop a
+// resource rather than scenery. It is also what makes fertility, fire scars and
+// terraforming mean anything at all — on ground where food is already superabundant,
+// doubling its richness buys precisely nothing.
+//
+// The value was swept on the all-mechanics arm over seeds 11, 23 and 37, before the
+// regrowth curve below was reshaped, so read the levels as relative and not as the
+// numbers the shipped world produces. Standing population goes 196 at 0.36, 256 at
+// 0.45 and 273 at 0.55, which is close to linear —
+// the signature of a population that is genuinely limited by what its ground grows
+// rather than by a rule imposed on it. 0.45 is chosen: it is the point where the
+// spread between seeds is smallest (between-seed coefficient of variation 0.099,
+// against 0.179 at 0.36 and 0.196 at 0.55) while the within-run swing stays well
+// under what the world used to do. It also lands the population within a third of
+// where it was, which matters only in that a world with a tenth of its animals is
+// a different world and not obviously a better-regulated one.
+const FOOD_PROD = 0.45;
+// ---------- the shape of the regrowth curve ----------
+// Regrowth per tick goes as FOOD_SEED + FOOD_LOG * u * (1 - u), where u is how full
+// the planet's standing crop is. FOOD_SEED is wind-blown seed rain, which arrives
+// whether or not anything is standing; the hump is growth from the stand itself,
+// fastest at half capacity and vanishing at either end.
+// These were 0.14 and 3.8, and they had never mattered, because nothing could draw
+// the crop down far enough to sit on the left-hand side of the hump. Once grazing
+// bites, that shape is an Allee effect: a stripped planet regrows at four per cent
+// of its peak rate, so a crash takes as long to climb out of as it took to fall in,
+// and the world settles into a slow consumer-resource cycle instead of a level.
+// Measured on the ecology-only arm — the harshest case, since none of the level-2
+// or level-3 mechanics are there to buffer anything — food and population ran
+// visibly out of phase with a period around forty-five hundred ticks, seed 37
+// swinging 103 to 424 and its crop 1018 to 3547.
+// The pair below moves most of the production out of the hump and into the seed
+// rain, which is a statement about the flora: this is ground that recolonises from
+// outside, not a closed stand that has to rebuild from its own survivors. A supply
+// that does not depend on the standing stock is donor-controlled, and a
+// donor-controlled resource is the one case where a consumer cannot drive a cycle
+// through it at all.
+// Swept on the ecology-only arm over seeds 11, 23 and 37, six thousand ticks, as
+// mean within-run coefficient of variation of the population over the second half:
+// 0.14/3.8 gave 0.306, 0.55/1.3 gave 0.253, 0.85/0.4 gives 0.219, and going all the
+// way flat at 1.0/0.0 gives 0.273 — worse again, because with no dependence on the
+// stand at all the crop refills to its ceiling while the grazers are still thin and
+// hands the next generation a full larder. The middle of that curve is the answer.
+const FOOD_SEED = 0.85;
+const FOOD_LOG = 0.4;
+// What fraction of its normal metabolism a starving body burns. See the use site.
+const TORPOR = 0.42;
+// ---------- what a misread mark costs ----------
+// The weight a mark keeps once a predator is actually in sight, as a fraction of
+// the weight it carries otherwise. The flee vector is 1.6 and a mark's own pull
+// tops out around 0.39, so 4 puts a confidently-held wrong reading on level terms
+// with the escape reflex and a right one squarely behind it. Set to 0 this
+// reproduces the old behaviour exactly, which is what the control arm uses.
+const MARK_RISK = 4;
+// Per-cell census of what each hunter can eat, rebuilt once per step rather than
+// rescanned per body: with prey typically a third of the population this was the
+// difference between one pass over the grid and one pass per animal.
+let _preyN = [];
 
 // ---------- pheromone field (stigmergy): faint scent trails per species ----------
 // Each species deposits into a coarse grid as it moves; the field blurs and decays.
@@ -347,28 +499,97 @@ function dropFood(pi, mig, yPeak, band2){
   // a new plant inherits from the nearest standing parent when flora genetics is on
   S.food.push(Object.assign({ x: bx, y: by }, flora.plantGenome(null)));
 }
+// Mean fertility of each planet's ground, sampled on a fixed lattice.
+//
+// This exists because fertility used to decide only *where* a seed landed and
+// never *how much* grew. dropFood() picks the best of three candidate points by
+// fertilityAt(), but inside a single planet every candidate sits on the same
+// planet fertility, so the argmax could only ever see the biome patches — and the
+// per-planet logistic below then drove every planet to the identical ceiling
+// P.maxFood no matter what its ground was worth. Measured on seed 37 at tick
+// 3800, planet 1 (fert 1.548) and planet 2 (fert 0.771) carried 654 and 870
+// standing plants: the poorer ground carried *more*. Fertility was decorative.
+//
+// The consequence reached much further than planet richness. Fire scars age into
+// rich ground and terraforming improves it, and both of those were being spent on
+// a conserved seed rain — a lineage that improved its ground only pulled seeds off
+// its neighbours' ground, so the fire and terra payoffs were positional goods in a
+// zero-sum pool and neither mechanic could produce a real surplus. Scaling the
+// regrowth rate and the local ceiling by fertility is what makes improving the
+// ground actually create food, which is the premise both mechanics were built on.
+//
+// The lattice is fixed rather than randomly sampled on purpose: it consumes no
+// rand() calls, so adding it does not shift the PRNG stream underneath anything
+// else. It is resampled periodically rather than cached at worldgen because fire
+// and terraforming move the field under it.
+const FERT_LX = 5, FERT_LY = 4;      // lattice points per planet (20 samples)
+const FERT_REFRESH = 240;            // ticks between resamples (scars/terra move slowly)
+const FERT_REF = 1.15;               // fertility that maps to exactly P.maxFood
+const FERT_LO = 0.45, FERT_HI = 1.9; // a planet is never worthless and never unbounded
+let _pfert = null, _pfertTick = -1e9;
+function planetFertility(){
+  if(_pfert && _pfert.length === S.planets.length && S.tick - _pfertTick < FERT_REFRESH) return _pfert;
+  const out = new Array(S.planets.length);
+  for(let i = 0; i < S.planets.length; i++){
+    const p = S.planets[i];
+    let s = 0;
+    for(let a = 0; a < FERT_LX; a++) for(let b = 0; b < FERT_LY; b++)
+      s += fertilityAt(p.x + p.w * (a + 0.5) / FERT_LX, p.y + p.h * (b + 0.5) / FERT_LY);
+    out[i] = s / (FERT_LX * FERT_LY);
+  }
+  _pfert = out; _pfertTick = S.tick;
+  return out;
+}
+export function fertReset(){ _pfert = null; _pfertTick = -1e9; }
+// How much standing crop a planet's ground can hold, relative to P.maxFood.
+function fertScale(i, fs){ return clamp((fs[i] || FERT_REF) / FERT_REF, FERT_LO, FERT_HI); }
+
 export function spawnFood(n, bulk){
   const pf = S.planets.length || 1;                     // each planet gets its own food budget
-  const cap = P.maxFood * pf;
   const mig = P.migrateOn && P.seasonsOn;
   const yPeak = mig ? solarPeakY(S.tick) : 0, band2 = mig ? (S.worldH * 0.26) ** 2 : 1;
-  if(P.stableOn !== false && !bulk && S.planets.length){
+  if(S.planets.length){
     // logistic regrowth: vegetation reseeds from the crop already standing and slows
     // as it approaches the planet's carrying capacity. A flat spawn rate lets food
     // pile up while grazers are scarce, banking the fuel for the next population
     // explosion; growing logistically the standing crop saturates instead, and a
     // stripped world recovers gradually from the surviving stand plus seed rain.
+    //
+    // Both the ceiling and the rate now scale with the ground's mean fertility, so
+    // rich ground carries a bigger standing crop AND rebuilds it faster. That is
+    // two separate levers on purpose: the ceiling is what a planet is worth at
+    // equilibrium, the rate is how fast it answers a grazing pulse, and a mechanic
+    // that improves fertility should buy both.
+    const fs = planetFertility();
     const std = new Array(S.planets.length).fill(0);
     for(const f of S.food){ const pi = planetIndexAt(f.x, f.y); if(pi >= 0) std[pi]++; }
+    let total = 0;
     for(let i = 0; i < S.planets.length; i++){
-      const u = clamp(std[i] / P.maxFood, 0, 1);
-      const r = n * (0.14 + 3.8 * u * (1 - u));         // wind-blown seed rain + logistic growth
+      const sc = fertScale(i, fs), lim = P.maxFood * sc;
+      total += lim;
+      if(bulk){    // the founding stand is placed outright, not grown
+        const k = Math.min(Math.round(n * sc), Math.max(0, Math.floor(lim) - std[i]));
+        for(let j = 0; j < k; j++){ dropFood(i, mig, yPeak, band2); std[i]++; }
+        continue;
+      }
+      const u = clamp(std[i] / lim, 0, 1);
+      // Logistic shape is a stabilising feedback and stays gated on stableOn, so
+      // the undamped world is still reachable; fertility scaling is not a damper
+      // and applies either way, because it is a statement about the ground.
+      const prod = P.foodProd === undefined ? FOOD_PROD : P.foodProd;
+      const seed = P.foodSeed === undefined ? FOOD_SEED : P.foodSeed;
+      const hump = P.foodLog === undefined ? FOOD_LOG : P.foodLog;
+      const r = P.stableOn === false ? n * sc * prod : n * sc * prod * (seed + hump * u * (1 - u));
       const k = Math.floor(r) + (rand() < (r % 1) ? 1 : 0);
-      for(let j = 0; j < k && std[i] < P.maxFood; j++){ dropFood(i, mig, yPeak, band2); std[i]++; }
+      for(let j = 0; j < k && std[i] < lim; j++){ dropFood(i, mig, yPeak, band2); std[i]++; }
     }
+    // flora.js caps its resprout queue against the same total, so a fertile world
+    // lets more cropped rootstocks come back rather than throwing them away
+    S.foodCap = total;
     return;
   }
   n *= pf;
+  const cap = P.maxFood * pf;
   const k = Math.floor(n) + (rand() < (n % 1) ? 1 : 0);
   for(let i = 0; i < k && S.food.length < cap; i++) dropFood(-1, mig, yPeak, band2);
 }
@@ -390,6 +611,7 @@ export function seed(seedVal){
   tools.toolReset(); fire.fireReset(); marks.markReset(); tech.techReset(); terra.terraReset();
   buildPlanets(P.planetCount);
   generateBiomes();
+  fertReset();          // the fertility lattice belongs to the old world, not this one
   pherInit();
   const nP = S.planets.length || 1;
   const hs = Math.round(P.herbStart * 0.55), os = Math.round(P.omniStart * 0.6), cs = Math.round(P.carnStart * 0.7);
@@ -439,6 +661,15 @@ export function step(){
   const cols = Math.max(1, Math.ceil(WW / CELL)), rows = Math.max(1, Math.ceil(HH / CELL));
   const cgrid = buildGrid(creatures, cols, rows);
   const fgrid = buildGrid(food, cols, rows);
+  // per-cell headcount by type, so a hunter can price the flesh standing in its
+  // patch the same way a grazer prices the greenery (see the scarcity note below)
+  _preyN = new Array(cols * rows);
+  for(let i = 0; i < cgrid.length; i++){
+    const b = cgrid[i]; if(!b) continue;
+    const h = { herb: 0, omni: 0, carn: 0 };
+    for(let j = 0; j < b.length; j++) h[b[j].type]++;
+    _preyN[i] = h;
+  }
 
   // cultural transmission: a newborn imitates the brain of the most thriving
   // same-type neighbour of its parent (not necessarily kin), so a successful
@@ -478,6 +709,79 @@ export function step(){
     if(c.fed > 0) c.fed--;                                                // still handling/digesting its last kill
     const gcx = clamp(Math.floor(c.x / CELL), 0, cols - 1), gcy = clamp(Math.floor(c.y / CELL), 0, rows - 1);
 
+    // ---- local scarcity: how thin the food is where this body is standing ----
+    //
+    // This replaced a headcount. The old rule read the number of bodies of any kind
+    // sharing this grid cell and charged reproduction 1 + 1.8*(n/4)^2 for it, on the
+    // argument that the ground is finite and cannot be evaded. The argument was
+    // right and the implementation measured the wrong thing: a headcount says how
+    // aggregated a population is, not whether it has eaten its patch. Those come
+    // apart badly here, because flocking is an evolved trait — bodies clump on
+    // purpose — so the brake fired hardest on exactly the behaviour the world was
+    // built to reward, and it fired whether or not there was any shortage.
+    //
+    // What that cost, measured at tick 3800 on the all-mechanics arm: 25-35% of all
+    // bodies sat pinned at the penalty's ceiling, paying 8.2x reproductive cost;
+    // 92-98% of grazers had a satiation cap below their own breeding threshold, so
+    // they physically could not eat their way to a birth; and standing food sat at
+    // 830-900 per planet against a ceiling of 900. Food was saturated and the
+    // population was starving for permission to breed. Seed 23's planet 3 held 896
+    // plants and 13 animals — 69 plants per body, a planet nobody could refill,
+    // because its 13 survivors flocked into one cell and read as maximally crowded.
+    // The signature is visible across the whole study: seed 37 carried the LOWEST
+    // population and the HIGHEST standing crop, and herbivore count correlated
+    // POSITIVELY with food (+0.11/+0.15/+0.28 at lag 0). A grazing-limited world
+    // gives the opposite sign. Nothing in it was coupled to its own food supply.
+    //
+    // The replacement asks the question the old one meant to ask: how many meals
+    // are standing here per body that wants one. A crowd on rich ground is not
+    // crowded; two animals on bare ground are. It is still unevadable — spacing out
+    // no longer helps by itself, only finding food does — and it closes the loop
+    // that was missing, because now breeding depletes the patch that licenses it.
+    const cellIdx = gcy * cols + gcx;
+    const cellB = cgrid[cellIdx];
+    const nBody = cellB ? cellB.length : 1;
+    let res = 0;
+    if(cfg.eatsPlants){ const fb = fgrid[cellIdx]; if(fb) res += fb.length; }
+    // a hunter's ration is the flesh standing in the patch, not the greenery; one
+    // head of prey is worth several plants, so it is weighted rather than counted
+    if(hunts.length){ const hc = _preyN[cellIdx]; if(hc) for(let hi = 0; hi < hunts.length; hi++) res += PREY_WORTH * (hc[hunts[hi]] || 0); }
+    const ration = res / nBody;
+    // 0 where the patch is well stocked, ->1 where it is stripped bare. Saturating
+    // rather than linear so that abundance is genuinely free: doubling an already
+    // ample ration should not keep buying cheaper births.
+    // The reference ration itself rises with the number of bodies in the patch. Pure
+    // exploitation competition — everyone shares one stock, so the per-head ration
+    // falls as the crowd grows — turned out not to be enough on its own: while the
+    // crop is still growing faster than it is being eaten, the ration stays high, the
+    // brake never engages, and the population sails past what the ground can keep. It
+    // then pays for the overshoot with a crash, and the world settles into a cycle.
+    // Adding an interference term is the textbook answer and is a real thing animals
+    // do to each other: at high density they spend their time on rivals rather than
+    // on food, so a patch supports fewer of them than its standing crop alone implies.
+    // It is deliberately additive and small next to the ration, so it cannot turn back
+    // into the headcount rule this replaced — thirteen animals sitting on nine hundred
+    // plants still read as comfortable, which under the old rule they did not.
+    //
+    // DD_INT ships at 0, i.e. the term is off, and that is a measured result rather
+    // than caution. At 0.5, with DD_REF lowered to 1.5 so that an ordinarily crowded
+    // patch charged what it charges now, the ecology-only arm got markedly WORSE:
+    // mean within-run coefficient of variation 0.316 against 0.253 for the same
+    // configuration without it. The reason is the same one that sank the headcount
+    // rule. Survivors of a crash clump, so a term that reads the crowd stays hard on
+    // during exactly the trough where the population needs to be allowed to recover,
+    // and it deepens the cycle it was meant to damp. Interference competition is real
+    // and the theory says it stabilises, but the theory assumes a well-mixed
+    // population, and this one is not. The knob is left in place because the next
+    // person to have the idea deserves the measurement rather than the argument.
+    const ddRef = (P.ddRef === undefined ? DD_REF : P.ddRef)
+                + (P.ddInt === undefined ? DD_INT : P.ddInt) * (nBody - 1);
+    const scarce = stab ? ddRef / (ddRef + ration) : 0;
+    // What a birth costs here. The quadratic is kept from the old rule — a mild
+    // shortage should be nearly free and a real one should bite hard — but it is
+    // now driven by the shortage rather than by the crowd.
+    const reproE = P[cfg.reproE] * (1 + (P.ddStr === undefined ? DD_STR : P.ddStr) * scarce * scarce) * lh.reproMult;
+
     const sp = Math.hypot(c.vx, c.vy);
     const hx = sp > 1e-4 ? c.vx / sp : 1, hy = sp > 1e-4 ? c.vy / sp : 0;
 
@@ -493,10 +797,34 @@ export function step(){
     const canHerdNow = P.husbandOn && hunts.length && (g.husbandry || 0) >= P.husbandThresh && g.brain.nh >= P.herdBrain && c.energy >= P[cfg.reproE] * 0.22;
     const herdCap = canHerdNow ? Math.max(1, Math.round((g.husbandry || 0) * HERD_CAP)) : 0;
     let herdRoom = canHerdNow ? Math.max(0, herdCap - (c.herd || 0)) : 0;
-    // a grazer with a full gut stops grazing: uneaten plants are left standing, so
+    // A grazer with a full gut stops grazing: uneaten plants are left standing, so
     // the summer surplus accumulates as a crop the herd can live off in winter
-    // instead of being stripped the moment it grows
-    const full = stab && cfg.eatsPlants && c.energy > P[cfg.reproE] * 1.15;
+    // instead of being stripped the moment it grows.
+    //
+    // The cap is measured against this body's OWN reproductive threshold — the one
+    // its life history sets — rather than against the flat species figure. Held flat
+    // it was a sterility clamp: a body in a patch the old crowding rule scored as
+    // full stopped eating at 138 energy while needing 420-690 to breed, a gap no
+    // amount of foraging could close, and that was true of 92-98% of grazers at any
+    // moment. A K-strategist demanding 1.22x the base reserve hit the same wall in
+    // miniature even after the crowding rule was replaced.
+    //
+    // It deliberately does NOT track the local scarcity premium, although tying it
+    // to the full `reproE` was tried first and looks tidier. Scarcity-coupled
+    // satiation means a grazer standing in a stripped patch keeps eating to a very
+    // high threshold, which is a positive feedback on exactly the crash you want
+    // damped: the patch empties, so the animals eat harder, so it empties faster.
+    // Measured at foodProd 0.30 with the coupled version, the second-half swing was
+    // 214-475 on seed 11. A gut that fills to a fixed multiple of the body's own
+    // reserve keeps the plant refuge the mechanic was built for — a fed grazer walks
+    // past food — and a refuge holding some fraction of the crop is the classic
+    // reason a consumer cannot run its resource to zero.
+    //
+    // SAT_MUL then has to clear the premium a breedable patch charges, or the two
+    // rules quietly contradict each other; the constant's own note records what
+    // happened when it did not.
+    const fullE = P[cfg.reproE] * lh.reproMult * (P.satMul === undefined ? SAT_MUL : P.satMul);
+    const full = stab && cfg.eatsPlants && c.energy > fullE;
     const mateReadyE = P[cfg.reproE] * 0.85;
     const fSense = (cfg.eatsPlants && P.mimicOn) ? senseSq * (1 - 0.3 * g.camo) * (1 - 0.3 * g.camo) : senseSq;
 
@@ -648,9 +976,53 @@ export function step(){
     // It enters as a steering pull rather than a brain input on purpose: adding
     // inputs would rebuild every existing brain's first layer and throw away the
     // behaviour already evolved in it.
-    if(P.marksOn && !thrHas){
-      const mp = marks.sense(c);
-      if(mp.w > 0){ ix += mp.dx * mp.w; iy += mp.dy * mp.w; }
+    //
+    // Until now this was gated on `!thrHas`, like every other appetite: the moment a
+    // predator came into view the mark stopped being consulted and the flee vector
+    // had the body to itself. That gate is why reading a mark wrongly had never cost
+    // anything. Marks are deposited where things happen, so a danger mark sits where
+    // a hunter was, and a body that decodes danger as forage walks toward it — but it
+    // arrives with its escape reflex fully intact, so the mistake buys it a slightly
+    // worse neighbourhood and nothing more. Two studies had already found the channel
+    // measurably informative and evolutionarily inert (decode error 0.098 shipped
+    // against 0.561 shuffled, with population 205+/-37 against 213+/-34), and the one
+    // remaining explanation was that nothing about reading was ever risky.
+    //
+    // So the pull now survives the encounter, at MARK_RISK of its usual authority.
+    // Read the mark right and it reinforces the flee, because a danger glyph decodes
+    // to a push away from where it stands; read it wrong and it fights the flee at
+    // roughly the strength of the flee itself, and the body dies. This is the only
+    // form of selection on a convention that the world had never offered: symmetric
+    // information with asymmetric consequences.
+    //
+    // It does not work, and the negative is worth more than the mechanic. Three arms,
+    // seeds 11, 23 and 37, six thousand ticks each, all mechanics on, scored on the
+    // share of the population holding the modal glyph rotation — the only statistic
+    // that can distinguish a convention from a gene drifting on its own, and one that
+    // has to be read against a control at the same run length because g.mark diffuses
+    // toward 0.5 whether or not anything is selecting it. Risky reading gave
+    // 0.846 +/- 0.047. The matched shuffle control, identical in every respect except
+    // that the glyphs on the standing marks are permuted, gave 0.824 +/- 0.033. Mean
+    // g.mark was 0.172 against 0.173. The channel is unambiguously informative — the
+    // decode error is 0.084 with content intact against 0.501 with it shuffled — and
+    // it is still not selected, now with dying attached to reading wrongly. Making
+    // the mistake fatal was the last standing explanation for the earlier null, and
+    // it is spent. Whatever keeps a convention from evolving here, it is not that
+    // being wrong was free.
+    //
+    // Against MARK_RISK = 0, which is the old behaviour exactly, the cost of shipping
+    // this is about 13% of the standing population (272 +/- 33 against 313 +/- 34,
+    // second half of the run) — bodies that hesitate at the wrong moment — bought
+    // with no gain in the convention and none in between-seed spread. It ships
+    // anyway, because a signal that a body is acting on has no business evaporating
+    // the instant it matters most, and because the null above is only a fact about
+    // the world the player actually runs if the risk is actually in it.
+    if(P.marksOn){
+      const risk = P.markRisk === undefined ? MARK_RISK : P.markRisk;
+      if(!thrHas || risk > 0){
+        const mp = marks.sense(c);
+        if(mp.w > 0){ const s = thrHas ? risk : 1; ix += mp.dx * mp.w * s; iy += mp.dy * mp.w * s; }
+      }
     }
     // the young keep close to a home site of their own kind
     if(P.nestsOn && c.age < matAge && S.nests.length && !thrHas){
@@ -739,8 +1111,18 @@ export function step(){
     trade.gather(c);   // pick up any of the second resource underfoot
     // metabolic depression: a starving animal winds down into torpor instead of
     // burning at full rate, so a shortage thins a population along a gradient
-    // rather than killing a whole cohort in the same handful of ticks
-    if(stab) burn *= 0.42 + 0.58 * clamp(c.energy / (P[cfg.reproE] * 0.3), 0, 1);
+    // rather than killing a whole cohort in the same handful of ticks.
+    //
+    // Once the population was genuinely coupled to its food this looked like a prime
+    // suspect for the residual cycle: torpor keeps the losers of a crash alive and
+    // grazing for a long time, which ought to hold the crop down and stretch the
+    // trough. It is the opposite. Raised to 0.85 — a starving body burning almost
+    // its full rate — the ecology-only arm's mean within-run coefficient of variation
+    // went from 0.219 to 0.304 and the standing population fell from 241 to 184, with
+    // seed 23 down to 111. Killing the hungry quickly synchronises the death, which
+    // is the thing that makes a bust a bust. The gradient is the point.
+    const torpor = P.torpor === undefined ? TORPOR : P.torpor;
+    if(stab) burn *= torpor + (1 - torpor) * clamp(c.energy / (P[cfg.reproE] * 0.3), 0, 1);
     c.energy -= burn;
     // standing in flame costs energy directly, not through the metabolic line:
     // it is damage, and it has to hurt a torpid body as much as an active one
@@ -849,18 +1231,13 @@ export function step(){
         }
       }
     }
-    // density-dependent reproduction: breeding into a crowded patch demands more
-    // reserve, because the young must compete locally for the same ground. This is
-    // the negative feedback that levels a boom off while its food still stands,
-    // instead of letting it overshoot and starve — and each animal reads only its
-    // own patch, so it needs no global population supervisor.
-    // Crowding is measured as how many bodies of any kind share this grid cell,
-    // not how many neighbours of its own kind are in sense range: a headcount of
-    // kin is a signal evolution can dodge by spacing out or growing less social,
-    // whereas the ground itself is finite and cannot be evaded.
-    const cellB = cgrid[gcy * cols + gcx];
-    const dd = stab ? clamp((cellB ? cellB.length : 1) / 4, 0, 2) : 0;
-    const reproE = P[cfg.reproE] * (1 + 1.8 * dd * dd) * lh.reproMult;
+    // Density-dependent reproduction: breeding into a stripped patch demands more
+    // reserve, because the young must compete locally for food that is not there.
+    // This is the negative feedback that levels a boom off while its food still
+    // stands, instead of letting it overshoot and starve — and each animal reads
+    // only its own patch, so it needs no global population supervisor. `reproE` is
+    // computed at the top of this body's turn, because the satiation gate needs the
+    // same answer before anything is scanned.
     // clutch size: the r end of the axis spends the same reproductive budget on
     // several small young, the K end on one large one (stochastic rounding keeps
     // fractional clutches meaningful without biasing the mean)
@@ -1080,7 +1457,7 @@ export function restore(s){
          brain: o.b.w.length === brainLenOld(o.b.nh) ? migrateBrain(o.b.nh, o.b.w) : { nh: o.b.nh, w: o.b.w.slice() } }
   }));
   S.food = s.food.map(flora.unpackPlant);
-  phylo.phyloReset(); flora.floraReset();
+  phylo.phyloReset(); flora.floraReset(); fertReset();
   village.villageReset(); property.propertyReset(); culture.cultureReset(); trade.tradeReset(); tribe.tribeReset();
   tools.toolReset(); fire.fireReset(); marks.markReset(); tech.techReset(); terra.terraReset();
   S.phylo = (s.phylo || []).map(r => ({ id: r.id, parent: r.parent || 0, born: r.born || 0, died: r.died || 0, n: r.n || 0, peak: r.peak || 0, type: r.type || 'herb', hue: r.hue || 0, cx: 0, cy: 0, g: null }));
