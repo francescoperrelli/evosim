@@ -506,10 +506,11 @@ export function cultureIndex(){ return S.culture ? S.culture.idx : 0; }
 //     frame fix is correct and necessary — it just was not the thing that was
 //     stopping learning from paying.
 //
-// 12. THE BRAINW/INNATEW SWEEP. BRAIN_W and INNATE_W are state.js constants, so the
-//     sweep was run by scaling the two tanh-bounded motor outputs in nn.js by
-//     P.motorGain, which is exactly equivalent to running at BRAIN_W = 0.7*mg
-//     (see nn.js). 4 seeds each:
+// 12. THE BRAINW/INNATEW SWEEP. This was run before state.js exposed P.brainW, by
+//     scaling the two tanh-bounded motor outputs in nn.js by a `motorGain` hook —
+//     exactly equivalent to running at BRAIN_W = 0.7*mg. The hook has since been
+//     deleted in favour of the real knob; to reproduce, set P.brainW to the
+//     "effective BRAIN_W" column directly. 4 seeds each:
 //         mg   effective BRAIN_W   income            pop          maxGen   learning
 //         0    0.00               0.1230 +- 0.0293    41 +-  4     1.0      on
 //         1    0.70 (shipping)    0.5053 +- 0.0315   423 +- 51    15.5      on

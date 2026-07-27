@@ -153,20 +153,13 @@ export function blendToward(child, model, alpha){
 
 const _h = new Array(MAX_NH);
 let _lastNH = 0;
-// MOTOR GAIN — an experiment hook, and a no-op (1) in normal play.
-//
-// world.js spends the two motor outputs as `_out[0]*BRAIN_W + ix*INNATE_W`, with
-// BRAIN_W 0.7 and INNATE_W 1.25 module constants in state.js. Because both motor
-// outputs are tanh-bounded, multiplying them here by `mg` is exactly equivalent to
-// running the world at BRAIN_W = 0.7*mg: it is the only way to sweep the
-// brain-versus-instinct balance from a module that does not own state.js. See the
-// sweep in the tuning log at the bottom of culture.js for what it bought.
-//
-// The gain is deliberately NOT allowed to leak into learn(): the Hebbian rule uses
-// the motor output as its post-synaptic term, so an ungated gain would silently
-// scale the learning rate on exactly the two weights the sweep is about, and the
-// arms would differ in two things at once. `_mg` is divided back out there.
-let _mg = 1;
+// There was a `motorGain` hook here: a scalar applied to the two motor outputs,
+// which — both being tanh-bounded — is exactly equivalent to changing BRAIN_W.
+// It existed only because the sweep of brain-versus-instinct authority had to be
+// run from a module that did not own state.js. state.js now exposes the real
+// knobs, P.brainW and P.innateW, so the equivalent-but-indirect version is gone.
+// The sweep it produced still stands, and is recorded in the tuning log at the
+// bottom of culture.js: authority is saturated at the shipped 0.7.
 // `plast` (optional) is a per-creature plastic overlay on the hidden->output
 // weights, learned within a single lifetime and NOT inherited.
 export function brainForward(b, inp, out, plast){
@@ -206,8 +199,6 @@ export function brainForward(b, inp, out, plast){
     } else out[k] = Math.tanh(s);
   }
   if(rpe) plast._b *= (1 - RPE_BETA);        // this tick contributed no reward
-  _mg = P.motorGain === undefined ? 1 : P.motorGain;
-  if(_mg !== 1){ out[0] *= _mg; out[1] *= _mg; }
   _lastNH = nh;
 }
 export const getHidden = () => ({ h: _h, nh: _lastNH });
@@ -221,10 +212,7 @@ export function learn(b, plast, out, reward){
   for(let j = 0; j < nh; j++){
     const hj = _h[j], base = j * NOUT;
     for(let k = 0; k < NOUT; k++){
-      // undo the motor gain on outputs 0/1 so the learning rate is the same in
-      // every arm of the brainW sweep (see _mg above)
-      const ok = (k < 2 && _mg !== 1) ? out[k] / _mg : out[k];
-      let v = plast[base + k] + lr * hj * ok;
+      let v = plast[base + k] + lr * hj * out[k];
       plast[base + k] = v > 0.9 ? 0.9 : v < -0.9 ? -0.9 : v;   // bounded so it only nudges the evolved brain
     }
   }
