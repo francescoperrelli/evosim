@@ -11,11 +11,12 @@ import { CHALLENGES, startChallenge, stopChallenge } from './challenges.js';
 import { initAudio, setMusic, setSfx, musicOn, sfxMeteor, sfxWin, sfxLose, setMusicVol, setSfxVol, suspendAudio, resumeAudio } from './audio.js';
 import { listSlots, saveSlot, loadSlot, deleteSlot } from './saves.js';
 import { I18N, t, setLang, getLang } from './i18n.js';
+import { phyloInfo, phyloForest, speciesName, recVec, traitDist, creatureVec, TRAIT_KEYS, TRAIT_SCALE } from './phylo.js';
 
 /* ---------- overlays ---------- */
-function show(id){ el(id).classList.add('show'); }
-function hide(id){ el(id).classList.remove('show'); }
-function hideAll(){ ['menu','tutorial','options','inspector','evolution','events','genealogy','challenges','slots','chronicle','legend'].forEach(hide); }
+function show(id){ const e = el(id); if(e) e.classList.add('show'); }
+function hide(id){ const e = el(id); if(e) e.classList.remove('show'); }
+function hideAll(){ ['menu','tutorial','options','inspector','evolution','events','genealogy','challenges','slots','chronicle','legend','phylo'].forEach(hide); }
 export { show };
 
 let toastT = null;
@@ -570,3 +571,651 @@ el('btnZoomOut').onclick = () => zoomAt(S.W / 2, S.H / 2, 1 / 1.25);
 function placeFood(wx, wy){
   for(let i = 0; i < 6; i++) if(S.food.length < P.maxFood + 400) S.food.push({ x: wx + rnd(-18, 18), y: wy + rnd(-18, 18) });
 }
+
+/* =====================================================================
+   PHYLOGENETIC TREE  (ROADMAP §2.5)
+
+   phylo.js has always recorded the topology; what was missing was a way to
+   look at it. This is a time-calibrated phylogram: the x axis is the tick a
+   lineage was minted and the tick it died, so a horizontal distance is real
+   elapsed time, not a made-up branch length. The y axis is nothing but a DFS
+   row index — it carries no meaning and is never claimed to.
+
+   Four things this view refuses to do, because phylo.js cannot honestly
+   support them:
+     - no population curve per lineage (only `peak` and current `n` are kept);
+     - no genetic distance when `g` is missing, which is the case for every
+       record that came back from a save; it says so instead of drawing a zero;
+     - no silent collapsing (see below);
+     - no hiding of extinct branches. Most branches end. A tree that draws only
+       the survivors is a lie, and a duller picture besides.
+
+   COLLAPSING. Records are hard-capped at MAX_REC = 150 by phylo.js's prune(),
+   so the feared 400-node hairball cannot happen by construction. A natural
+   20 000-tick run settles around 25-30 records. But a low specThresh drives it
+   to the cap, and 150 rows do not fit on a screen, so above a budget of 48
+   rows whole clades fold into a classic collapsed-clade wedge. The order is a
+   total order on (subtree peak, id) — smallest first, extinct clades before
+   living ones — so it is deterministic and never calls rand(). A folded clade
+   is drawn as a triangle whose height grows with the number of things inside
+   it and is labelled with that number: a node standing for 30 sublineages
+   looks like it stands for 30. Clicking it unfolds it.
+
+   The same honesty applies one level up: prune() itself deletes records, and
+   phylo.js now credits every deleted record to the surviving ancestor it was
+   grafted onto (`absorbed`). Those show as an amber diamond and a "+N".
+   Records whose whole ancestry was pruned away are counted in
+   phyloInfo.rootLost and reported in the footer rather than vanishing.
+
+   COST. phyloInfo.rev is bumped only when the shape of the forest changes.
+   The layout is rebuilt on a change of that one integer; the canvas is
+   repainted only when the layout, the selection, the view transform or the
+   "now" cursor's pixel column actually moved. While the panel is shut,
+   refreshPhylo() returns after a single classList test.
+   ===================================================================== */
+
+const PHYLO_I18N = {
+  it: {
+    phyloBtn: "🌳 Albero", phyloEyebrow: "La forma della discendenza", phyloTitle: "Albero filogenetico",
+    phyloHint: "Trascina per spostarti · rotella per lo zoom sul tempo · tocca un ramo per selezionarlo · tocca un triangolo per aprire un gruppo",
+    phyloEmpty: "Nessun lignaggio registrato. Lascia correre il mondo.",
+    phyloOff: "La speciazione è disattivata nelle opzioni: non c'è nessun albero da mostrare.",
+    phyloReset: "Reinquadra", phyloClose: "Chiudi",
+    phyloAlive: "vivo", phyloExtinct: "estinto",
+    phyloBorn: "Comparso", phyloDied: "Estinto", phyloSpan: "Durata", phyloPeak: "Picco", phyloNow: "Ora",
+    phyloParent: "Discende da", phyloRoot: "Lignaggio fondatore",
+    phyloSister: "Rispetto alla sorella", phyloNoSister: "Nessuna sorella registrata: il ramo gemello è stato potato o non c'è mai stato.",
+    phyloNoVec: "Genetica non disponibile: questo record viene da un salvataggio, che non conserva il vettore dei tratti.",
+    phyloMembers: "Creature vive in questo lignaggio", phyloNoMembers: "Nessuna creatura viva porta questo lignaggio.",
+    phyloJump: "Vai", phyloMore: "…e altre {n}",
+    phyloFolded: "Contiene {n} lignaggi ripiegati, tutti estinti tranne quelli segnati. Tocca per aprirlo.",
+    phyloAbsorbed: "Ha assorbito {n} record potati dalla memoria.",
+    phyloSelHint: "Tocca un ramo per leggerlo.",
+    phyloRecs: "record", phyloPruned: "potati", phyloRootLost: "radici perse",
+    phyloFoldedRows: "gruppi ripiegati", phyloBundles: "mazzi di rami morti",
+    phTrdiet: "dieta", phTrsize: "taglia", phTrspeed: "velocità", phTrhue: "colore",
+    phTrshape: "forma", phTrpattern: "livrea", phTrornament: "ornamento", phTrsense: "vista"
+  },
+  en: {
+    phyloBtn: "🌳 Tree", phyloEyebrow: "The shape of descent", phyloTitle: "Phylogenetic tree",
+    phyloHint: "Drag to pan · wheel to zoom time · tap a branch to select it · tap a triangle to open a folded group",
+    phyloEmpty: "No lineages recorded yet. Let the world run.",
+    phyloOff: "Speciation is switched off in the options, so there is no tree to show.",
+    phyloReset: "Reframe", phyloClose: "Close",
+    phyloAlive: "alive", phyloExtinct: "extinct",
+    phyloBorn: "Appeared", phyloDied: "Extinct", phyloSpan: "Lasted", phyloPeak: "Peak", phyloNow: "Now",
+    phyloParent: "Descends from", phyloRoot: "Founding lineage",
+    phyloSister: "Against its sister", phyloNoSister: "No sister on record: the twin branch was pruned away, or never existed.",
+    phyloNoVec: "Genetics unavailable: this record came back from a save, which does not keep the trait vector.",
+    phyloMembers: "Creatures alive in this lineage", phyloNoMembers: "No living creature carries this lineage.",
+    phyloJump: "Go", phyloMore: "…and {n} more",
+    phyloFolded: "Holds {n} folded lineages, all extinct unless marked. Tap to open it.",
+    phyloAbsorbed: "Absorbed {n} records pruned out of memory.",
+    phyloSelHint: "Tap a branch to read it.",
+    phyloRecs: "records", phyloPruned: "pruned", phyloRootLost: "roots lost",
+    phyloFoldedRows: "folded groups", phyloBundles: "bundles of dead twigs",
+    phTrdiet: "diet", phTrsize: "size", phTrspeed: "speed", phTrhue: "colour",
+    phTrshape: "shape", phTrpattern: "livery", phTrornament: "ornament", phTrsense: "sight"
+  }
+};
+// Merge only what is missing, so moving these strings into i18n.js later is a
+// no-op rather than a conflict.
+for(const lang of ['it', 'en']){
+  const src = PHYLO_I18N[lang], dst = I18N[lang];
+  if(!dst) continue;
+  for(const k in src) if(dst[k] === undefined) dst[k] = src[k];
+}
+const tf = (k, vals) => { let s = t(k); for(const v in vals) s = s.split('{' + v + '}').join(vals[v]); return s; };
+
+const PHYLO_CSS = `
+.ph-card{width:min(980px,100%)}
+#phWrap{position:relative;border:1px solid #24331f;border-radius:12px;background:#0d130d;overflow:hidden}
+#phCanvas{display:block;width:100%;height:min(52vh,440px);touch-action:none;cursor:grab}
+#phCanvas.drag{cursor:grabbing}
+#phFoot{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11px;color:#6f8168;margin:7px 2px 0}
+#phDetail{margin-top:12px;border-top:1px solid #1e2a1c;padding-top:11px;font-size:12.5px;min-height:74px}
+#phDetail .ph-h{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+#phDetail .ph-dot{width:12px;height:12px;border-radius:50%;flex:0 0 auto;box-shadow:0 0 0 1px rgba(0,0,0,.5) inset}
+#phDetail .ph-nm{font-family:var(--serif,serif);font-size:17px}
+#phDetail .ph-tag{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;padding:1px 6px;border-radius:6px;border:1px solid #33452c;color:#8fa585}
+#phDetail .ph-tag.dead{color:#a07a72;border-color:#4a332e}
+#phDetail .ph-grid{display:flex;flex-wrap:wrap;gap:3px 20px;color:#93a68c}
+#phDetail .ph-grid b{color:#d6e4cf;font-weight:500}
+#phDetail .ph-sub{color:#7d8f77;margin:8px 0 3px;font-size:11px;letter-spacing:.04em;text-transform:uppercase}
+#phDetail .ph-bar{display:flex;align-items:center;gap:7px;margin:2px 0}
+#phDetail .ph-bar i{display:block;height:6px;border-radius:3px;background:#6f9a4c;flex:0 0 auto}
+#phDetail .ph-mem{display:flex;flex-wrap:wrap;gap:5px;margin-top:3px}
+#phDetail .ph-mem button{font:inherit;font-size:11px;padding:2px 8px;border-radius:7px;cursor:pointer;
+  background:#182218;border:1px solid #2c3d28;color:#b9cbb2}
+#phDetail .ph-mem button:hover{background:#22301f}
+#phDetail .ph-note{color:#8a7f63;font-size:11.5px;line-height:1.45}
+`;
+
+/* ---------- DOM, built from here so index.html need not change ---------- */
+function phEl(tag, attrs, parent){
+  const n = document.createElement(tag);
+  if(attrs) for(const k in attrs){ if(k === 'text') n.textContent = attrs[k]; else n.setAttribute(k, attrs[k]); }
+  if(parent) parent.appendChild(n);
+  return n;
+}
+function buildPhyloDom(){
+  if(!el('phylo')) buildPhyloOverlay();         // skipped if the markup is already in index.html
+  const rst = el('phReset'), cls = el('phClose'), ov = el('phylo');
+  if(rst) rst.onclick = () => { phFit(true); phDirty = true; };
+  if(cls) cls.onclick = () => closePhylo();
+  if(ov && !ov._phBound){ ov._phBound = true; ov.addEventListener('pointerdown', e => { if(e.target === ov) closePhylo(); }); }
+  // The launcher, next to the other panel buttons. If the owner adds a button
+  // with this id to index.html, the create branch never runs and nothing duplicates.
+  if(!el('btnPhylo')){
+    const anchor = el('btnLegend');
+    const b = phEl('button', { class: 'btn ghost', id: 'btnPhylo', 'data-i18n': 'phyloBtn', text: PHYLO_I18N.it.phyloBtn });
+    if(anchor && anchor.parentNode) anchor.parentNode.appendChild(b);
+    else document.body.appendChild(b);
+  }
+  const bp = el('btnPhylo'); if(bp) bp.onclick = () => openPhylo();
+}
+function buildPhyloOverlay(){
+  if(!el('phyloStyle')){
+    const st = document.createElement('style'); st.id = 'phyloStyle'; st.textContent = PHYLO_CSS;
+    document.head.appendChild(st);
+  }
+  const ov = phEl('div', { class: 'overlay', id: 'phylo' });
+  const card = phEl('div', { class: 'card ph-card' }, ov);
+  phEl('p', { class: 'eyebrow', 'data-i18n': 'phyloEyebrow', text: PHYLO_I18N.it.phyloEyebrow }, card);
+  phEl('h3', { 'data-i18n': 'phyloTitle', text: PHYLO_I18N.it.phyloTitle }, card);
+  const wrap = phEl('div', { id: 'phWrap' }, card);
+  phEl('canvas', { id: 'phCanvas' }, wrap);
+  phEl('div', { id: 'phFoot' }, card);
+  phEl('p', { class: 'caption', 'data-i18n': 'phyloHint', text: PHYLO_I18N.it.phyloHint }, card);
+  phEl('div', { id: 'phDetail' }, card);
+  const row = phEl('div', { class: 'row' }, card);
+  phEl('button', { class: 'btn ghost', id: 'phReset', 'data-i18n': 'phyloReset', text: PHYLO_I18N.it.phyloReset }, row);
+  phEl('button', { class: 'btn primary', id: 'phClose', 'data-i18n': 'close', text: 'Chiudi' }, row);
+  document.body.appendChild(ov);
+}
+
+/* ---------- view state ---------- */
+const PH_ROW_MAX = 15, PH_ROW_MIN = 7;
+const PH_PADL = 10, PH_PADR = 30, PH_PADT = 26, PH_PADB = 10;
+let PH_ROW = PH_ROW_MAX;                        // actual pitch, shrunk to fit (see phLayout)
+// How many rows we are willing to draw. Derived from the canvas, not fixed: the
+// default view should fit without scrolling, because a tree you have to scroll
+// to see is a tree you cannot read the shape of. Unfolding a clade by hand may
+// push it past this, and then you scroll — that is a choice the player made.
+function phAvail(){ const c = el('phCanvas'); return ((c ? c.clientHeight : 0) || 400) - PH_PADT - PH_PADB; }
+function phBudget(){ return clamp(Math.floor(phAvail() / PH_ROW_MIN), 12, 160); }
+const PH_DPR = Math.min(devicePixelRatio || 1, 2);   // matches render.js
+const phOpen = new Set();                       // clades the player unfolded by hand
+const phShut = new Set();                       // clades the player folded by hand
+let phZoom = 1, phOx = 0, phOy = 0;             // time scale, pan in CSS px
+let phLay = null, phLayRev = -1, phLayW = -1, phLayH = -1;   // cached layout + what it was built for
+let phSel = 0, phDirty = true, phLastCol = -1, phLastLang = '';
+let phItems = [], phWedges = [];
+let phRaf = 0, phMemT = 0, phMemSel = -1, phCanW = 0, phCanH = 0;
+let phPaints = 0, phPaintMs = 0, phTicks = 0, phTickMs = 0;   // measured, reported in the footer under ?debug
+
+/* ---------- layout ---------- */
+// Deterministic throughout: rows come from a DFS with children already sorted by
+// (born, id) in phyloForest(); the fold order is (subtree peak, id). No rand().
+function phBuildLayout(){
+  const F = phyloForest();
+  const budget = phBudget();
+  const folded = new Set();
+  const ancFolded = n => { let p = n.parent; while(p){ if(folded.has(p.id)) return true; p = p.parent; } return false; };
+  if(F.nodes.length > budget){
+    // Only clades that are extinct root and branch are ever folded automatically:
+    // a lineage that is alive right now always keeps a row of its own, because
+    // "which creatures alive right now belong to this" is the question the panel
+    // exists to answer, and it cannot be answered about something not drawn.
+    // Folding a clade that hides a single node buys nothing and costs a glyph.
+    const dead = F.nodes.filter(n => n.subDead && n.kids.length && n.subCount >= 3 && !phOpen.has(n.id))
+      .sort((a, b) => (a.subPeak - b.subPeak) || (a.id - b.id));
+    let rows = F.nodes.length;
+    for(const n of dead){
+      if(rows <= budget) break;
+      if(folded.has(n.id) || ancFolded(n)) continue;
+      folded.add(n.id); rows -= n.subCount - 1;
+    }
+  }
+  for(const id of phShut){ const n = F.byId.get(id); if(n && n.kids.length) folded.add(id); }
+  for(const id of phOpen) folded.delete(id);
+
+  let rows = [];
+  for(const r of F.roots){
+    const st = [r];
+    while(st.length){
+      const n = st.pop();
+      n.folded = folded.has(n.id); rows.push(n);
+      if(n.folded) continue;
+      for(let i = n.kids.length - 1; i >= 0; i--) st.push(n.kids[i]);
+    }
+  }
+
+  // Clade folding has a floor it cannot cross: a childless root is not a clade,
+  // and phylo.js produces a great many of them — a fresh world names every
+  // founding form as its own root, and at a low specThresh that is most of the
+  // record list (measured: 111 roots out of 150 records at specThresh 0.16).
+  // Those rows are what actually makes the picture unreadable, so adjacent runs
+  // of extinct twigs are bundled into one striped band labelled with its count.
+  // A band is drawn unlike a clade wedge on purpose: it is a bag of unrelated
+  // dead ends, not a subtree, and must not be read as one.
+  let bundles = 0;
+  if(rows.length > budget){
+    const ok = n => n.kids.length === 0 && n.died && n.id !== phSel && !phOpen.has(n.id);
+    const runs = [];
+    for(let i = 0; i < rows.length;){
+      if(!ok(rows[i])){ i++; continue; }
+      let j = i; while(j < rows.length && ok(rows[j])) j++;
+      if(j - i >= 2) runs.push({ i, j, len: j - i });
+      i = j;
+    }
+    runs.sort((a, b) => (b.len - a.len) || (a.i - b.i));   // total order, no rand()
+    let over = rows.length - budget;
+    const take = [];
+    for(const r of runs){ if(over <= 0) break; take.push(r); over -= r.len - 1; }
+    if(take.length){
+      take.sort((a, b) => a.i - b.i);
+      const out = [];
+      let k = 0;
+      for(const r of take){
+        while(k < r.i) out.push(rows[k++]);
+        const mem = rows.slice(r.i, r.j);
+        let born = Infinity, end = 0, peak = 0, hue = 0, abs = 0, top = mem[0];
+        for(const m of mem){
+          if(m.born < born) born = m.born;
+          if(m.died > end) end = m.died;
+          abs += m.absorbed;
+          if(m.peak > peak || (m.peak === peak && m.id < top.id)){ peak = m.peak; top = m; }
+          hue += m.hue;
+        }
+        out.push({ bundle: true, id: -mem[0].id, members: mem, born, end,
+          hue: hue / mem.length, peak, absorbed: abs, count: mem.length });
+        bundles++;
+        k = r.j;
+      }
+      while(k < rows.length) out.push(rows[k++]);
+      rows = out;
+    }
+  }
+  for(let i = 0; i < rows.length; i++) rows[i].row = i;
+  return { F, rows, folded, foldedCount: folded.size, bundles };
+}
+function phLayout(){
+  const c = el('phCanvas'); const w = c ? c.clientWidth : 0, h = c ? c.clientHeight : 0;
+  if(!phLay || phLayRev !== phyloInfo.rev || phLayW !== w || phLayH !== h){
+    phLay = phBuildLayout(); phLayRev = phyloInfo.rev; phLayW = w; phLayH = h; phDirty = true;
+    // Nothing living is ever hidden, so the row count has a floor: one row per
+    // extant childless root, and phylo.js can mint a hundred of those. When the
+    // fold cannot get under the budget the rows get thinner instead of going
+    // away — a cramped tree is still an honest tree, a truncated one is not.
+    const pitch = phLay.rows.length ? Math.floor(phAvail() / phLay.rows.length) : PH_ROW_MAX;
+    PH_ROW = clamp(pitch, PH_ROW_MIN, PH_ROW_MAX);
+    if(phSel && !phLay.F.byId.has(phSel)){ phSel = 0; phMemSel = -1; }
+  }
+  return phLay;
+}
+function phFit(reset){
+  phZoom = 1; phOx = 0; phOy = 0;
+  if(reset){ phOpen.clear(); phShut.clear(); phLayRev = -1; }
+}
+
+/* ---------- pixel mapping ---------- */
+let phT0 = 0, phT1 = 1, phW = 1, phH = 1;
+const phX = tk => PH_PADL + phOx + (tk - phT0) / (phT1 - phT0 || 1) * (phW - PH_PADL - PH_PADR) * phZoom;
+const phY = row => PH_PADT + phOy + row * PH_ROW + PH_ROW * 0.5;
+const phInvX = px => phT0 + (px - PH_PADL - phOx) / ((phW - PH_PADL - PH_PADR) * phZoom || 1) * (phT1 - phT0);
+// bar thickness reports the lineage's PEAK, not its headcount right now: the
+// headcount is already the round cap at the live end, and a bar that thinned as
+// a species died would be indistinguishable from one that was always small.
+const phBarH = peak => clamp(2 + 2.2 * Math.log2(1 + peak), 2.5, Math.min(10, PH_ROW * 0.66));
+const phCapR = n => clamp(2 + Math.sqrt(n) * 0.7, 2, Math.min(9, PH_ROW * 0.6));
+function phCol(node, alpha){
+  const h = node.hue, dead = !!node.died;
+  return dead ? `hsla(${h},14%,44%,${alpha * 0.62})` : `hsla(${h},58%,58%,${alpha})`;
+}
+function phNiceStep(span, px){
+  const target = Math.max(60, span / Math.max(2, px / 90));
+  const p = Math.pow(10, Math.floor(Math.log10(target))), r = target / p;
+  return (r <= 1 ? 1 : r <= 2 ? 2 : r <= 5 ? 5 : 10) * p;
+}
+
+/* ---------- paint ---------- */
+function phPaint(){
+  const t0 = performance.now();
+  const c = el('phCanvas'); if(!c) return;
+  const w = c.clientWidth | 0, h = c.clientHeight | 0;
+  if(!w || !h) return;
+  if(w !== phCanW || h !== phCanH){ c.width = Math.round(w * PH_DPR); c.height = Math.round(h * PH_DPR); phCanW = w; phCanH = h; }
+  phW = w; phH = h;
+  const g = c.getContext('2d');
+  g.setTransform(PH_DPR, 0, 0, PH_DPR, 0, 0);
+  g.clearRect(0, 0, w, h);
+  g.fillStyle = '#0d130d'; g.fillRect(0, 0, w, h);
+
+  const L = phLayout(), F = L.F;
+  phItems = []; phWedges = [];
+  if(!F.nodes.length){
+    g.fillStyle = '#6f8168'; g.font = '13px system-ui, sans-serif'; g.textAlign = 'center';
+    g.fillText(P.speciesOn === false ? t('phyloOff') : t('phyloEmpty'), w / 2, h / 2);
+    g.textAlign = 'left';
+    phPaints++; phPaintMs += performance.now() - t0;
+    return;
+  }
+  phT0 = F.tMin; phT1 = Math.max(F.tMax, F.tMin + 1);
+
+  // time axis
+  const step = phNiceStep(phT1 - phT0, (w - PH_PADL - PH_PADR) * phZoom);
+  g.font = '10px system-ui, sans-serif'; g.textBaseline = 'alphabetic';
+  for(let tk = Math.ceil(phT0 / step) * step; tk <= phT1; tk += step){
+    const x = phX(tk); if(x < -40 || x > w + 40) continue;
+    g.strokeStyle = 'rgba(120,150,110,.10)'; g.beginPath(); g.moveTo(x, PH_PADT - 8); g.lineTo(x, h - PH_PADB); g.stroke();
+    g.fillStyle = '#5d6f58'; g.fillText(tk >= 1000 ? +(tk / 1000).toFixed(1) + 'k' : String(tk), x + 3, 12);
+  }
+  // "now"
+  const xn = phX(S.tick);
+  g.strokeStyle = 'rgba(150,200,120,.34)'; g.beginPath(); g.moveTo(xn, PH_PADT - 10); g.lineTo(xn, h - PH_PADB); g.stroke();
+
+  const topY = PH_PADT - 6, botY = h - PH_PADB;
+  for(const n of L.rows){
+    const y = phY(n.row);
+    if(y < topY - PH_ROW || y > botY + PH_ROW) continue;
+
+    // a bundle of unrelated extinct twigs: a striped band, never a triangle
+    if(n.bundle){
+      const bx0 = phX(n.born), bx1 = Math.max(bx0 + 10, phX(n.end));
+      const bh = clamp(3 + 1.6 * Math.log2(1 + n.count), 4, PH_ROW * 0.5);
+      g.fillStyle = 'rgba(140,140,140,.22)';
+      g.fillRect(bx0, y - bh, bx1 - bx0, bh * 2);
+      g.strokeStyle = 'rgba(170,170,170,.34)'; g.lineWidth = 1;
+      for(let sy = -bh + 2; sy < bh; sy += 3){
+        g.beginPath(); g.moveTo(bx0, y + sy); g.lineTo(bx1, y + sy); g.stroke();
+      }
+      const lbl = '≡' + n.count + '†' + (n.absorbed ? '+' + n.absorbed : '');
+      g.fillStyle = '#8d9a88'; g.font = '10px system-ui, sans-serif';
+      const lw = g.measureText(lbl).width, lx = Math.min(bx1 + 4, w - 3 - lw);
+      g.fillText(lbl, lx, y + 3.4);
+      phWedges.push({ id: n.id, members: n.members, x0: bx0, x1: Math.max(bx1, lx + lw), y, h: Math.max(bh, 6) });
+      continue;
+    }
+
+    const x0 = phX(n.born), xe = phX(n.died || S.tick);
+    const bh = phBarH(n.peak), sel = n.id === phSel;
+
+    // the elbow down from the parent, drawn at the tick of the split
+    if(n.parent && n.parent.row != null && !n.parent.folded){
+      const py = phY(n.parent.row);
+      const cx = Math.round(x0) + 0.5;
+      g.strokeStyle = 'rgba(186,214,176,.5)'; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(cx, py); g.lineTo(cx, y); g.stroke();
+    }
+    // the lineage itself
+    g.fillStyle = phCol(n, 1);
+    g.fillRect(x0, y - bh / 2, Math.max(1.5, xe - x0), bh);
+    if(sel){
+      g.strokeStyle = '#e8f2df'; g.lineWidth = 1.4;
+      g.strokeRect(x0 - 1.6, y - bh / 2 - 1.6, Math.max(1.5, xe - x0) + 3.2, bh + 3.2);
+    }
+    if(n.died){
+      // an honest ending: the cross sits at the census tick that declared it gone
+      g.strokeStyle = 'rgba(210,140,120,.75)'; g.lineWidth = 1.2;
+      g.beginPath(); g.moveTo(xe - 2.6, y - 2.6); g.lineTo(xe + 2.6, y + 2.6);
+      g.moveTo(xe + 2.6, y - 2.6); g.lineTo(xe - 2.6, y + 2.6); g.stroke();
+    }else{
+      g.fillStyle = phCol(n, 1); g.beginPath(); g.arc(xe, y, phCapR(n.n), 0, Math.PI * 2); g.fill();
+      g.strokeStyle = 'rgba(232,242,223,.55)'; g.lineWidth = 0.8; g.stroke();
+    }
+    // records prune() folded into this one, made visible instead of silent
+    if(n.absorbed > 0){
+      const dx = x0 - 6.5;
+      g.fillStyle = 'rgba(224,178,80,.85)';
+      g.beginPath(); g.moveTo(dx, y - 3.2); g.lineTo(dx + 3.2, y); g.lineTo(dx, y + 3.2); g.lineTo(dx - 3.2, y); g.closePath(); g.fill();
+      g.fillStyle = 'rgba(224,178,80,.7)'; g.font = '9px system-ui, sans-serif';
+      g.fillText('+' + n.absorbed, dx - 4 - (String(n.absorbed).length + 1) * 5, y + 3);
+      g.font = '10px system-ui, sans-serif';
+    }
+    // a folded clade: a wedge whose height counts what is inside it
+    if(n.folded){
+      const hid = n.subCount - 1, hidAbs = n.subAbsorbed - n.absorbed;
+      const endT = n.subDead ? Math.max(n.subEnd, n.born) : S.tick;
+      const wx0 = phX(n.kids.length ? n.kids[0].born : n.born), wx1 = Math.max(wx0 + 8, phX(endT));
+      const wh = clamp(2.5 + 1.9 * Math.log2(1 + hid + hidAbs), 3, PH_ROW * 0.46);
+      g.fillStyle = n.subDead ? 'rgba(150,150,150,.30)' : `hsla(${n.hue},40%,52%,.42)`;
+      g.beginPath(); g.moveTo(wx0, y); g.lineTo(wx1, y - wh); g.lineTo(wx1, y + wh); g.closePath(); g.fill();
+      g.strokeStyle = n.subDead ? 'rgba(180,180,180,.45)' : `hsla(${n.hue},46%,66%,.6)`; g.lineWidth = 1; g.stroke();
+      const lbl = '▸' + (hid + hidAbs) + (n.subDead ? '†' : '');
+      g.fillStyle = '#93a68c'; g.font = '10px system-ui, sans-serif';
+      const lw = g.measureText(lbl).width, lx = Math.min(wx1 + 4, w - 3 - lw);
+      g.fillText(lbl, lx, y + 3.4);
+      phWedges.push({ id: n.id, x0: wx0, x1: Math.max(wx1, lx + lw), y, h: Math.max(wh, 6) });
+    }
+    phItems.push({ id: n.id, x0: Math.min(x0, x0 - 10), x1: xe + 10, y, h: Math.max(bh, 8) });
+  }
+  phLastCol = Math.round(xn);
+  phPaints++; phPaintMs += performance.now() - t0;
+  phFoot(L);
+}
+function phFoot(L){
+  const f = el('phFoot'); if(!f) return;
+  const F = L.F;
+  const bits = [
+    `${F.nodes.length}/${F.cap} ${t('phyloRecs')}`,
+    `${F.extant} ${t('phyloAlive')} · ${F.dead} ${t('phyloExtinct')}`
+  ];
+  if(L.foldedCount) bits.push(`${L.foldedCount} ${t('phyloFoldedRows')}`);
+  if(L.bundles) bits.push(`${L.bundles} ${t('phyloBundles')}`);
+  if(F.pruned) bits.push(`${F.pruned} ${t('phyloPruned')}`);
+  if(F.rootLost) bits.push(`${F.rootLost} ${t('phyloRootLost')}`);
+  const s = bits.join(' · ');
+  if(f.textContent !== s) f.textContent = s;
+}
+
+/* ---------- pointer: pan, zoom, select, fold ---------- */
+function phHit(px, py){
+  let best = null, bd = 1e9;
+  for(const it of phWedges){
+    if(px >= it.x0 - 4 && px <= it.x1 + 4 && Math.abs(py - it.y) <= it.h + 3) return { wedge: it.id, members: it.members };
+  }
+  for(const it of phItems){
+    if(px < it.x0 - 4 || px > it.x1 + 4) continue;
+    const d = Math.abs(py - it.y);
+    if(d <= it.h / 2 + 5 && d < bd){ bd = d; best = it.id; }
+  }
+  return best ? { node: best } : null;
+}
+function bindPhyloPointer(){
+  const c = el('phCanvas'); if(!c || c._phBound) return; c._phBound = true;
+  let down = false, moved = 0, lx = 0, ly = 0, pid = -1;
+  c.addEventListener('pointerdown', e => {
+    down = true; moved = 0; lx = e.clientX; ly = e.clientY; pid = e.pointerId;
+    c.setPointerCapture(pid); c.classList.add('drag');
+  });
+  c.addEventListener('pointermove', e => {
+    if(!down) return;
+    const dx = e.clientX - lx, dy = e.clientY - ly; lx = e.clientX; ly = e.clientY;
+    moved += Math.abs(dx) + Math.abs(dy);
+    phOx += dx; phOy += dy; phClampView(); phDirty = true;
+  });
+  const up = e => {
+    if(!down) return; down = false; c.classList.remove('drag');
+    try{ c.releasePointerCapture(pid); }catch(_){}
+    if(moved > 5) return;
+    const r = c.getBoundingClientRect();
+    const hit = phHit(e.clientX - r.left, e.clientY - r.top);
+    if(hit && hit.members){
+      // a bundle: unfold every twig in it, or fold them all back
+      const open = phOpen.has(hit.members[0].id);
+      for(const m of hit.members){ if(open) phOpen.delete(m.id); else phOpen.add(m.id); }
+      phLayRev = -1;
+    }else if(hit && hit.wedge != null){
+      const id = hit.wedge;
+      if(phOpen.has(id)) phOpen.delete(id); else phOpen.add(id);
+      phShut.delete(id); phLayRev = -1;
+    }else if(hit && hit.node != null){
+      if(phSel === hit.node && phLay){
+        const n = phLay.F.byId.get(hit.node);
+        if(n && n.kids.length && !n.folded){ phShut.add(hit.node); phOpen.delete(hit.node); phLayRev = -1; }
+      }
+      phSel = hit.node;
+    }else phSel = 0;
+    phMemSel = -1; phDirty = true;
+  };
+  c.addEventListener('pointerup', up);
+  c.addEventListener('pointercancel', () => { down = false; c.classList.remove('drag'); });
+  c.addEventListener('wheel', e => {
+    e.preventDefault();
+    const r = c.getBoundingClientRect(), mx = e.clientX - r.left;
+    const tk = phInvX(mx);
+    phZoom = clamp(phZoom * (e.deltaY < 0 ? 1.18 : 1 / 1.18), 1, 64);
+    phOx += mx - phX(tk); phClampView(); phDirty = true;
+  }, { passive: false });
+}
+function phClampView(){
+  const spanX = (phW - PH_PADL - PH_PADR) * phZoom;
+  phOx = clamp(phOx, Math.min(0, phW - PH_PADR - PH_PADL - spanX), 0);
+  const rows = phLay ? phLay.rows.length : 0;
+  const spanY = rows * PH_ROW + PH_PADT + PH_PADB;
+  phOy = clamp(phOy, Math.min(0, phH - spanY), 0);
+}
+
+/* ---------- the detail pane: what a selected lineage connects to ---------- */
+// O(population), so it is rebuilt on a change of selection or language and
+// otherwise at most once every 30 refreshes (~half a second at 60fps).
+function phMembers(id){
+  const out = []; let n = 0;
+  for(const c of S.creatures){ if(c.sp === id && !c.dead){ n++; if(out.length < 12) out.push(c); } }
+  return { list: out, n };
+}
+function phDiffs(a, b){
+  const va = recVec(a), vb = recVec(b);
+  if(!va || !vb) return null;
+  const d = [];
+  for(let i = 0; i < TRAIT_KEYS.length; i++) d.push({ k: TRAIT_KEYS[i], raw: va[i] - vb[i], real: (va[i] - vb[i]) * TRAIT_SCALE[i] });
+  d.sort((x, y) => Math.abs(y.raw) - Math.abs(x.raw));
+  return { top: d.slice(0, 3), dist: traitDist(va, vb), max: Math.abs(d[0].raw) || 1 };
+}
+const phEsc = s => String(s).replace(/[&<>"]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]));
+function phBuildDetail(force){
+  const box = el('phDetail'); if(!box) return;
+  const L = phLay; if(!L) return;
+  if(!phSel){
+    if(box.dataset.sel !== '0'){ box.dataset.sel = '0'; box.innerHTML = `<div class="ph-note">${phEsc(t('phyloSelHint'))}</div>`; }
+    return;
+  }
+  const n = L.F.byId.get(phSel); if(!n){ phSel = 0; return; }
+  phMemT++;
+  if(!force && box.dataset.sel === String(phSel) && phMemT % 30 !== 0) return;
+  box.dataset.sel = String(phSel);
+
+  const r = n.rec, dead = !!n.died;
+  const end = n.died || S.tick;
+  const rows = [
+    [t('phyloBorn'), n.born],
+    dead ? [t('phyloDied'), n.died] : [t('phyloNow'), n.n],
+    [t('phyloSpan'), (end - n.born) + ' t'],
+    [t('phyloPeak'), n.peak]
+  ];
+  let html = `<div class="ph-h">
+    <span class="ph-dot" style="background:hsl(${n.hue},${dead ? 12 : 58}%,${dead ? 42 : 56}%)"></span>
+    <span class="ph-nm">${phEsc(speciesName(r))}</span>
+    <span class="ph-tag ${dead ? 'dead' : ''}">${phEsc(dead ? t('phyloExtinct') : t('phyloAlive'))}</span>
+    <span class="ph-tag">${phEsc(n.type)}</span></div>`;
+  html += `<div class="ph-grid">${rows.map(([k, v]) => `<span>${phEsc(k)} <b>${phEsc(v)}</b></span>`).join('')}</div>`;
+  html += `<div class="ph-grid" style="margin-top:4px"><span>${phEsc(t('phyloParent'))} <b>${
+    n.parent ? phEsc(speciesName(n.parent.rec)) : phEsc(t('phyloRoot'))}</b></span></div>`;
+  if(n.absorbed > 0) html += `<div class="ph-note" style="margin-top:6px">◆ ${phEsc(tf('phyloAbsorbed', { n: n.absorbed }))}</div>`;
+  if(n.folded) html += `<div class="ph-note" style="margin-top:4px">▸ ${phEsc(tf('phyloFolded', { n: n.subCount - 1 }))}</div>`;
+
+  // what distinguishes it from its sibling — the reason the split happened
+  const sibs = n.parent ? n.parent.kids.filter(k => k !== n) : [];
+  html += `<div class="ph-sub">${phEsc(t('phyloSister'))}</div>`;
+  if(!sibs.length) html += `<div class="ph-note">${phEsc(t('phyloNoSister'))}</div>`;
+  else{
+    const sis = sibs[0], df = phDiffs(r, sis.rec);
+    if(!df) html += `<div class="ph-note">${phEsc(t('phyloNoVec'))}</div>`;
+    else{
+      html += `<div class="ph-grid"><span>${phEsc(speciesName(sis.rec))} · Δ <b>${df.dist.toFixed(3)}</b></span></div>`;
+      for(const d of df.top){
+        const wpx = Math.round(6 + 92 * Math.abs(d.raw) / df.max);
+        const unit = d.k === 'hue' ? '°' : '';
+        html += `<div class="ph-bar"><span style="width:74px;color:#93a68c">${phEsc(t('phTr' + d.k))}</span>
+          <i style="width:${wpx}px;background:${d.raw >= 0 ? '#6f9a4c' : '#a5713f'}"></i>
+          <b style="color:#d6e4cf">${d.real >= 0 ? '+' : ''}${Math.abs(d.real) >= 10 ? d.real.toFixed(0) : d.real.toFixed(2)}${unit}</b></div>`;
+      }
+    }
+  }
+
+  // and who is carrying it right now
+  html += `<div class="ph-sub">${phEsc(t('phyloMembers'))}</div>`;
+  const m = phMembers(n.id);
+  if(!m.n) html += `<div class="ph-note">${phEsc(t('phyloNoMembers'))}</div>`;
+  else{
+    html += `<div class="ph-mem">${m.list.map(c => `<button data-cid="${c.id}">#${c.id} · ${phEsc(t('phyloJump'))}</button>`).join('')}`;
+    if(m.n > m.list.length) html += `<span class="ph-note" style="align-self:center">${phEsc(tf('phyloMore', { n: m.n - m.list.length }))}</span>`;
+    html += `</div>`;
+  }
+  box.innerHTML = html;
+  box.querySelectorAll('[data-cid]').forEach(b => {
+    b.onclick = () => {
+      const c = S.creatures.find(x => x.id === +b.dataset.cid && !x.dead);
+      if(!c) return;
+      S.selected = c; hide('phylo'); stopPhyloLoop();
+      centerCameraOn(c.x, c.y); show('inspector'); refreshInspector();
+    };
+  });
+}
+
+/* ---------- open / close / drive ---------- */
+function phTick(){
+  const ov = el('phylo');
+  if(!ov || !ov.classList.contains('show')) return;
+  const t0 = performance.now();
+  phLayout();
+  const lang = getLang();
+  if(lang !== phLastLang){ phLastLang = lang; phDirty = true; phMemSel = -1; }
+  // the "now" line and the live caps move with the clock; only repaint when
+  // that actually lands on a different pixel column
+  if(!phDirty && phLay && phLay.F.nodes.length && Math.round(phX(S.tick)) !== phLastCol) phDirty = true;
+  if(phDirty){ phDirty = false; phPaint(); }
+  phBuildDetail(phMemSel !== phSel);
+  phMemSel = phSel;
+  phTicks++; phTickMs += performance.now() - t0;
+}
+function phLoop(){ if(!phRaf) return; phTick(); phRaf = requestAnimationFrame(phLoop); }
+function startPhyloLoop(){ if(phRaf) return; phRaf = requestAnimationFrame(phLoop); }
+function stopPhyloLoop(){ if(phRaf) cancelAnimationFrame(phRaf); phRaf = 0; }
+function closePhylo(){ hide('phylo'); stopPhyloLoop(); }
+function openPhylo(){
+  buildPhyloDom(); bindPhyloPointer();
+  hideAll(); show('phylo');
+  phLayRev = -1; phDirty = true; phMemSel = -1; phCanW = phCanH = 0;
+  phFit(false);
+  phTick(); startPhyloLoop();
+}
+// Exported so js/main.js can drive it from the frame loop like the other
+// refreshers if that is preferred; the panel also self-drives while open, and
+// calling both only costs the two integer compares below.
+export function refreshPhylo(){ phTick(); }
+// What the view is actually doing right now: the measured cost, and how many
+// rows survived the fold. Exported so a test can assert the row budget is
+// honoured instead of taking a screenshot's word for it.
+export function phyloPerf(){
+  const L = phLay;
+  let hidden = 0, extantHidden = 0;
+  if(L){
+    const shown = new Set();
+    for(const n of L.rows){
+      if(n.bundle){ hidden += n.count - 1; shown.add(n.members[0].id); }
+      else{ shown.add(n.id); if(n.folded) hidden += n.subCount - 1; }
+    }
+    // the promise the fold makes: a lineage that is alive right now is always on
+    // a row of its own, whatever the record count does
+    for(const n of L.F.nodes) if(!n.died && !shown.has(n.id)) extantHidden++;
+  }
+  return { paints: phPaints, paintMs: +phPaintMs.toFixed(3), ticks: phTicks, tickMs: +phTickMs.toFixed(3),
+    perPaint: phPaints ? +(phPaintMs / phPaints).toFixed(4) : 0,
+    perTick: phTicks ? +(phTickMs / phTicks).toFixed(4) : 0,
+    records: L ? L.F.nodes.length : 0, rows: L ? L.rows.length : 0,
+    folded: L ? L.foldedCount : 0, bundles: L ? L.bundles : 0, hidden, extantHidden,
+    budget: phBudget(), rowPx: PH_ROW, selected: phSel, zoom: phZoom };
+}
+buildPhyloDom();

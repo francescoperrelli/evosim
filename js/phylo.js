@@ -11,14 +11,38 @@
 //   speciesName(rec)  -> short display label for a species record.
 //
 // S.phylo is an array of records:
-//   { id, parent, born, died, n, peak, type, hue, cx, cy, g }
+//   { id, parent, born, died, n, peak, type, hue, cx, cy, g, absorbed }
 //   id     unique species id (1-based)          parent  id of the species it split from (0 = root)
 //   born   tick of origin                        died   tick of extinction (0 while extant)
 //   n      current headcount                     peak   highest headcount ever
 //   type   feeding band at origin                hue    representative hue
 //   cx,cy  centroid of living members            g      representative gene vector
+//   absorbed  how many pruned sublineages this record now stands for (see prune())
 //
 // Each creature carries `c.sp` = its species id.
+//
+// What this record can and cannot support, for whoever draws it:
+//
+//   * The topology is complete for everything still in S.phylo — `parent` is
+//     always an id that was minted earlier, so the structure is a forest of
+//     strictly increasing ids and can never contain a cycle. It is a FOREST and
+//     not a tree: a fresh world names each of its founding forms as a separate
+//     root (parent 0), and a world that goes totally extinct starts a new set of
+//     roots at the tick it is repopulated.
+//   * Extinct branches are kept. They are only ever removed by prune(), and a
+//     prune is now recorded on the surviving ancestor as `absorbed` so a node can
+//     say how much vanished history it stands for.
+//   * There is NO per-lineage population history: only `peak` and the current
+//     `n`. A drawing may scale a branch by those two numbers, but it cannot draw
+//     a population curve through time without inventing one.
+//   * `g` does NOT survive a save. world.js serialises id/parent/born/died/n/
+//     peak/type/hue only, and restore() sets `g: null`; the next census refills
+//     it for LIVING species and never for extinct ones. `absorbed` is dropped by
+//     the same serialiser, so it restarts at 0 after a reload. Both degrade by
+//     under-reporting, which is the correct direction: a restored world admits it
+//     does not know, rather than inventing history it never had.
+//   * A record restored from a save may carry `g` as a plain object (Float64Array
+//     does not round-trip through JSON). recVec() below normalises both shapes.
 //
 // How a species is born here, in evolutionary terms:
 //
@@ -75,6 +99,15 @@ const CENSUS = 64;        // ticks between full censuses — everything else is 
 // live diagnostics (read by tests / tuning; not part of the save format)
 export const phyloStats = { tested: 0, blocked: 0, splits: 0, allo: 0, sym: 0, extinct: 0, pruned: 0 };
 
+// Revision counter for anything that draws the tree. `rev` is bumped only when
+// the SHAPE of the forest changes — a species minted, a species declared extinct,
+// a prune — so a view can cache its layout and rebuild on a compare of one
+// integer instead of walking S.phylo every frame. Headcounts move on their own
+// (every CENSUS ticks) without bumping it: a drawing reads r.n live.
+// `rootLost` counts records pruned away that had no surviving ancestor to be
+// grafted onto, i.e. founding lineages that fell out of the record window.
+export const phyloInfo = { rev: 0, rootLost: 0 };
+
 let cursor = 0;           // rolling position of the amortised scan over the population
 let idx = new Map();      // species id -> record
 let idxArr = null, idxLen = -1;
@@ -109,14 +142,14 @@ function mint(parent, members, gv){
   const rec = {
     id: ++S.speciesN, parent: parent ? parent.id : 0, born: S.tick, died: 0,
     n: members.length, peak: members.length,
-    type: 'herb', hue: 0, cx: 0, cy: 0, g: Float64Array.from(gv), split: S.tick
+    type: 'herb', hue: 0, cx: 0, cy: 0, g: Float64Array.from(gv), split: S.tick, absorbed: 0
   };
   let dietS = 0, hueS = 0, xs = 0, ys = 0;
   for(const c of members){ c.sp = rec.id; dietS += c.g.diet || 0; hueS += c.g.hue || 0; xs += c.x; ys += c.y; }
   const m = members.length || 1;
   rec.type = typeOf(dietS / m); rec.hue = hueS / m; rec.cx = xs / m; rec.cy = ys / m;
   S.phylo.push(rec); idxArr = null;
-  phyloStats.splits++;
+  phyloStats.splits++; phyloInfo.rev++;
   return rec;
 }
 
@@ -238,7 +271,7 @@ function census(){
     const g = groups.get(r.id);
     if(!g || !g.length){
       r.n = 0;
-      if(!r.died){ r.died = S.tick; phyloStats.extinct++; }
+      if(!r.died){ r.died = S.tick; phyloStats.extinct++; phyloInfo.rev++; }
       continue;
     }
     r.n = g.length; if(r.n > r.peak) r.peak = r.n;
@@ -272,6 +305,14 @@ function census(){
 // S.phylo rides along in the save file, so the fossil record has to be finite.
 // Extinct twigs that never amounted to anything go first; a pruned record's
 // children are grafted onto its own parent so the tree stays connected.
+//
+// The graft used to be silent, and that was a lie by omission: a node that had
+// swallowed thirty extinct sublineages looked exactly like one that had swallowed
+// none. Each surviving ancestor now carries `absorbed` — the number of records
+// folded into it, including anything those records had already absorbed — so a
+// drawing can make the collapsing visible instead of pretending it never
+// happened. It is a counter incremented inside a prune, which only runs when the
+// record list is over MAX_REC, so it costs nothing per tick.
 function prune(){
   if(S.phylo.length <= MAX_REC) return;
   const dead = S.phylo.filter(r => r.died);
@@ -283,9 +324,21 @@ function prune(){
   const graft = new Map();
   for(const r of S.phylo) if(drop.has(r.id)) graft.set(r.id, r.parent);
   const resolve = id => { let g = id, n = 0; while(drop.has(g) && n++ < MAX_REC) g = graft.get(g) || 0; return g; };
+  // roll each dropped record's weight onto whichever ancestor survives it; the
+  // ones whose whole ancestry went with them are counted at the root instead
+  const carry = new Map();
+  for(const r of S.phylo){
+    if(!drop.has(r.id)) continue;
+    const w = 1 + (r.absorbed || 0), g = resolve(r.parent);
+    if(g) carry.set(g, (carry.get(g) || 0) + w); else phyloInfo.rootLost += w;
+  }
   S.phylo = S.phylo.filter(r => !drop.has(r.id));
-  for(const r of S.phylo) if(drop.has(r.parent)) r.parent = resolve(r.parent);
+  for(const r of S.phylo){
+    if(drop.has(r.parent)) r.parent = resolve(r.parent);
+    const a = carry.get(r.id); if(a) r.absorbed = (r.absorbed || 0) + a;
+  }
   phyloStats.pruned += drop.size;
+  phyloInfo.rev++;
   idxArr = null;
 }
 
@@ -321,6 +374,7 @@ export function phyloReset(){
   cursor = 0; idx = new Map(); idxArr = null; idxLen = -1;
   phyloStats.tested = phyloStats.blocked = phyloStats.splits = 0;
   phyloStats.allo = phyloStats.sym = phyloStats.extinct = phyloStats.pruned = 0;
+  phyloInfo.rev++; phyloInfo.rootLost = 0;   // bump, never reset: a view must notice
 }
 
 /* ---------- display ---------- */
@@ -339,4 +393,91 @@ export function speciesName(rec){
 export function extantCount(){
   let n = 0; for(const r of S.phylo) if(!r.died && r.n > 0) n++;
   return n;
+}
+
+/* ---------- the trait space, for whoever explains a split to a player ---------- */
+// The eight axes tv() measures, in order, with the factor that turns a component
+// back into the gene's own units. Exported because a view that says "this lineage
+// split from its sister on size and diet" has to name them, and must not
+// re-derive the weights by hand and drift out of step with tv().
+export const TRAIT_KEYS = ['diet', 'size', 'speed', 'hue', 'shape', 'pattern', 'ornament', 'sense'];
+export const TRAIT_SCALE = [1 / 1.25, 9 / 0.95, 3.4 / 0.85, 360 / 1.05, 1 / 0.8, 1 / 0.75, 1 / 0.65, 165 / 0.55];
+
+// A record's representative vector, normalised. Live records carry a
+// Float64Array; a record restored from a save carries either null (extinct, gone
+// for good) or the plain object JSON turns a typed array into. Returns null when
+// there is nothing trustworthy to compare, and callers must say "unknown" rather
+// than draw a zero.
+export function recVec(r){
+  const g = r && r.g;
+  if(!g) return null;
+  const out = new Float64Array(K);
+  for(let i = 0; i < K; i++){ const v = +g[i]; if(!isFinite(v)) return null; out[i] = v; }
+  return out;
+}
+export const traitDist = (a, b) => (a && b ? dist(a, b) : NaN);
+// the genome vector of a living creature, on the same axes
+export const creatureVec = c => Float64Array.from(tv(c.g, new Float64Array(K)));
+
+/* ---------- the forest, assembled for drawing ---------- */
+// Pure structure: no layout, no pixels, no rand(). One pass to wrap the records,
+// one to link them, one iterative DFS for depth, one reverse pass for subtree
+// aggregates. O(records), and records are capped at MAX_REC, so this is bounded
+// work no matter how long the world has been running.
+//
+// A parent link is only honoured when it points at a record that exists AND has
+// a smaller id. mint() guarantees both, but a hand-edited or truncated save need
+// not, and a cycle here would hang the renderer; this makes one impossible.
+export function phyloForest(){
+  const A = S.phylo, nmap = new Map(), nodes = [];
+  for(const r of A){
+    const n = {
+      rec: r, id: r.id, kids: [], parent: null, depth: 0,
+      born: r.born | 0, died: r.died | 0, n: r.n | 0, peak: r.peak | 0,
+      type: r.type || 'herb', hue: +r.hue || 0, absorbed: r.absorbed | 0,
+      subN: 0, subCount: 1, subPeak: 0, subAbsorbed: 0, subDead: true, subEnd: 0, subBorn: 0
+    };
+    nodes.push(n); nmap.set(r.id, n);
+  }
+  const roots = [];
+  for(const n of nodes){
+    const pid = n.rec.parent | 0;
+    const p = pid > 0 && pid < n.id ? nmap.get(pid) : null;
+    if(p){ n.parent = p; p.kids.push(n); } else roots.push(n);
+  }
+  const cmp = (a, b) => (a.born - b.born) || (a.id - b.id);
+  roots.sort(cmp);
+  for(const n of nodes) if(n.kids.length > 1) n.kids.sort(cmp);
+
+  const order = [];
+  for(const r of roots){
+    const st = [r];
+    while(st.length){
+      const n = st.pop(); order.push(n);
+      for(let i = n.kids.length - 1; i >= 0; i--){ const k = n.kids[i]; k.depth = n.depth + 1; st.push(k); }
+    }
+  }
+  for(let i = order.length - 1; i >= 0; i--){
+    const n = order[i];
+    n.subDead = !!n.died; n.subN = n.n; n.subCount = 1;
+    n.subPeak = n.peak; n.subAbsorbed = n.absorbed;
+    n.subEnd = n.died || 0; n.subBorn = n.born;
+    for(const k of n.kids){
+      n.subN += k.subN; n.subCount += k.subCount; n.subAbsorbed += k.subAbsorbed;
+      if(k.subPeak > n.subPeak) n.subPeak = k.subPeak;
+      if(!k.subDead) n.subDead = false;
+      if(k.subEnd > n.subEnd) n.subEnd = k.subEnd;
+    }
+  }
+
+  let extant = 0, dead = 0, tMin = Infinity, tMax = 0;
+  for(const n of nodes){
+    if(n.died) dead++; else extant++;
+    if(n.born < tMin) tMin = n.born;
+    if(n.died > tMax) tMax = n.died;
+  }
+  if(!isFinite(tMin)) tMin = 0;
+  return { nodes, roots, order, byId: nmap, extant, dead,
+    tMin, tMax: Math.max(tMax, S.tick), rev: phyloInfo.rev,
+    pruned: phyloStats.pruned, rootLost: phyloInfo.rootLost, cap: MAX_REC };
 }
