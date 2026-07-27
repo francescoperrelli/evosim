@@ -153,6 +153,20 @@ export function blendToward(child, model, alpha){
 
 const _h = new Array(MAX_NH);
 let _lastNH = 0;
+// MOTOR GAIN — an experiment hook, and a no-op (1) in normal play.
+//
+// world.js spends the two motor outputs as `_out[0]*BRAIN_W + ix*INNATE_W`, with
+// BRAIN_W 0.7 and INNATE_W 1.25 module constants in state.js. Because both motor
+// outputs are tanh-bounded, multiplying them here by `mg` is exactly equivalent to
+// running the world at BRAIN_W = 0.7*mg: it is the only way to sweep the
+// brain-versus-instinct balance from a module that does not own state.js. See the
+// sweep in the tuning log at the bottom of culture.js for what it bought.
+//
+// The gain is deliberately NOT allowed to leak into learn(): the Hebbian rule uses
+// the motor output as its post-synaptic term, so an ungated gain would silently
+// scale the learning rate on exactly the two weights the sweep is about, and the
+// arms would differ in two things at once. `_mg` is divided back out there.
+let _mg = 1;
 // `plast` (optional) is a per-creature plastic overlay on the hidden->output
 // weights, learned within a single lifetime and NOT inherited.
 export function brainForward(b, inp, out, plast){
@@ -162,12 +176,38 @@ export function brainForward(b, inp, out, plast){
     for(let i = 0; i < NIN; i++) s += inp[i] * w[base + i];
     _h[j] = Math.tanh(s);
   }
+  const rpe = plast && P.learnRule === 'rpe';
+  let e = null;
+  if(rpe){
+    e = plast._e || (plast._e = new Float32Array(nh * NOUT));
+    if(plast._b === undefined) plast._b = 0;
+  }
+  const sig = P.learnSigma === undefined ? RPE_SIGMA : P.learnSigma;
+  const lam = P.learnLam === undefined ? RPE_LAM : P.learnLam;
+  const lr = P.learnLR === undefined ? RPE_LR : P.learnLR;
   for(let k = 0; k < NOUT; k++){
     let s = w[b2off + k];
     if(plast) for(let j = 0; j < nh; j++) s += _h[j] * (w[w2off + j * NOUT + k] + plast[j * NOUT + k]);
     else      for(let j = 0; j < nh; j++) s += _h[j] * w[w2off + j * NOUT + k];
-    out[k] = Math.tanh(s);
+    if(rpe){
+      // node perturbation: the exploration this body is being graded on
+      const n = gauss() * sig;
+      out[k] = Math.tanh(s + n);
+      // eligibility trace of (which unit fired) x (which way the output was pushed),
+      // and the baseline half of the update, paid on every tick because this tick's
+      // reward is zero unless world.js calls learn() below.
+      const bb = lr * plast._b;
+      for(let j = 0; j < nh; j++){
+        const i = j * NOUT + k;
+        const ev = e[i] = lam * e[i] + (1 - lam) * _h[j] * n;
+        const v = plast[i] - bb * ev;
+        plast[i] = v > 0.9 ? 0.9 : v < -0.9 ? -0.9 : v;
+      }
+    } else out[k] = Math.tanh(s);
   }
+  if(rpe) plast._b *= (1 - RPE_BETA);        // this tick contributed no reward
+  _mg = P.motorGain === undefined ? 1 : P.motorGain;
+  if(_mg !== 1){ out[0] *= _mg; out[1] *= _mg; }
   _lastNH = nh;
 }
 export const getHidden = () => ({ h: _h, nh: _lastNH });
@@ -176,12 +216,81 @@ export const getHidden = () => ({ h: _h, nh: _lastNH });
 // that were just active, in proportion to the reward received. Uses the hidden
 // activations still held in _h from this creature's most recent forward pass.
 export function learn(b, plast, out, reward){
+  if(P.learnRule === 'rpe') return learnRPE(b, plast, reward);
   const nh = b.nh, lr = 0.03 * reward;
   for(let j = 0; j < nh; j++){
     const hj = _h[j], base = j * NOUT;
     for(let k = 0; k < NOUT; k++){
-      let v = plast[base + k] + lr * hj * out[k];
+      // undo the motor gain on outputs 0/1 so the learning rate is the same in
+      // every arm of the brainW sweep (see _mg above)
+      const ok = (k < 2 && _mg !== 1) ? out[k] / _mg : out[k];
+      let v = plast[base + k] + lr * hj * ok;
       plast[base + k] = v > 0.9 ? 0.9 : v < -0.9 ? -0.9 : v;   // bounded so it only nudges the evolved brain
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// AN ALTERNATIVE LEARNING RULE (P.learnRule === 'rpe'), AND WHY IT WAS BUILT.
+//
+// The default rule above is reward-modulated Hebbian: dp = lr*r*h_j*out_k, with r
+// always POSITIVE (world.js pays 0.12 for a meal and 0.2 for a kill and never calls
+// learn() otherwise). Three things follow, and together they are the reason that
+// deleting lifetime learning from this world costs nothing measurable:
+//
+//   * No negative case. Every update reinforces whatever the body was already
+//     doing at the moment it happened to be fed. The rule has no way to represent
+//     "that was worse than usual", so it cannot discriminate between actions; it
+//     can only entrench the current policy. Its fixed point is output saturation.
+//   * No exploration. out_k is a deterministic function of the genome and the
+//     inputs, so h_j*out_k is too. The overlay a body accumulates is therefore
+//     close to a deterministic function of its own genome — measured directly:
+//     cos(germline hidden->output block, plast) = 0.345 +- 0.010 across 4 seeds,
+//     and culture.js finding 6 has sibling plast agreeing at 0.85 even when the
+//     teaching content is randomised. There is no variance for a reward to select.
+//   * No credit assignment in time. learn() fires on the tick the food is eaten,
+//     using the activations of that tick. The behaviour that earned the meal was
+//     the approach over the preceding tens of ticks, and it is never reinforced.
+//
+// 'rpe' replaces all three with the standard continuing-task policy-gradient form:
+// perturb each output's pre-activation with gaussian noise (the exploration), keep
+// an eligibility trace of h_j * noise_k (which unit was firing when the output was
+// pushed which way), and apply dp = LR * (r_t - rbar) * e on every tick, where rbar
+// is an exponentially-weighted average of the per-tick reward. The baseline half
+// (-LR*rbar*e) is paid inside brainForward because that is the only entry point
+// world.js calls on the ticks where r_t is zero; the reward half is learnRPE().
+// Subtracting the baseline is what turns "reinforce what you did when fed" into
+// "reinforce what you did better than usual", which is the whole difference.
+//
+// All randomness is gauss() from utils.js. Note that this consumes the world PRNG,
+// so an 'rpe' arm is NOT bit-paired with a hebb arm — comparisons below are
+// seed-matched, not PRNG-paired.
+// MEASURED, AND REJECTED AS THE DEFAULT. It does what it was built to do — the
+// overlay stops being an echo of the genome (cos(germline hidden->output, plast)
+// falls from 0.345 +- 0.010 to 0.000 +- 0.002) and can be driven to any magnitude
+// (overlay rms 0.036 / 0.137 / 0.337 at learnLR 10 / 40 / 120, against 0.0095 for
+// the Hebbian rule and a ~0.45 genetic weight scale). It buys nothing. 8 seeds x
+// 10000 ticks at learnLR 40, against its own control — identical exploration noise
+// with learnLR 0, so the only difference is whether the reward is used at all:
+//     learnLR 40   income 0.5026 +- 0.0219   pop 379 +- 72   maxGen 15.8 +- 2.3
+//     learnLR 0    income 0.5005 +- 0.0271   pop 427 +- 63   maxGen 14.6 +- 1.7
+// +0.002 income and 11% fewer bodies. Income is flat (0.456 / 0.444 / 0.450) while
+// the overlay grows to three quarters of the genetic weight scale, and raising the
+// exploration noise from 0.15 to 0.4 does not change that either. So the default
+// rule's inertness is not caused by the default rule being wrong; it is caused by
+// the world not paying enough for good steering to select on it (genome.js's cost
+// sweep, and findings 11-16 in culture.js). Kept behind the flag because it is the
+// control that retires the hypothesis.
+const RPE_SIGMA = 0.15;   // exploration noise on the output pre-activations
+const RPE_LAM = 0.95;     // trace decay, tau ~20 ticks (the approach-to-meal latency)
+const RPE_LR = 1.0;       // trace is (1-lam)-normalised, so this is O(1), not O(0.03)
+const RPE_BETA = 0.002;   // baseline EWMA, tau ~500 ticks (about one lifetime)
+function learnRPE(b, plast, reward){
+  const e = plast._e; if(!e) return;
+  const n = b.nh * NOUT, lr = (P.learnLR === undefined ? RPE_LR : P.learnLR) * reward;
+  for(let i = 0; i < n; i++){
+    const v = plast[i] + lr * e[i];
+    plast[i] = v > 0.9 ? 0.9 : v < -0.9 ? -0.9 : v;
+  }
+  plast._b += RPE_BETA * reward;
 }
