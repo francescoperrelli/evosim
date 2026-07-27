@@ -315,6 +315,115 @@ const hus = await page.evaluate(async () => {
 check('intelligent species tame livestock', hus.tamed >= 1, 'tamed=' + hus.tamed);
 check('husbandry needs intelligence (gated on brain)', hus.dumbTamed === 0, 'dumbTamed=' + hus.dumbTamed);
 
+// A test asserting that the standing crop varies more across space than over time
+// -- the load-bearing fact behind the refuted spatial-structure work in world.js --
+// was written here and then deleted, because it could not be made to fail. Killing
+// the fertility bias in dropFood() did not move it, and neither did a hard
+// per-patch ceiling on placement. See the note at the end of that block in
+// world.js: the heterogeneity is manufactured by grazing, not by planting, so no
+// reachable change to the flora side can homogenise the crop. It is structurally
+// guaranteed rather than contingent, and an assertion of something guaranteed is
+// not a test. Rule 2 in ROADMAP.md.
+
+// ---- neutral drift scales with P.mut ----
+// The re-measurement written into state.js standardises every effect against the
+// drift of a functionless-gene pool. That denominator is only valid if the pool's
+// drift actually tracks P.mut, and nothing guarded it. A change to the mutation
+// step or to mutScale() could otherwise invalidate every signal-to-noise number in
+// the repo without breaking a single test. Ratio measured at 6000 ticks is ~7x;
+// the floor is 2x so this only fires on a real regression.
+const DRIFT_POOL = ['camo','acuity','shape','altruism','ornament','preference',
+  'resist','reciprocity','migrate','hoard','build','disperse','pace','detox'];
+const drift = await page.evaluate(async (pool) => {
+  const w = await import('./js/world.js'), st = await import('./js/state.js');
+  const P = st.P, S = st.S, mut0 = P.mut;
+  const poolMean = () => {
+    const cs = S.creatures; if(!cs.length) return NaN;
+    let t = 0;
+    for(const c of cs) for(const g of pool) t += (c.g[g] === undefined ? 0.5 : c.g[g]);
+    return t / (cs.length * pool.length);
+  };
+  const run = mut => {
+    P.mut = mut; w.seed(4242);
+    const start = poolMean();
+    for(let i = 0; i < 1500; i++) w.step();
+    return { d: Math.abs(poolMean() - start), pop: S.creatures.length };
+  };
+  const lo = run(0.02), hi = run(0.16);
+  P.mut = mut0;
+  return { lo, hi };
+}, DRIFT_POOL);
+check('both drift arms kept a live population',
+  drift.lo.pop > 20 && drift.hi.pop > 20, 'pops ' + drift.lo.pop + ' / ' + drift.hi.pop);
+check('neutral drift scales with P.mut',
+  drift.hi.d > 2 * drift.lo.d,
+  '|d| = ' + drift.lo.d.toFixed(4) + ' at 0.02 vs ' + drift.hi.d.toFixed(4) + ' at 0.16');
+
+// ---- P.dupMode is a research knob, not a behaviour change ----
+// nn.js gained a three-arm control for the neuron-duplication study. The arm that
+// ships must be bit-identical to what shipped before it existed, and the knob must
+// actually switch something -- a knob that silently does nothing would have made
+// the whole duplication measurement a comparison of an arm with itself.
+const dupKnob = await page.evaluate(async () => {
+  const w = await import('./js/world.js'), st = await import('./js/state.js');
+  const fp = () => { let h = 7;
+    for(const c of st.S.creatures)
+      h = (h * 31 + Math.round(c.x * 97) + Math.round(c.y * 89) + c.g.brain.nh * 17) >>> 0;
+    return h >>> 0; };
+  const run = mode => { st.P.dupMode = mode; w.seed(4242);
+    for(let i = 0; i < 2500; i++) w.step();
+    return { fp: fp(), pop: st.S.creatures.length }; };
+  const undef = run(undefined), dup = run('dup'), invent = run('invent');
+  st.P.dupMode = undefined;
+  return { undef, dup, invent };
+});
+check('P.dupMode undefined is exactly the shipped duplication path',
+  dupKnob.undef.fp === dupKnob.dup.fp, dupKnob.undef.fp + ' vs ' + dupKnob.dup.fp);
+check('P.dupMode actually switches the arm',
+  dupKnob.invent.fp !== dupKnob.dup.fp, 'both arms hashed ' + dupKnob.dup.fp);
+
+// ---- the void is impassable with dispersal off ----
+// Every number in the allopatry study in phylo.js was taken on runs with dispOn
+// false, on the assumption that no body can then change planet. Nothing checked it.
+//
+// THE POSITIVE CONTROL BELOW IS THE TEST. The obvious version of this -- run with
+// dispOn false and assert zero crossings -- cannot fail, and that was verified, not
+// assumed: with the gate deleted outright the suite still reported it passing. The
+// reason is that the `disperse` gene has to drift past P.dispThresh before anything
+// crosses at all, and phylo.js measured the first crossings arriving around tick
+// 12000-16000. Three thousand ticks of a world that would not have crossed anyway
+// is not evidence that something stopped it. So the gene is forced to 1 in both
+// arms, which puts every body over the threshold and leaves P.dispOn as the only
+// thing standing between them and the void, and the same run is done twice. The
+// `on` arm is what makes the `off` arm mean anything.
+const sealed = await page.evaluate(async () => {
+  const w = await import('./js/world.js'), st = await import('./js/state.js');
+  const was = st.P.dispOn;
+  const run = on => {
+    st.P.dispOn = on; w.seed(11);
+    const home = new Map(); let crossings = 0;
+    for(let i = 0; i < 3000; i++){
+      w.step();
+      for(const c of st.S.creatures){
+        c.g.disperse = 1;                       // over P.dispThresh by construction
+        const pi = w.planetIndexAt(c.x, c.y);
+        if(pi < 0) continue;
+        if(home.has(c.id)){ if(home.get(c.id) !== pi) crossings++; }
+        else home.set(c.id, pi);
+      }
+    }
+    return { crossings, tracked: home.size };
+  };
+  const off = run(false), on = run(true);
+  st.P.dispOn = was;
+  return { off, on };
+});
+check('with dispersal on and the gene forced, bodies do cross the void',
+  sealed.on.crossings > 0, 'crossings=' + sealed.on.crossings);
+check('with dispersal off no body ever changes planet',
+  sealed.off.crossings === 0 && sealed.off.tracked > 100,
+  'crossings=' + sealed.off.crossings + ' over ' + sealed.off.tracked + ' bodies');
+
 await browser.close();
 server.close();
 

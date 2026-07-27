@@ -160,6 +160,73 @@ const FOOD_PROD = 0.45;
 // hands the next generation a full larder. The middle of that curve is the answer.
 const FOOD_SEED = 0.85;
 const FOOD_LOG = 0.4;
+// ---------- SPATIAL STRUCTURE FOR THE RESIDUAL SWING: TRIED, REFUTED ----------
+// The pair above took the within-run coefficient of variation as far as reshaping a
+// planet-wide curve can take it, and the plan on the roadmap was to go after what
+// was left with spatial structure: give each patch of ground its own logistic
+// instead of sharing one per planet, and place growth from the standing stand in
+// the patch it grew from instead of anywhere on the planet. Asynchronous patches,
+// dispersal limitation, refugia. Four temporal dampers had already been tried and
+// rejected, so space was the obvious remaining axis.
+//
+// It was built and measured, and it does not work. Both halves of why are worth
+// keeping, because the second one is the more useful.
+//
+// FIRST, THE PREMISE WAS ALREADY FALSE. The whole idea rests on patches currently
+// moving in lockstep, so that decoupling them buys something. They do not. Binning
+// the standing crop onto the same 6x4 lattice and correlating the patch time series
+// over ticks 3000-6000, the shipped world gives a mean between-patch correlation of
+// 0.16 to 0.23 (adjacent patches 0.39-0.51, opposite corners 0.07-0.12), and the
+// variance of crop ACROSS patches at one instant runs 528-962 against 18-85 for the
+// variance of the planet mean over time. Twenty to thirty times more of the
+// variation in this world is already spatial than is temporal. There is no
+// synchrony left to break.
+//
+// SECOND, IMPOSING IT MAKES THE HARSH CASE WORSE. Measured against its own control
+// -- the same 6x4 fertility lattice, the same everything, only the logistic moved
+// from per-planet to per-patch -- the shipped arm did not move (cv 0.188 to 0.186,
+// mean population 307 to 323) and the ecology-only arm got clearly worse in all
+// three seeds: cv 0.604 to 0.723 (0.721/0.554/0.536 to 0.783/0.624/0.763) and mean
+// population 133 to 115. The reason is visible in the same probe: grazer density in
+// a patch anticorrelates with that patch's crop at increasing lag, -0.06 at lag 0
+// falling to -0.21 to -0.32 by lag 8 (200 ticks). Growth from the stand is growth
+// where the stand is, and where the stand is, is where the grazers already are.
+// Placing it there hands it straight to them. What reads as "seed dispersal
+// limitation" from the plant's side reads as "delivery to the consumer" from the
+// animal's, and this world is mobile enough that the second effect is the larger.
+//
+// THE TARGET WAS ALSO AN ARTEFACT. It was set at cv below 0.14 on the strength of
+// the shipped world measuring 0.154, which was three seeds. At six (11/23/37/53/71/
+// 97) the shipped world is 0.175 with a between-seed sd of 0.049 -- per-seed 0.196,
+// 0.147, 0.118, 0.167, 0.263, 0.156. The goal sat inside one seed-to-seed sd of
+// where the world already was, so it was never a target, it was noise with a
+// decimal point. Rule 3 in ROADMAP.md says short runs lie; this is its sibling, and
+// it cost a working day. FEW SEEDS LIE, and they lie in the flattering direction,
+// because whoever picks the seed count stops when the number looks like a result.
+//
+// AND THE STABILITY IS NOT ATTRIBUTABLE. The obvious follow-up was to find which
+// mechanic buys the desynchronisation, since the ecology-only arm sits at 0.593
+// against the shipped 0.175. At three seeds nests looked like the answer, +0.095
+// cv when removed. At six it is +0.027 with an sd of 0.098 and the sign wrong in
+// two seeds -- nothing. Same for territory, villages, flocking and property, all
+// positive, none separable from noise. Only removing the whole level-2 and level-3
+// stack at once moves it. The site fidelity that keeps this world's patches
+// independent is diffuse across two dozen mechanics and is not any one of them.
+//
+// A POSTSCRIPT THAT STRENGTHENS THE FIRST POINT. The heterogeneity above was going
+// to be pinned by a test, on the theory that it holds only while food placement
+// stays local and would expire if someone made placement uniform. It does not hold
+// contingently: the test could not be made to fail. Deleting the fertility argmax
+// in dropFood() so plants land uniformly at random left the ratio untouched, and so
+// did a hard per-patch ceiling that refuses a placement into any cell already above
+// 1.15x the planet's mean. The crop is patchy because it is EATEN patchily, not
+// because it is planted patchily, and consumption is not something the flora side
+// can reach. So the premise is not merely true today, it is structurally out of
+// reach of any change to this file -- which is the strongest possible version of
+// "there is no synchrony left to break", and also why there is no test here.
+//
+// What is left of the swing is therefore not spatial, and this file should not
+// grow another mechanism aimed at it until somebody can say what it IS.
 // What fraction of its normal metabolism a starving body burns. See the use site.
 const TORPOR = 0.42;
 // ---------- what a misread mark costs ----------

@@ -158,21 +158,45 @@ fallire non è un test.
 
 ## 2. Cosa resta
 
-### 2.1 Struttura spaziale per l'oscillazione (priorità 1)
+### 2.1 ~~Struttura spaziale per l'oscillazione~~ — PROVATA E RESPINTA
 
-L'oscillazione dentro la run è ormai ecologia vera, non un artefatto, e per questo va
-affrontata dove vive: nello spazio. Tutti gli smorzatori globali sono già stati provati
-e respinti (§1.1).
+Era la voce a priorità 1. È stata costruita, misurata e rimossa. Il resoconto completo
+sta in `js/world.js`, sotto `FOOD_SEED`/`FOOD_LOG`; qui il minimo indispensabile.
 
-L'idea: rendere le regioni **asincrone**, così che i cicli locali sfasino e il totale
-globale si liscia da solo, senza alcun termine di smorzamento. Tre leve, in ordine di
-costo crescente: chiazze di ricrescita asincrone (fase per cella nel reticolo di
-fertilità), limitazione della dispersione (i semi non arrivano ovunque), rifugi in cui
-la vegetazione non viene mai brucata a zero. Tocca `js/flora.js` e probabilmente il
-terreno; forse il movimento.
+**La premessa era già falsa.** L'idea si regge sull'ipotesi che le chiazze si muovano
+oggi in sincrono, così che disaccoppiarle guadagni qualcosa. Non è così. Correlazione
+media fra le serie temporali delle chiazze nel mondo di serie: **0.16–0.23**. La
+varianza del raccolto *fra* chiazze allo stesso istante sta a **528–962** contro
+**18–85** della varianza della media planetaria nel tempo. In questo mondo c'è già
+venti-trenta volte più variazione spaziale che temporale: non restava sincronia da
+rompere.
 
-Criterio di successo: cv entro la run che scende sotto 0.14 **senza** che la
-popolazione media cali, su tre semi × 6000 tick, seconda metà.
+**Imporla peggiora il caso duro.** Logistica per chiazza più dispersione limitata,
+contro il proprio controllo: braccio di serie fermo (cv 0.188 → 0.186), braccio
+solo-ecologia peggiore in tutti e tre i semi (cv 0.604 → 0.723, popolazione media
+133 → 115). Il motivo è nella stessa sonda: la crescita dallo stand è crescita dove
+sta lo stand, e dove sta lo stand stanno già gli erbivori. Quella che dal lato della
+pianta si chiama «limitazione della dispersione», dal lato dell'animale si chiama
+consegna a domicilio.
+
+**Anche l'obiettivo era un artefatto.** Il criterio «cv sotto 0.14» era stato fissato
+perché il mondo di serie misurava 0.154 — su **tre** semi. Su sei (11/23/37/53/71/97)
+misura **0.175 con sd fra semi di 0.049**. L'obiettivo stava dentro una sd da dove il
+mondo già era. La regola 3 del §4 dice che le run corte mentono; questa ne è la
+sorella: **pochi semi mentono**, e mentono nella direzione lusinghiera, perché chi
+sceglie quanti semi fare si ferma quando il numero somiglia a un risultato.
+
+**E la stabilità non è attribuibile.** Il seguito ovvio era trovare quale meccanica
+compra il disaccoppiamento, visto che il braccio solo-ecologia sta a 0.593 contro
+0.175. Su tre semi sembravano i nidi (+0.095 di cv togliendoli). Su sei sono
++0.027 con sd 0.098 e segno sbagliato in due semi: niente. Idem territorio, villaggi,
+stormi, proprietà — tutte nella stessa direzione, nessuna separabile dal rumore. Si
+muove solo togliendo in blocco tutto il livello 2 e 3. La fedeltà al sito che tiene
+indipendenti le chiazze è diffusa fra due dozzine di meccaniche e non è nessuna di
+esse.
+
+Quel che resta dell'oscillazione **non è spaziale**. Il file non deve crescere un'altra
+meccanica puntata lì finché qualcuno non sa dire che cosa *sia*.
 
 ### 2.2 `P.mut` da 0.08 a 0.04 — decisione aperta
 
