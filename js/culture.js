@@ -268,7 +268,9 @@ export function inherit(parent, childGenome){
 // not be read as competence, because there is currently no acquired competence to
 // transmit: knocking lifetime learning out entirely, amplifying it 3x, or replacing
 // it with noise ten times its size all leave energy income unchanged at 0.50
-// (4 seeds x 8.5k ticks, spread +-0.03 in every arm). See the tuning log.
+// (4 seeds x 8.5k ticks, spread +-0.03 in every arm). Still true after world.js's
+// motor-frame fix, after sweeping the brain-versus-instinct balance to 4x, and after
+// replacing the Hebbian rule with a policy-gradient one — see findings 11-16.
 // ---------------------------------------------------------------------------
 const _buckets = new Map();      // reused across sweeps: this runs every 24 ticks forever
 function sweep(){
@@ -343,8 +345,14 @@ export function cultureIndex(){ return S.culture ? S.culture.idx : 0; }
 // rand()), which was verified: the fidelity-pinned-to-0 arm produced numbers
 // bit-identical to the mechanic-off arm in every window.
 //
-// 1. THE SUBSTRATE CARRIES ALMOST NO ACQUIRED COMPETENCE. This is the finding that
-//    conditions everything below, and it was found before the mechanic was tuned.
+// 1. THE SUBSTRATE CARRIES ALMOST NO ACQUIRED COMPETENCE.
+//
+//    SUPERSEDED IN ITS DIAGNOSIS, NOT IN ITS RESULT — see findings 11-15, which
+//    re-ran all of this after the egocentric-motor-frame bug named below was fixed
+//    in world.js. The two structural causes this finding blamed have both now been
+//    removed and tested, and the number did not move. Read 11-15 before acting on
+//    anything here.
+//
 //    Intervening on plast directly at tick 6000 and measuring energy income over
 //    the next 2500 ticks:
 //        untouched                            income 0.4983 +- 0.0394  |plast| 0.012
@@ -473,6 +481,139 @@ export function cultureIndex(){ return S.culture ? S.culture.idx : 0; }
 //       is handed only one parent. Right in expectation, wrong weight by weight;
 //       omnivore lineages therefore leak a little culture into the germline. The
 //       fix needs a second parent in the signature — see the report.
+//
+// ===========================================================================
+// RE-MEASUREMENT AFTER THE MOTOR-FRAME FIX (findings 11-15).
+//
+// world.js now rotates the brain's two motor outputs back into world frame by the
+// body's own heading before adding the innate pull (world.js:699), which is the
+// exact fix demanded in finding 1. Everything below was therefore re-opened: every
+// earlier conclusion about lifetime learning, the Baldwin effect and `fidelity` had
+// been measured against a motor system that could not act.
+//
+// Harness: headless chromium, ONE short-lived process per (arm, seed), 10000 ticks,
+// metrics accumulated from tick 3500. `income` is the mean per-tick positive energy
+// delta per established body, computed from outside the world (world.js exposes no
+// income counter and is not ours to change). Seeds 11/23/37/51, plus 67/83/101/113
+// where n=8 is stated. All figures mean +- sd ACROSS SEEDS.
+//
+// 11. THE FRAME FIX DID NOT MAKE LIFETIME LEARNING MEASURABLE. Learning on vs off,
+//     everything else at defaults (4 seeds):
+//         learnOn true    income 0.5053 +- 0.0315   pop 423 +- 51   maxGen 15.5 +- 1.7
+//         learnOn false   income 0.4920 +- 0.0288   pop 439 +- 15   maxGen 14.8 +- 1.0
+//     The gap is +0.013 income against a between-seed sd of 0.03, and population goes
+//     the WRONG way. Deleting lifetime learning still costs nothing measurable. The
+//     frame fix is correct and necessary — it just was not the thing that was
+//     stopping learning from paying.
+//
+// 12. THE BRAINW/INNATEW SWEEP. BRAIN_W and INNATE_W are state.js constants, so the
+//     sweep was run by scaling the two tanh-bounded motor outputs in nn.js by
+//     P.motorGain, which is exactly equivalent to running at BRAIN_W = 0.7*mg
+//     (see nn.js). 4 seeds each:
+//         mg   effective BRAIN_W   income            pop          maxGen   learning
+//         0    0.00               0.1230 +- 0.0293    41 +-  4     1.0      on
+//         1    0.70 (shipping)    0.5053 +- 0.0315   423 +- 51    15.5      on
+//         1    0.70              0.4920 +- 0.0288   439 +- 15    14.8      off
+//         2    1.40              0.4850 +- 0.0231   418 +- 17    16.3      on
+//         2    1.40              0.5093 +- 0.0504   436 +- 38    15.5      off
+//         4    2.80              0.4983 +- 0.0343   361 +- 49    15.5      on
+//         4    2.80              0.4991 +- 0.0314   397 +- 68    15.0      off
+//     Two things, and they point opposite ways.
+//     (a) The brain is NOT decoration. Silencing its motor outputs entirely (mg 0,
+//         i.e. pure hand-written instinct) collapses the world: income falls 4x, the
+//         population falls from ~420 to 41 and no lineage reaches generation 2. The
+//         reason is visible in world.js:701 — with no brain term, a body that senses
+//         nothing has ix=iy=0 and falls through to rnd(-1,1) every tick, i.e. a
+//         Brownian walk that never finds food. The brain supplies the persistent
+//         directed search; instinct only supplies the final approach.
+//     (b) But its AUTHORITY is already saturated at the shipped 0.7. Raising it past
+//         INNATE_W (mg 2) and to 4x INNATE_W (mg 4) changes income by less than one
+//         between-seed sd in either direction and costs ~15% of the population at
+//         mg 4. There is no setting of the balance at which learning starts to pay:
+//         the learning-on-minus-off gap is +0.013, -0.024 and -0.001 at mg 1, 2, 4.
+//     So "the instinct prior is doing all the work" is false, and "raising BRAIN_W
+//     would let learning express itself" is also false. REJECTED as a tuning.
+//
+// 13. NO BALDWIN EFFECT. The classic assay: evolve 10000 ticks with plasticity, then
+//     freeze the world and measure income for 1500 ticks with the overlay zeroed and
+//     learning off, versus the same world with it left on (snapshot/restore, so both
+//     assays start from the identical state). 4 seeds:
+//                                   assay WITH plasticity   assay WITHOUT
+//         evolved with learning     0.4978 +- 0.0279        0.5198 +- 0.0339
+//         evolved without learning  0.4815 +- 0.0438        0.4968 +- 0.0470
+//     A Baldwin effect predicts the top-right cell rising toward the top-left over
+//     generations as the innate prior assimilates the learned behaviour. Instead the
+//     overlay is worth NEGATIVE 0.022 in the lineages that grew up with it: removing
+//     plasticity improves income in both arms. Cross-arm, a genome evolved alongside
+//     plasticity is +0.023 better without it than a genome evolved without it ever
+//     existing — half a between-seed sd, n=4. There is nothing here to assimilate,
+//     which is the only honest reading given finding 11.
+//
+// 14. `fidelity` IS STILL DRIFT, WITH ITS DRIFT CONTROL RUN. Each arm carries its own
+//     yardstick: the five functionless level-3 genes (tool/pyro/mark/techApt/terra)
+//     mutate with the same step and are clamped the same way, so the number that
+//     matters is fidelity MINUS that arm's own control-pool mean, not fidelity's
+//     distance from its founding 0.15. 4 seeds x 10000 ticks:
+//         arm                             fidelity          ctrl pool   excess
+//         real teaching                   0.1883 +- 0.0056    0.2017    -0.013
+//         cost only (cultureGain 0)       0.2218 +- 0.0339    0.1950    +0.027
+//         drift control (cultureVertOn 0) 0.2194 +- 0.0233    0.2071    +0.012
+//         random content (cultureNoise)   0.2248 +- 0.0312    0.2154    +0.009
+//         teaching on, learnOn false      0.2435 +- 0.0367    0.1984    +0.045
+//     The drift control is the third row: the gene is free, functionless and still
+//     mutating, and it climbs to 0.219 anyway. Real teaching produces the LOWEST
+//     excess of the five arms and the only negative one. Nothing here beats its own
+//     control; the direction of the only nominal signal is still weak stabilising
+//     selection AGAINST fidelity, exactly as finding 4 said before the fix.
+//
+// 15. THE CULTURE INDEX STILL DISCRIMINATES CONTENT FROM BANDWIDTH, AND STILL BUYS
+//     NOTHING. Real teaching 0.0631 +- 0.0091, random content at the same fidelity
+//     and near-identical taught rms (0.0255 vs 0.0257) 0.0362 +- 0.0040 — a factor
+//     of 1.7, consistent across seeds. Income in the same four arms: real 0.5053
+//     +- 0.0315, noise 0.5086 +- 0.0541, cost-only 0.4957 +- 0.0182, mechanic off
+//     0.5161 +- 0.0442. Transmission is real, individually specific and faithful,
+//     and it has no fitness consequence whatsoever. That gap — a working channel
+//     carrying content nobody can eat — is the honest state of culture in this world.
+//
+// 16. THE LEARNING RULE ITSELF WAS REPLACED, MEASURED AND THE REPLACEMENT REJECTED.
+//     Only after 11-15 was the rule in nn.js suspected. It is reward-modulated
+//     Hebbian with a strictly positive reward, no exploration and no temporal credit
+//     assignment, so the overlay it accumulates is close to a deterministic function
+//     of the genome: cos(germline hidden->output block, plast) = 0.345 +- 0.010.
+//     nn.js now also carries 'rpe', a continuing-task policy-gradient rule (output
+//     perturbation, eligibility trace, reward baseline) behind P.learnRule. It does
+//     break the genetic echo — the same cosine falls to 0.000 +- 0.002 — and it can
+//     be driven to any overlay magnitude wanted. At P.learnLR 40 the overlay reaches
+//     rms 0.140, i.e. 31% of the ~0.45 genetic weight scale, against 0.0095 (2%) for
+//     the default rule. 8 seeds x 10000 ticks, against its OWN control (identical
+//     exploration noise, learning rate zero, so the only difference is whether the
+//     reward is used at all):
+//         rpe, learnLR 40    income 0.5026 +- 0.0219  pop 379 +- 72  maxGen 15.8 +- 2.3
+//         rpe, learnLR 0     income 0.5005 +- 0.0271  pop 427 +- 63  maxGen 14.6 +- 1.7
+//     +0.002 income, and 11% FEWER bodies. At n=4 the maxGen gap looked like the one
+//     candidate positive in this whole investigation (16.5 +- 2.4 vs 14.0 +- 1.2);
+//     four more seeds took it to 15.8 vs 14.6 and it is now well inside the spread.
+//     Overlay magnitude was calibrated separately (seed 11, 3000 ticks): learnLR
+//     10/40/120 give overlay rms 0.036/0.137/0.337 and income 0.456/0.444/0.450 —
+//     income is flat while the overlay grows to three quarters of the genetic weight
+//     scale. Raising the exploration noise from 0.15 to 0.4 gives 0.450 as well.
+//     REJECTED as the default. The Hebbian rule stays; 'rpe' stays behind the flag
+//     because it is the control that retires the hypothesis, and re-deriving it
+//     costs a day.
+//
+// WHAT THESE FIVE FINDINGS ADD UP TO. The two structural excuses finding 1 offered
+// for lifetime learning being inert have now both been removed — the motor frame is
+// fixed in world.js, and the brain-versus-instinct balance has been swept to 4x the
+// instinct weight — and a correct learning algorithm with an overlay 15x the size of
+// the default one was tried on top of that. Income is 0.50 in all twenty arms. The
+// remaining explanation is the one genome.js already measured for every other gene
+// in this simulation: an effect has to be tens of percent of a body's energy budget
+// before this world can select on it, and the difference between a well-steered
+// forager and an averagely-steered one is not that big. Lifetime learning here is a
+// real mechanism producing a real, individually-specific, faithfully-transmitted
+// signal that changes no outcome. It should be described that way and not as
+// competence.
+// ===========================================================================
 //
 // PERFORMANCE (same harness): inherit() 2.0 us per birth; cultureTick() 0.011 ms
 // per step amortised, 0.22 ms on the steps where it actually sweeps. Against a
