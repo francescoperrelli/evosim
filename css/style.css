@@ -274,3 +274,37 @@ input[type=range]{width:100%; accent-color:var(--moss); margin-top:5px}
 .sw-tilled{width:22px; height:22px; border-radius:5px; background:#3f4d2c; border:1px solid #56663a;
   background-image:repeating-linear-gradient(45deg,rgba(150,182,96,.35) 0 1px,transparent 1px 5px)}
 .sw-crater{width:22px; height:22px; border-radius:50%; background:#241f1c; border:1px solid rgba(232,150,86,.5)}
+
+/* ---------------------------------------------------------------------------
+   Postcard and time-lapse (js/export.js).
+   Two surfaces only: the picker card, and a recording pill that has to stay
+   readable over whatever the world happens to be doing behind it. The pill
+   borrows #challengeBar's geometry deliberately — it sits in the same corner
+   of the stage and answers the same question ("something is running") — but
+   it is offset below so that a challenge and a recording can coexist rather
+   than stack on top of each other.
+   --------------------------------------------------------------------------- */
+
+/* --- recording pill --- */
+#recBar{position:absolute; top:52px; right:12px; z-index:6; display:none; align-items:center; gap:9px;
+  background:rgba(10,15,10,.72); border:1px solid var(--blood); border-radius:22px; padding:7px 8px 7px 13px;
+  backdrop-filter:blur(5px); font-size:13px; max-width:min(70%,420px)}
+#recBar.show{display:flex}
+#recBar #recText{color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  font-variant-numeric:tabular-nums}
+#recBar .rec-dot{width:9px; height:9px; border-radius:50%; background:var(--blood); flex:none;
+  box-shadow:0 0 8px rgba(221,111,87,.8); animation:recpulse 1.4s ease-in-out infinite}
+@keyframes recpulse{0%,100%{opacity:1} 50%{opacity:.25}}
+#recStop{background:transparent; border:1px solid var(--line); color:var(--muted); cursor:pointer;
+  font-family:var(--sans); font-size:12px; border-radius:14px; padding:3px 10px; line-height:1.4; flex:none}
+#recStop:hover{border-color:var(--blood); color:#fff}
+
+/* --- postcard card: the two framings are choices, so they are sized as
+       choices rather than as a row of equal buttons --- */
+.pc-shots{display:flex; flex-direction:column; gap:8px; margin:4px 0 18px}
+.pc-shot{display:block; text-align:left; padding:12px 15px}
+.pc-shot b{display:block; font-size:14px; margin-bottom:2px}
+.pc-shot span{display:block; font-size:11.5px; line-height:1.45; color:var(--muted); font-weight:400}
+.pc-shot.primary span{color:rgba(255,255,255,.72)}
+.pc-span{font-size:11.5px; color:var(--muted); text-align:left; margin:2px 2px 0}
+.pc-span b{color:var(--ink); font-variant-numeric:tabular-nums}
