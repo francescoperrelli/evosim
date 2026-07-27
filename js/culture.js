@@ -34,7 +34,7 @@ import { P, S } from './state.js';
 // rand/rnd/gauss are deliberately NOT imported: nothing in this module may consume
 // the world's PRNG (see inherit() below for why the experiments depend on it).
 import { clamp } from './utils.js';
-import { NIN, NOUT } from './nn.js';   // nn.js imports only utils/state, so no cycle
+import { NIN, NOUT, crossMask } from './nn.js';   // nn.js imports only utils/state, so no cycle
 
 // ---------------------------------------------------------------------------
 // WHAT IS TRANSMITTED, AND WHY IT IS KEPT OUT OF THE GERMLINE
@@ -139,14 +139,24 @@ export function inherit(parent, childGenome){
   // inherited. Exact for asexual lineages, where the child's brain is the
   // parent's plus mutation noise. For a sexual pair crossBrain() takes each
   // weight from one parent or the other, so only about half of the child's
-  // weights carry the parent's offset at all: subtracting half of it is right in
-  // expectation and wrong weight by weight. Omnivores therefore leak a little
-  // culture into their germline (and subtract a little noise from the mate's
-  // weights). inherit() only receives one parent, so a per-weight purge is not
-  // possible under the fixed signature — see the report.
+  // weights carry the parent's offset at all.
+  //
+  // This used to subtract HALF the offset from EVERY weight, which is right in
+  // expectation and wrong on every individual child: it left learned weight
+  // sitting on the loci the child took from the OTHER parent, and subtracted
+  // noise from loci that never carried the offset. Averaged over a population
+  // the books balanced, so it never showed up as a drift in any aggregate — but
+  // every individual omnivore genome carried a little inherited culture, which
+  // is precisely the Lamarckian channel the whole `__t` bookkeeping exists to
+  // close. nn.js now hands back which parent each weight came from, so the purge
+  // is exact: subtract the offset from the parent's own loci and leave the
+  // mate's alone. When no mask is available the birth was asexual (or mutation
+  // resized the hidden layer, in which case we have already returned above), and
+  // the whole offset is the right thing to remove.
   if(pt){
-    const share = childGenome.sexual > 0.5 ? 0.5 : 1;
-    for(let i = 0; i < n; i++) w[off + i] -= pt[i] * share;
+    const mask = crossMask(cb);
+    if(mask){ for(let i = 0; i < n; i++) if(mask[off + i]) w[off + i] -= pt[i]; }
+    else for(let i = 0; i < n; i++) w[off + i] -= pt[i];
   }
   const f = clamp(pg.fidelity === undefined ? 0 : pg.fidelity, 0, 1);
   if(f <= 0 || (!pt && !pl)) return;             // a faithless parent teaches nothing

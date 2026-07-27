@@ -148,6 +148,68 @@ check('every level-3 mechanic stays deterministic', l3det.length === 0,
 check('no level-3 mechanic empties the world on its own', l3dead.length === 0,
   l3dead.map(r => r.f).join(', '));
 
+// ---- culture does not leak into the germline ----
+// The point of culture.js's __t bookkeeping is that a lesson stays a lesson: the
+// parent's taught offset is added to the child's brain as culture and subtracted
+// back out of the genes the child inherited. For an asexual birth that is one
+// subtraction. For a sexual pair the child's weights come from two parents, and
+// the purge is only correct if it removes the offset from exactly the loci that
+// came from the parent doing the teaching. It used to subtract half of it from
+// all of them, which balances on average and is wrong for every individual.
+//
+// Rather than assert the arithmetic, this drives the real chain — crossover(),
+// then inherit() — and checks the invariant that makes it right: after the purge
+// a child's germline weight must land EXACTLY on one of its two parents' values,
+// never between them. Mutation is switched off (P.mut = 0) for the duration so
+// the comparison can be exact rather than a tolerance wide enough to hide the
+// very error being looked for; the first version of this test used a 0.25 window
+// and passed happily against the buggy code, because half a taught offset is
+// smaller than that. The offset is also made large relative to a weight so a
+// half-subtraction cannot be mistaken for rounding.
+const cult = await page.evaluate(async () => {
+  const g = await import('./js/genome.js'), c = await import('./js/culture.js'),
+        nn = await import('./js/nn.js'), st = await import('./js/state.js'), w = await import('./js/world.js');
+  w.seed(4242);
+  const mut0 = st.P.mut, cv0 = st.P.cultureVertOn;
+  st.P.mut = 0; st.P.cultureVertOn = true;
+  const NOUT = nn.NOUT, NIN = nn.NIN, EPS = 1e-5;
+  let checked = 0, offMask = 0, blended = 0, noMask = 0, resized = 0;
+  for(let trial = 0; trial < 400; trial++){
+    const ga = g.randomGenome('omni'), gb = g.randomGenome('omni');
+    if(ga.brain.nh !== gb.brain.nh) continue;
+    ga.sexual = gb.sexual = 1;
+    ga.fidelity = 0;                            // isolate the purge from the teaching step
+    const nh = ga.brain.nh, n = nh * NOUT, off = nh * NIN + nh;
+    // give parent A a taught overlay, and put it into A's own germline the way a
+    // real birth does. Amplitude ~0.6, well above any plausible noise floor.
+    ga.__t = new Float32Array(n);
+    for(let i = 0; i < n; i++){ ga.__t[i] = ((i % 5) - 2) * 0.3; ga.brain.w[off + i] += ga.__t[i]; }
+    const parent = { g: ga, plast: null };
+    const aW = ga.brain.w.slice(), bW = gb.brain.w.slice();
+    const cg = g.crossover(ga, gb);
+    if(cg.brain.nh !== nh){ resized++; continue; }   // hidden layer resized; inherit() bails
+    const mask = nn.crossMask(cg.brain);
+    if(!mask){ noMask++; continue; }
+    const maskCopy = mask.slice();                   // inherit() must not disturb it, but be safe
+    c.inherit(parent, cg);
+    checked++;
+    for(let i = 0; i < n; i++){
+      const k = off + i;
+      const wantA = aW[k] - ga.__t[i];          // A's value with its culture removed
+      const wantB = bW[k];                      // B never carried A's culture
+      const got = cg.brain.w[k];
+      const dA = Math.abs(got - wantA), dB = Math.abs(got - wantB);
+      if(Math.min(dA, dB) > EPS) blended++;              // sitting between the two parents
+      if((maskCopy[k] ? dA : dB) > EPS) offMask++;       // matched the wrong parent
+    }
+  }
+  st.P.mut = mut0; st.P.cultureVertOn = cv0;
+  return { checked, blended, offMask, noMask, resized };
+});
+check('sexual births purge culture per-weight, not on average',
+  cult.checked > 20 && cult.blended === 0 && cult.offMask === 0,
+  `checked=${cult.checked} blended=${cult.blended} offMask=${cult.offMask} noMask=${cult.noMask}`);
+
 // ---- multi-planet world: planets build, creatures stay confined ----
 const pl = await page.evaluate(async () => {
   const w = await import('./js/world.js'), st = await import('./js/state.js');

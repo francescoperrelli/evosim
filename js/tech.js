@@ -220,13 +220,39 @@ let _index = 0;                                  // cached HUD number
 let _ghosts = [];                                // fading marks where something was lost
 let _villMask = new Map();                       // settlement id -> pooled capabilities
 let _gained = 0, _lost = 0, _invented = 0, _taught = 0, _forgot = 0;
+// The deepest regression already announced to the chronicle. S.techPeak was being
+// maintained on the stated grounds that "the chronicle can say when something was
+// lost", and then nothing ever said it — the number existed for a sentence that
+// was never written. It is written below now.
+//
+// The entry is deliberately about the BEST-EQUIPPED BODY ALIVE, not about the
+// world's mean holding: _index already reports the mean on the HUD every tick,
+// and a mean that sags because the population grew is not a loss of anything.
+// What is worth telling the player about is the high-water mark receding — the
+// most capable body alive today knows less than the most capable body that ever
+// lived, which is the only sense in which this world can forget.
+//
+// Debounced by depth rather than by time. A regression is announced once, when it
+// first reaches a depth deeper than anything announced so far; recovering to the
+// old peak rearms it. Without that the entry would fire every tick for as long as
+// the loss persisted and bury the other four chronicle keys.
+let _lossTold = 0;
 
 export function techReset(){
   S.techPeak = 0;
   _cellMask = null; _cCols = _cRows = 0; _index = 0;
   _ghosts.length = 0; _villMask.clear();
   _gained = _lost = _invented = _taught = _forgot = 0;
+  _lossTold = 0;
   syncEff();
+}
+
+// A chronicle entry, written in the shape world.js's logEvent() writes, and for
+// the same reason terra.js keeps its own copy: importing world.js from a level-3
+// module would close a cycle that only exists to append to an array.
+function chron(key, n){
+  S.chronicle.unshift({ tick: S.tick, key, n: n === undefined ? null : n, x: null, y: null, cid: null });
+  if(S.chronicle.length > 80) S.chronicle.pop();
 }
 
 // Instrumentation only. Nothing in world.js, render.js or ui.js calls this; it
@@ -289,7 +315,7 @@ export function techTick(){
   }
 
   // pass 2 — learn, invent, shed
-  let held = 0, peak = S.techPeak || 0;
+  let held = 0, peak = S.techPeak || 0, best = 0;
   _villMask.clear();
   for(let i = 0; i < n; i++){
     const c = cr[i], g = c.g;
@@ -337,10 +363,15 @@ export function techTick(){
     c.tech = t;
     const np = POP[t];
     held += np;
+    if(np > best) best = np;
     if(np > peak) peak = np;
     if(t && c.vill) _villMask.set(c.vill, (_villMask.get(c.vill) || 0) | t);
   }
   S.techPeak = peak;
+  // the high-water mark receding: announce once per new depth, rearm on recovery
+  const gap = peak - best;
+  if(gap > _lossTold){ _lossTold = gap; chron('techlost', gap); }
+  else if(gap === 0) _lossTold = 0;
   _index = held / (n * NCAP);
   // fade the loss marks
   if(_ghosts.length){

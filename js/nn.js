@@ -129,17 +129,67 @@ export function mutateBrain(b, scale){
   else nb = { nh: b.nh, w: b.w.slice() };
   const m = P.mut * sc, w = nb.w;
   for(let i = 0; i < w.length; i++) w[i] = clamp(w[i] + gauss() * m * 0.6, -5, 5);
+  // carry crossBrain's provenance mask across the mutation step, but only while
+  // the weight indices still mean the same thing. addNeuron/removeNeuron renumber
+  // the whole array, so the mask is dropped there by simply not re-pointing the
+  // owner token — crossMask() then returns null and the caller falls back.
+  if(_xOwner === b && nb.nh === b.nh) _xOwner = nb;
   return nb;
 }
+
+// ---------------------------------------------------------------------------
+// PER-WEIGHT PROVENANCE FROM THE LAST RECOMBINATION.
+//
+// culture.js has to take a parent's taught offset back out of the germline its
+// child just inherited, so that a lesson stays a lesson and does not quietly
+// become DNA. For an asexual birth that is easy: the child's brain is the
+// parent's, so subtract the whole offset. For a sexual pair it was not possible
+// at all — inherit() is handed one parent, and crossBrain() had already thrown
+// away which parent each weight came from, so culture.js subtracted HALF the
+// offset from EVERY weight. That is right in expectation and wrong on every
+// individual: each child kept a fraction of learned weight on the loci it took
+// from the other parent, and had a fraction of noise subtracted from the rest.
+// A small, systematic, one-directional Lamarckian leak, biased toward whichever
+// parent happened to be passed first.
+//
+// The mask below is the missing information. It is module-level scratch rather
+// than a property on the brain, because it is needed for exactly the few
+// microseconds between crossover() and inherit() and would otherwise be pinned
+// for the whole life of every creature ever born. `_xOwner` is the identity of
+// the brain the mask describes: a caller that asks about any other brain — a
+// stale one, an asexual child, a child whose hidden layer was resized by
+// mutation — gets null and is expected to fall back.
+//
+// 1 means the weight came from the FIRST argument of crossBrain(), which is the
+// first argument of crossover(), which world.js guarantees is the same body it
+// then passes to culture.inherit(). That chain is the contract; it is asserted
+// by the culture test rather than by a comment alone.
+let _xMask = null, _xOwner = null;
+export function crossMask(brain){ return _xOwner === brain ? _xMask : null; }
 
 // recombine two brains: equal size -> per-weight crossover; else inherit one
 export function crossBrain(ba, bb){
   if(ba.nh === bb.nh){
-    const w = new Array(ba.w.length);
-    for(let i = 0; i < w.length; i++) w[i] = rand() < 0.5 ? ba.w[i] : bb.w[i];
-    return { nh: ba.nh, w };
+    const n = ba.w.length, w = new Array(n);
+    if(!_xMask || _xMask.length < n) _xMask = new Uint8Array(n);
+    for(let i = 0; i < n; i++){ const a = rand() < 0.5; w[i] = a ? ba.w[i] : bb.w[i]; _xMask[i] = a ? 1 : 0; }
+    const nb = { nh: ba.nh, w };
+    _xOwner = nb;
+    return nb;
   }
-  return rand() < 0.5 ? { nh: ba.nh, w: ba.w.slice() } : { nh: bb.nh, w: bb.w.slice() };
+  // whole-brain inheritance. If it came from bb the child's hidden size differs
+  // from the primary parent's and culture.inherit() bails out before it can ask;
+  // if it came from ba every weight is the parent's, so the mask is all ones.
+  if(rand() < 0.5){
+    const n = ba.w.length;
+    if(!_xMask || _xMask.length < n) _xMask = new Uint8Array(n);
+    _xMask.fill(1, 0, n);
+    const nb = { nh: ba.nh, w: ba.w.slice() };
+    _xOwner = nb;
+    return nb;
+  }
+  _xOwner = null;
+  return { nh: bb.nh, w: bb.w.slice() };
 }
 
 // cultural transmission: nudge a brain's weights toward a role model's
