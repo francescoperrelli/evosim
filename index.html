@@ -34,6 +34,13 @@
       <span id="chStatus"></span>
       <button id="chDismiss" title="Chiudi">✕</button>
     </div>
+    <!-- Recording indicator. Lives in the stage, not in an overlay, because the
+         whole point is to stay visible while you watch the world being taped. -->
+    <div id="recBar">
+      <i class="rec-dot"></i>
+      <span id="recText"></span>
+      <button id="recStop" data-i18n="recStop">■ Ferma</button>
+    </div>
   </div>
 
   <aside>
@@ -82,6 +89,7 @@
       </div>
       <div class="row">
         <button class="btn ghost" id="btnLegend" data-i18n="legendBtn">🧭 Legenda</button>
+        <button class="btn ghost" id="btnPostcard" data-i18n="pcBtn">📷 Cartolina</button>
       </div>
       <label class="ctl"><span data-i18n="timeSpeed">Velocità del tempo</span> <b id="vSpeed">1×</b>
         <input type="range" id="rSpeed" min="0" max="8" step="1" value="1"></label>
@@ -106,6 +114,7 @@
         <button class="btn" id="mEvents" data-i18n="eventsBtn">⚡ Eventi</button>
         <button class="btn" id="mChallenge" data-i18n="chBtn">🎯 Sfide</button>
         <button class="btn" id="mLegend" data-i18n="legendBtn">🧭 Legenda</button>
+        <button class="btn" id="mPostcard" data-i18n="pcBtn">📷 Cartolina</button>
       </div>
       <p class="foot" data-i18n="footer">Pubblicato su GitHub Pages · si salva da solo nel browser</p>
       <p class="foot"><a href="about.html" data-i18n="aboutLink">Scopri il progetto →</a></p>
@@ -468,9 +477,46 @@
     </div>
   </div>
 
+  <!-- POSTCARD + TIME-LAPSE: the two ways a run leaves the browser as an image.
+       Both are driven by js/export.js, which renders off the live canvas and
+       never touches the simulation. -->
+  <div class="overlay" id="postcard">
+    <div class="card">
+      <p class="eyebrow" data-i18n="pcEyebrow">Porta fuori il tuo mondo</p>
+      <h3 data-i18n="pcTitle">Cartolina</h3>
+      <p class="lead" data-i18n="pcLead">Un'immagine sola, con il seme e i numeri che la rendono leggibile a chi non c'era.</p>
+
+      <div class="pc-shots">
+        <button class="btn primary pc-shot" id="pcShotView">
+          <b data-i18n="pcShotView">📷 Inquadratura attuale</b>
+          <span data-i18n="pcShotViewD">Esattamente ciò che vedi ora, con le creature una per una.</span>
+        </button>
+        <button class="btn pc-shot" id="pcShotAll">
+          <b data-i18n="pcShotAll">🪐 Sistema intero</b>
+          <span data-i18n="pcShotAllD">Tutti e quattro i pianeti: a questa scala la vita si legge come densità.</span>
+        </button>
+      </div>
+
+      <p class="insp-sub" data-i18n="pcLapse">Time-lapse animata (GIF)</p>
+      <p class="l3-hint" data-i18n="pcLapseD">La registrazione cattura un fotogramma ogni tot tick e alla fine codifica una GIF. La codifica gira in un worker: il mondo continua a girare, ma può volerci qualche secondo.</p>
+      <div class="opt-group">
+        <label class="ctl"><span data-i18n="pcEvery">Un fotogramma ogni</span> <b id="vGifEvery">60 t</b>
+          <input type="range" id="rGifEvery" min="10" max="300" step="10" value="60"></label>
+        <label class="ctl"><span data-i18n="pcFrames">Fotogrammi</span> <b id="vGifFrames">90</b>
+          <input type="range" id="rGifFrames" min="20" max="240" step="10" value="90"></label>
+        <label class="ctl"><span data-i18n="pcWidth">Larghezza</span> <b id="vGifWidth">320 px</b>
+          <input type="range" id="rGifWidth" min="160" max="640" step="40" value="320"></label>
+        <p class="pc-span"><span data-i18n="pcSpan">Copre circa</span> <b id="vGifSpan">5400</b> <span data-i18n="pcSpanT">tick di tempo simulato</span></p>
+      </div>
+      <div class="row"><button class="btn primary" id="pcRecStart" data-i18n="pcRecStart">⏺ Avvia registrazione</button></div>
+      <div class="row"><button class="btn ghost" id="pcClose" data-i18n="close">Chiudi</button></div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 
   <script type="module" src="js/main.js"></script>
+  <script type="module" src="js/export.js"></script>
   <script>if('serviceWorker' in navigator){ addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(()=>{})); }</script>
 </body>
 </html>
