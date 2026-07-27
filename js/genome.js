@@ -5,8 +5,20 @@ import { rnd, clamp, gauss, rand } from './utils.js';
 import { P, S, TYPES, typeOf } from './state.js';
 import { randomBrain, mutateBrain, crossBrain, NMEM } from './nn.js';
 
+// P.geneInit is a research knob, not a game setting: a map of gene name -> founding
+// value, applied on top of the natural founding draw. It exists because the decisive
+// question about a gene ("is this under selection, or is it drifting?") is answered by
+// starting a population off its equilibrium and asking whether selection brings it
+// back. A selected gene forgets where it started; a drifting one remembers. See THE
+// 38-GENE AUDIT below. Undefined by default, so the shipped world is untouched.
 export function randomGenome(type){
   const cfg = TYPES[type];
+  const g = _randomGenome(cfg);
+  const gi = P.geneInit;
+  if(gi) for(const k in gi){ if(g[k] !== undefined) g[k] = gi[k]; }
+  return g;
+}
+function _randomGenome(cfg){
   return {
     speed: rnd(0.9, 2.1), sense: rnd(45, 95), size: rnd(3.5, 6),
     hue: cfg.hueC + rnd(-cfg.hueSpan, cfg.hueSpan) * 0.5,
@@ -345,6 +357,271 @@ export function makeCreature(x, y, type, genome, gen){
 // against `tribal`. This is the l2Cost sweep repeating itself on a second gene.
 // REJECTED; shipped coefficient stays 0.008. The request was reasonable and the
 // answer is a measurement, not a preference.
+//
+// ---------------------------------------------------------------------------
+// THE 38-GENE AUDIT. Every field of this genome, classified as SELECTED (it beats
+// a matched control), DRIFT (it does not) or INERT (no code path lets it change a
+// body's fitness at all). The two studies above kept asking this question one gene
+// at a time and getting the same answer; this asks it once, for all of them, with
+// a method that cannot flatter them.
+//
+// WHY THE OBVIOUS TEST IS WRONG, AND WHAT REPLACES IT. The tempting test is to
+// found a gene at 0.15, run a long time, and call it selected if it has moved. It
+// will have moved. Mutation here is gaussian and the result is clamped into [0,1],
+// so a gene that does NOTHING AT ALL still walks to the middle of its clamp range
+// and settles there. Measured on a functionless gene over successive 10k-tick
+// windows: 0.165 -> 0.327 -> 0.480 -> 0.505 +- 0.115, with the between-seed sd
+// growing 0.016 -> 0.115 along the way. Two consequences, both load-bearing:
+//
+//   * The drift attractor is the MIDPOINT OF THE CLAMP RANGE, not the founding
+//     value. "Rose from 0.15 to 0.48" is a fact about the clamp, not about
+//     fitness. Every founding value in this file is below 0.5, so every gene in
+//     the file rises, and none of that rising is evidence of anything.
+//   * Long runs do not buy free statistical power. The between-seed sd grows
+//     faster than any of these signals do. A 40k-tick run is not a better version
+//     of a 10k-tick run, it is a noisier one.
+//
+// So nothing below is ever compared to where a gene started. Every claim is a gene
+// against a matched control AT THE SAME RUN LENGTH ON THE SAME SEEDS: either a
+// functionless gene riding along in the same run (the `fidelity` trick from the
+// l2Cost sweep above), or the same gene in an arm where its payoff has been
+// deleted with a P.* flag. Three instruments, in increasing cost:
+//
+//   1. STRUCTURAL READING. Every field grepped for its readers, every reader
+//      traced to ask whether it can change a body's energy, its offspring count
+//      or its death. Done first and exhaustively, because a gene with no such
+//      reader needs no simulation, and simulation time is the scarce resource.
+//   2. PAIRED FLAG ARMS. 6000 ticks, 4 seeds (11/23/37/53), sampled every 200
+//      after t=2400. One arm ships, the other has one subsystem's flag off. The
+//      ~30 genes NOT targeted by that flag are the run's own noise floor.
+//   3. REVERSION TO EQUILIBRIUM. 30000 ticks, sampled every 500 after t=20000.
+//      P.geneInit (added for this, see randomGenome) founds a population off
+//      equilibrium; two arms, symmetric at 0.25 and 0.75. A selected gene forgets
+//      where it started and the arms converge; a drifting one remembers. The
+//      MIDPOINT of the two arms estimates where selection pulls, because the
+//      founding bias cancels; the GAP between them estimates how much of the
+//      founding value survived.
+//
+// GENERATIONS, NOT TICKS, ARE THE CURRENCY OF SELECTION. 6000 ticks is about 9
+// generations and has no power for instrument 3 at all — the first attempt at it
+// reported that even `speed` and `size` retain ~100% of an imposed gap, which is
+// not a result about `speed`, it is nine generations being too few to erase
+// anything. 30000 ticks is 33-36 generations, and there the test discriminates.
+//
+// RESULT 1: AT 6000 TICKS, NOTHING BEATS ITS CONTROL. Six paired arms — mimicOn
+// alone, four physiology flags, the behaviour flags, the level-2 set, the level-3
+// set, speciesOn+tribeOn, plaguesOn — and in every one the targeted genes sat
+// inside the noise floor of the untargeted ones. Noise floor, as |base - control|
+// across the ~30 untargeted 0..1 genes, quoted as a range over the six arms:
+// median 0.008-0.011, 90th percentile 0.022-0.040, worst case 0.032-0.072. The
+// largest targeted move in the entire set apart from `sociality` was `migrate` at
+// +0.024, which is its own arm's 90th percentile of noise.
+//
+// One near-miss is worth recording, because it is the trap this method exists to
+// catch. Turning four physiology flags off together moved `acuity` by -0.051,
+// comfortably outside that arm's noise floor, and it looked like a result. It was
+// not. That arm also lost a quarter of its population (260 +- 36 against 344 +-
+// 90). Re-run with mimicOn off ALONE, population matched at 344 vs 349, `acuity`
+// moved -0.015 and went straight back inside the noise. An arm that changes the
+// population is not a matched control, it is a different ecology, and every gene
+// in it will shift. Population is reported for every arm here for that reason.
+//
+// RESULT 2: THREE GENES SURVIVE, FOR THREE DIFFERENT REASONS.
+//
+// `sociality` — DIRECTIONAL, and the only large effect in the genome. Against a
+// matched control with flocksOn and pherOn off, at 6000 ticks: 0.366 +- 0.047 vs
+// 0.531 +- 0.034, a difference of -0.166, while every other gene in that same arm
+// pair moved 0.021 or less. It is selected DOWNWARD — flocking costs more than it
+// returns in this world. At 30000 ticks it reaches the same place from anywhere:
+// 0.141 +- 0.027 from its natural founding of 0.55, 0.145 +- 0.053 from 0.25,
+// 0.177 +- 0.013 from 0.75. Across the 31 soft genes the symmetric-founding
+// midpoint averages 0.448 +- 0.072; `sociality` sits at 0.161, a 4.0-sigma
+// outlier, and nothing else in the genome exceeds 1.5 sigma. The reason it works
+// is structural. It is the only 0..1 gene wired into the movement integrator
+// rather than into a metabolism line item: it changes WHERE the body is, every
+// tick, and therefore what it eats and what eats it. It moves the whole income
+// statement instead of a few percent of one line.
+//
+// `speed` — DIRECTIONAL, weak, and the only hard gene with a verdict. 30000-tick
+// mean 2.311 +- 0.125 against a drift attractor of 1.900, i.e. +3.3 sigma, held
+// against a quadratic metabolic cost that is one of the largest terms below. Same
+// reason as sociality: it is a movement gene.
+//
+// `pattern` — STABILISING, not directional. This one needed its own control and
+// nearly went down as drift. It retains 99% of an imposed 0.25-vs-0.75 founding
+// gap at 30000 ticks where the other 30 soft genes retain 6-75%, but high
+// retention is exactly what a gene that simply is not moving looks like, so
+// retention alone proves nothing. The control is the same gene, same seeds, same
+// run length, with its readers deleted:
+//
+//   arm                    lo (from 0.25)   hi (from 0.75)   gap kept   midpoint
+//   shipped defaults       0.276 +- 0.094   0.771 +- 0.061      99%       0.524
+//   speciesOn+tribeOn off  0.395 +- 0.114   0.619 +- 0.145      45%       0.507
+//   paired difference 0.271 +- 0.160 over 6 seeds, t(5) = 4.16, same sign 6/6
+//
+// The pinning is real, and the 45% is the honest drift baseline for a soft gene
+// over 30k ticks. Note the two midpoints: both are 0.5. There is no preferred
+// value — selection resists displacement from wherever the population already is,
+// which is the signature of a badge rather than of a trait. `shape` rode through
+// the same arms as a control and shows nothing (43% vs 38% kept, t(5) = 0.66,
+// sign consistent in only 3 of 6 seeds), and that also identifies the agent:
+// phylo.js's trait vector reads shape at weight 0.80 and pattern at 0.75, so it
+// cannot be pinning the lighter-weighted of the two and not the heavier.
+// tribe.js's marker() reads `pattern` and nothing else. The tribe badge is doing
+// this, and a similarity-matching badge producing stabilising selection is the
+// theory behaving exactly as it should.
+//
+// A structural fact fell out of those runs and is worth keeping. With speciesOn
+// and tribeOn off, the 0.25 and 0.75 arms are BIT-IDENTICAL worlds in 6 seeds of
+// 6 — same population, same alive count, same value for every other gene. With
+// the flags on, 0 of 6 match. `pattern` and `shape` have no causal channel into
+// this simulation other than those two subsystems; and since world.js's geneVec()
+// feeds only speciesCount(), which is a number drawn on a panel, `shape` has no
+// fitness-affecting reader anywhere at all.
+//
+// THE TABLE. Soft genes are quoted as the symmetric-founding midpoint at 30000
+// ticks with its z against the 31-gene pool (mean 0.448 +- 0.072); a gene at
+// z ~ 0 is sitting on the neutral point with everything else. Hard genes are
+// quoted against their own clamp midpoint. Spread is shown for every number,
+// because a number without its spread is not a result.
+//
+//   FIELD           VERDICT     EVIDENCE
+//   speed           SELECTED    30k 2.311 +- 0.125 vs 1.900 attractor, +3.3 sd
+//   sense           UNRESOLVED  30k 92.3 +- 4.2 vs a 92.5 attractor, +0.0 sd. Its
+//                               equilibrium and its attractor coincide, so this
+//                               test cannot separate them. Not measured, not drift.
+//   size            UNRESOLVED  30k 5.008 +- 0.804 vs 5.750, -0.9 sd; the spread is
+//                               too wide for this design to resolve
+//   territoryR      DRIFT       30k 95.2 +- 17.4 vs 105.0, -0.6 sd; carnivore-only
+//   diet            SELECTED*   structural, not measured: it sets the feeding band
+//                               and with it plantEff, preyEff and baseMeta. No
+//                               control arm exists, because deleting its payoff
+//                               deletes the ecology. Verdict read, not run.
+//   hue             DRIFT       30k 146.5 +- 17.4; its only fitness reader is a weak
+//                               mate-recognition term, and it mutates gauss()*8,
+//                               ignoring P.mut entirely
+//   sexual          NOT A GENE  provably non-heritable: set from TYPES[typeOf(diet)]
+//                               in BOTH randomGenome and mutateGenome, and absent
+//                               from crossover's recombination list. A derived
+//                               field carried and serialised as if it were a gene.
+//   sociality       SELECTED    -0.166 vs matched control, noise floor 0.021;
+//                               30k midpoint 0.161, -4.0 sd. The strong result.
+//   camo            DRIFT       -0.005 vs mimicOn control; 30k midpoint 0.427, -0.3
+//   acuity          DRIFT       -0.015 vs mimicOn control; 30k midpoint 0.456, +0.1.
+//                               The -0.051 seen in the four-flag arm was a
+//                               population artefact and is retracted.
+//   territoriality  DRIFT       30k midpoint 0.406, -0.6
+//   shape           DRIFT       no pinning: 43% vs 38% kept, t(5)=0.66, 3/6 seeds.
+//                               Structurally it has no fitness reader at all.
+//   pattern         SELECTED    stabilising: 99% vs 45% kept, t(5)=4.16, 6/6 seeds
+//   altruism        DRIFT       30k midpoint 0.437, -0.2
+//   ornament        DRIFT       +0.012 vs control; 30k midpoint 0.422, -0.4
+//   preference      DRIFT       +0.010 vs control; 30k midpoint 0.517, +1.0
+//   resist          DRIFT       +0.019 vs plaguesOn control; 30k midpoint 0.468, +0.3
+//   reciprocity     DRIFT       30k midpoint 0.413, -0.5
+//   migrate         DRIFT       +0.024 vs control (its arm's 90th pct of noise);
+//                               30k midpoint 0.372, -1.1
+//   hoard           DRIFT       -0.015 vs control; 30k midpoint 0.433, -0.2
+//   build           DRIFT       +0.015 vs control; 30k midpoint 0.448, -0.0
+//   disperse        DRIFT       -0.010 vs control; 30k midpoint 0.556, +1.5
+//   husbandry       DRIFT       +0.003 vs control; 30k midpoint 0.423, -0.4
+//   pace            DRIFT       +0.002 vs control; 30k midpoint 0.531, +1.2
+//   mutRate         DRIFT       +0.012 vs control; 30k midpoint 0.425, -0.3. Steps at
+//                               gauss()*m*0.5, not *1.3, so its gap retention is not
+//                               comparable to the rest of the pool.
+//   detox           DRIFT       -0.006 vs control; 30k midpoint 0.462, +0.2
+//   civic           DRIFT       -0.006 vs control; 30k midpoint 0.489, +0.6. The
+//                               textbook case: from 0.25 and 0.75 it lands on
+//                               0.470 +- 0.150 and 0.507 +- 0.152, fully diffused.
+//   caste           DRIFT       -0.016 vs control; 30k midpoint 0.444, -0.1
+//   raid            DRIFT       +0.010 vs control; 30k midpoint 0.452, +0.0
+//   respect         DRIFT       +0.008 vs control; 30k midpoint 0.446, -0.0
+//   fidelity        DRIFT       -0.013 vs control; 30k midpoint 0.407, -0.6
+//   trade           DRIFT       +0.015 vs control; 30k midpoint 0.458, +0.1
+//   tribal          DRIFT       +0.016 vs control; 30k midpoint 0.413, -0.5
+//   tool            DRIFT       +0.022 vs control; 30k midpoint 0.559, +1.5
+//   pyro            DRIFT       +0.004 vs control; 30k midpoint 0.444, -0.1
+//   mark            DRIFT       -0.019 vs control; 30k midpoint 0.546, +1.4
+//   techApt         DRIFT       +0.004 vs control; 30k midpoint 0.499, +0.7
+//   terra           DRIFT       +0.003 vs control; 30k midpoint 0.423, -0.4
+//
+// Tally: 3 selected and measured, 1 selected by structure, 2 unresolved, 1 not a
+// gene, 31 drifting. `raid` is listed here as drift, which is not a contradiction
+// of the l2Cost study above — that study found it selected among the level-2 genes
+// against a level-3 control pool, and this one asks the harder question of whether
+// it beats its own deleted-payoff arm, where it does not.
+//
+// THE MUTATION RATE. The standing hypothesis was that P.mut = 0.08 is too high for
+// 38 dimensions. Swept at 6000 ticks, 4 seeds, each rate run as its own base and
+// its own matched flocks-off control, with signal-to-noise defined as the size of
+// the `sociality` effect divided by the between-seed sd of the drifting genes in
+// the same runs — i.e. how visible the one real signal is against the noise the
+// rest of the genome is making:
+//
+//   P.mut   pop         sociality base    sociality ctrl   effect   pool sd   S/N
+//   0.02    344 +- 42   0.434 +- 0.036    0.565 +- 0.030   -0.130    0.017    7.6
+//   0.04    339 +- 35   0.418 +- 0.021    0.575 +- 0.054   -0.157    0.016    9.8
+//   0.08    344 +- 90   0.366 +- 0.047    0.531 +- 0.034   -0.166    0.022    7.5
+//   0.16    300 +- 29   0.344 +- 0.032    0.539 +- 0.057   -0.195    0.037    5.3
+//
+// The hypothesis is half right. Signal-to-noise peaks at 0.04 and 0.16 is clearly
+// worse — it also costs 13% of the population — so the shipped 0.08 is on the high
+// side and gives up roughly a quarter of the achievable ratio. But the effect size
+// itself grows monotonically with the rate; what degrades at high rates is the
+// noise, not the signal, so the gain from halving P.mut is modest and it is bought
+// by making every lineage change more slowly, which is a thing a player watches
+// for. Two honest caveats before anyone acts on this table: it is measured at 6000
+// ticks, so it is a rate of approach and not an equilibrium, and it is measured on
+// the one gene with a large effect, so it says nothing about rescuing the other 31.
+// P.mut lives in state.js. This is a recommendation, not a change.
+//
+// TRIED AND REJECTED, so nobody spends the runtime again:
+//   * Comparing a gene to its founding value. Rejected: the clamp midpoint is the
+//     attractor, so every gene "rises" and the statistic is meaningless.
+//   * The off-attractor distance as a selection statistic. Rejected: it conflates
+//     selection with incomplete diffusion. `hoard` sits 5.5 sd below its attractor
+//     at 30k purely because it was founded at 0.15 and has not finished diffusing;
+//     its symmetric midpoint, where founding bias cancels, is 0.433 at z = -0.2.
+//   * Reversion tests at 6000 ticks. Rejected: ~9 generations, no power.
+//   * Multi-flag arms. Rejected: they change the population, and a different
+//     ecology moves every gene (see the retracted `acuity` result).
+//   * Longer runs as a substitute for a matched control. Rejected: between-seed sd
+//     grows with run length faster than these effects do.
+//
+// PRUNING: THE CASE, WHICH IS NOT THE CASE ANYONE EXPECTED. The premise behind
+// asking for this audit was that 38 dimensions dilute selection and that cutting
+// dead genes would let the survivors breathe. The architecture says otherwise, and
+// this is the most useful thing in the study. There is no shared budget being
+// divided: each gene draws its own independent gaussian, and each pays its own
+// separate line in metabolism(). Deleting twenty drifting genes would not raise
+// the selection on `sociality` by one part in a thousand, because nothing those
+// genes consume is taken from it. The binding constraint is the one the l2Cost
+// sweep already found — a consequence worth a few percent of an energy budget is
+// below this world's selection threshold no matter how few genes share the world.
+// A gene earns its slot here by moving the body's whole income (where it goes:
+// `sociality`; how fast and far: `speed`) or by being a badge others react to
+// (`pattern`), not by adding a line item.
+//
+// So the recommendation is NOT to prune for statistical reasons; there are none.
+// The short honest list, for a maintainer to decide on, is:
+//   * `sexual` is the one field that is not a gene. It is a pure function of
+//     `diet`, recomputed on every mutation and every recombination, and it can
+//     never carry information. It is the strongest deletion candidate on clarity
+//     grounds alone. Deleting it changes the 38-field serialisation and the
+//     snapshot version, which is a cross-cutting change and not made here.
+//   * `shape` and `hue` have no fitness reader worth the name, but both are what
+//     makes lineages look different on screen, and that is a real job. Keep them;
+//     just do not expect them to evolve toward anything.
+//   * Three genes are charged a cost in metabolism() unconditionally while their
+//     benefit is gated: `resist` (benefit needs plaguesOn, which SHIPS FALSE, so
+//     by default every body pays upkeep on an immune system against a disease that
+//     never arrives), `disperse` (benefit needs the gene above P.dispThresh = 0.5
+//     and dispOn, while the cost is paid from the founding 0..0.12 upward) and
+//     `ornament` (benefit is mate choice, which only omnivores use). The
+//     measurements say the mismatch is far too small to matter — `resist` sits at
+//     z = +0.3, indistinguishable from drift — so gating those costs is a
+//     correctness and readability fix rather than a balance one, and it would
+//     change the shipped world's metabolism, so it is left for a decision.
 // ---------------------------------------------------------------------------
 export function metabolism(c){
   const g = c.g, cfg = TYPES[c.type];
