@@ -110,7 +110,16 @@ adattamento con effetto Baldwin: va corretto** (vedi §2.4).
 ### 1.5 L'audit del genoma: tre geni su 38
 
 Ogni campo è stato confrontato con un controllo appaiato. Solo tre risultano
-misurabilmente selezionati. Tentazione naturale: potare. **Non serve**, e il motivo è
+misurabilmente selezionati alla lunghezza a cui l'audit è girato — quattro contando
+`terra`, che a 6000 tick risultava deriva e a 40 000 no (§1.2). L'audit non è
+sbagliato: è corretto per la lunghezza a cui è stato eseguito, ed è il caso più
+limpido della regola 3 in §4.
+
+Una conseguenza pratica di questo, facile da non vedere: `terra` fa parte del pool di
+cinque geni «senza funzione» usato come metro di deriva in `js/genome.js` e nel
+finding 14 di `js/culture.js`. Entrambi girano sotto i 10 000 tick, quindi il pool è
+pulito **così come è stato eseguito** — ma quei cinque geni non sono più un metro
+neutro per una run da 30 000 in su. La nota è ora scritta in entrambi i file. Tentazione naturale: potare. **Non serve**, e il motivo è
 strutturale: ogni gene estrae la propria gaussiana indipendente, non esiste un budget
 di mutazione condiviso che venga diluito. I geni inerti non tolgono potenza agli
 altri; costano solo memoria e onestà descrittiva.

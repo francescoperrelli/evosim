@@ -148,6 +148,57 @@ check('every level-3 mechanic stays deterministic', l3det.length === 0,
 check('no level-3 mechanic empties the world on its own', l3dead.length === 0,
   l3dead.map(r => r.f).join(', '));
 
+// ---- the phylogeny panel is a view, and a view may not touch the world ----
+// It reads S.creatures every frame to list who is alive in a lineage, it lays out
+// a canvas, and it runs its own rAF loop while open. Any of those three is a place
+// where a stray rand() would desynchronise the run from its seed without anything
+// visibly breaking. Run the same seed with the panel shut and with it open and
+// refreshed on every step; the worlds must be bit-identical.
+const phDet = await page.evaluate(async () => {
+  const w = await import('./js/world.js'), st = await import('./js/state.js'), ui = await import('./js/ui.js');
+  const run = open => {
+    w.seed(11);
+    if(open) document.getElementById('btnPhylo').click();
+    for(let i = 0; i < 3000; i++){ w.step(); if(open) ui.refreshPhylo(); }
+    const h = st.S.creatures.reduce((a, c) => ((a * 31 + Math.round(c.x * 97) + Math.round(c.y * 89)) >>> 0), 7);
+    if(open) document.getElementById('phClose').click();
+    return h;
+  };
+  return { off: run(false), on: run(true) };
+});
+check('the phylogeny panel does not perturb the world', phDet.on === phDet.off,
+  phDet.on + ' vs ' + phDet.off);
+
+// ---- folding may hide an extinct branch, never a living one ----
+// The tree stays readable by folding whole clades and bundling dead twigs, and the
+// only thing making that honest rather than convenient is the rule that a lineage
+// with creatures alive in it right now always gets its own row. It is exactly the
+// kind of promise that decays silently the next time the fold heuristic is tuned.
+//
+// P.specThresh is lowered from the shipped 0.42 for the duration, and that is the
+// whole point of this test rather than an incidental detail. At 0.42 a run this
+// long produces about 26 lineages, which fit on screen, so NOTHING is ever folded
+// and the assertion holds vacuously -- the first version of this test passed
+// happily against a fold predicate with the is-it-dead check deliberately deleted.
+// At 0.16 the forest pins against the record cap and the fold path is forced to
+// run, which is the only state in which the promise means anything.
+const phHid = await page.evaluate(async () => {
+  const w = await import('./js/world.js'), st = await import('./js/state.js'), ui = await import('./js/ui.js');
+  const th0 = st.P.specThresh;
+  st.P.specThresh = 0.16;
+  w.seed(11);
+  document.getElementById('btnPhylo').click();
+  for(let i = 0; i < 8000; i++){ w.step(); if(i % 16 === 0) ui.refreshPhylo(); }
+  const p = ui.phyloPerf();
+  document.getElementById('phClose').click();
+  st.P.specThresh = th0;
+  return p;
+});
+check('the tree folds no living lineage out of sight',
+  phHid.extantHidden === 0 && (phHid.bundles + phHid.folded) > 0,
+  'hidden=' + phHid.extantHidden + ' of ' + phHid.records +
+  ' records, bundles=' + phHid.bundles + ' folded=' + phHid.folded);
+
 // ---- culture does not leak into the germline ----
 // The point of culture.js's __t bookkeeping is that a lesson stays a lesson: the
 // parent's taught offset is added to the child's brain as culture and subtracted

@@ -305,7 +305,11 @@ export function makeCreature(x, y, type, genome, gen){
 // FUNCTIONLESS level-3 genes (tool/pyro/mark/techApt/terra), which mutate with the
 // same m2 step and are clamped the same way, so each run carries its own drift
 // yardstick and between-seed noise cancels. Control pool mean is the mean of the
-// five. "null" is the drift control: assortment on, every payoff channel removed
+// five. CAVEAT FOR ANYONE REUSING THIS POOL: `terra` is no longer functionless.
+// It was later shown selected past ~25k ticks. At the 6000 ticks run here the pool
+// is still clean -- terra's signal does not exist yet at that length -- but the
+// same five genes are NOT a neutral yardstick for a run of 30k or more. Drop terra
+// from the pool, or re-derive the pool, before reusing it long. "null" is the drift control: assortment on, every payoff channel removed
 // (propertyPunish off, tribeRate 0, village defStr/defWatch/nurse/thatch 0) while
 // the genes still mutate, still pay metabolism and still assign roles.
 //
@@ -544,6 +548,11 @@ export function makeCreature(x, y, type, genome, gen){
 //   mark            DRIFT       -0.019 vs control; 30k midpoint 0.546, +1.4
 //   techApt         DRIFT       +0.004 vs control; 30k midpoint 0.499, +0.7
 //   terra           DRIFT       +0.003 vs control; 30k midpoint 0.423, -0.4
+//                   -- SUPERSEDED. Re-run at 40k in terra.js, terra IS selected,
+//                      and the signal only appears past ~25k ticks. This row is
+//                      correct for the length it was run at and wrong as a verdict.
+//                      It is the clearest case in the project of rule 3 in
+//                      ROADMAP.md: short runs lie.
 //
 // Tally: 3 selected and measured, 1 selected by structure, 2 unresolved, 1 not a
 // gene, 31 drifting. `raid` is listed here as drift, which is not a contradiction

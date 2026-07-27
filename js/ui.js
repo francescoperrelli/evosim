@@ -16,7 +16,7 @@ import { phyloInfo, phyloForest, speciesName, recVec, traitDist, creatureVec, TR
 /* ---------- overlays ---------- */
 function show(id){ const e = el(id); if(e) e.classList.add('show'); }
 function hide(id){ const e = el(id); if(e) e.classList.remove('show'); }
-function hideAll(){ ['menu','tutorial','options','inspector','evolution','events','genealogy','challenges','slots','chronicle','legend','phylo'].forEach(hide); }
+function hideAll(){ ['menu','tutorial','options','inspector','evolution','events','genealogy','challenges','slots','chronicle','legend','phylo','postcard'].forEach(hide); }
 export { show };
 
 let toastT = null;
@@ -614,82 +614,7 @@ function placeFood(wx, wy){
    refreshPhylo() returns after a single classList test.
    ===================================================================== */
 
-const PHYLO_I18N = {
-  it: {
-    phyloBtn: "🌳 Albero", phyloEyebrow: "La forma della discendenza", phyloTitle: "Albero filogenetico",
-    phyloHint: "Trascina per spostarti · rotella per lo zoom sul tempo · tocca un ramo per selezionarlo · tocca un triangolo per aprire un gruppo",
-    phyloEmpty: "Nessun lignaggio registrato. Lascia correre il mondo.",
-    phyloOff: "La speciazione è disattivata nelle opzioni: non c'è nessun albero da mostrare.",
-    phyloReset: "Reinquadra", phyloClose: "Chiudi",
-    phyloAlive: "vivo", phyloExtinct: "estinto",
-    phyloBorn: "Comparso", phyloDied: "Estinto", phyloSpan: "Durata", phyloPeak: "Picco", phyloNow: "Ora",
-    phyloParent: "Discende da", phyloRoot: "Lignaggio fondatore",
-    phyloSister: "Rispetto alla sorella", phyloNoSister: "Nessuna sorella registrata: il ramo gemello è stato potato o non c'è mai stato.",
-    phyloNoVec: "Genetica non disponibile: questo record viene da un salvataggio, che non conserva il vettore dei tratti.",
-    phyloMembers: "Creature vive in questo lignaggio", phyloNoMembers: "Nessuna creatura viva porta questo lignaggio.",
-    phyloJump: "Vai", phyloMore: "…e altre {n}",
-    phyloFolded: "Contiene {n} lignaggi ripiegati, tutti estinti tranne quelli segnati. Tocca per aprirlo.",
-    phyloAbsorbed: "Ha assorbito {n} record potati dalla memoria.",
-    phyloSelHint: "Tocca un ramo per leggerlo.",
-    phyloRecs: "record", phyloPruned: "potati", phyloRootLost: "radici perse",
-    phyloFoldedRows: "gruppi ripiegati", phyloBundles: "mazzi di rami morti",
-    phTrdiet: "dieta", phTrsize: "taglia", phTrspeed: "velocità", phTrhue: "colore",
-    phTrshape: "forma", phTrpattern: "livrea", phTrornament: "ornamento", phTrsense: "vista"
-  },
-  en: {
-    phyloBtn: "🌳 Tree", phyloEyebrow: "The shape of descent", phyloTitle: "Phylogenetic tree",
-    phyloHint: "Drag to pan · wheel to zoom time · tap a branch to select it · tap a triangle to open a folded group",
-    phyloEmpty: "No lineages recorded yet. Let the world run.",
-    phyloOff: "Speciation is switched off in the options, so there is no tree to show.",
-    phyloReset: "Reframe", phyloClose: "Close",
-    phyloAlive: "alive", phyloExtinct: "extinct",
-    phyloBorn: "Appeared", phyloDied: "Extinct", phyloSpan: "Lasted", phyloPeak: "Peak", phyloNow: "Now",
-    phyloParent: "Descends from", phyloRoot: "Founding lineage",
-    phyloSister: "Against its sister", phyloNoSister: "No sister on record: the twin branch was pruned away, or never existed.",
-    phyloNoVec: "Genetics unavailable: this record came back from a save, which does not keep the trait vector.",
-    phyloMembers: "Creatures alive in this lineage", phyloNoMembers: "No living creature carries this lineage.",
-    phyloJump: "Go", phyloMore: "…and {n} more",
-    phyloFolded: "Holds {n} folded lineages, all extinct unless marked. Tap to open it.",
-    phyloAbsorbed: "Absorbed {n} records pruned out of memory.",
-    phyloSelHint: "Tap a branch to read it.",
-    phyloRecs: "records", phyloPruned: "pruned", phyloRootLost: "roots lost",
-    phyloFoldedRows: "folded groups", phyloBundles: "bundles of dead twigs",
-    phTrdiet: "diet", phTrsize: "size", phTrspeed: "speed", phTrhue: "colour",
-    phTrshape: "shape", phTrpattern: "livery", phTrornament: "ornament", phTrsense: "sight"
-  }
-};
-// Merge only what is missing, so moving these strings into i18n.js later is a
-// no-op rather than a conflict.
-for(const lang of ['it', 'en']){
-  const src = PHYLO_I18N[lang], dst = I18N[lang];
-  if(!dst) continue;
-  for(const k in src) if(dst[k] === undefined) dst[k] = src[k];
-}
 const tf = (k, vals) => { let s = t(k); for(const v in vals) s = s.split('{' + v + '}').join(vals[v]); return s; };
-
-const PHYLO_CSS = `
-.ph-card{width:min(980px,100%)}
-#phWrap{position:relative;border:1px solid #24331f;border-radius:12px;background:#0d130d;overflow:hidden}
-#phCanvas{display:block;width:100%;height:min(52vh,440px);touch-action:none;cursor:grab}
-#phCanvas.drag{cursor:grabbing}
-#phFoot{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11px;color:#6f8168;margin:7px 2px 0}
-#phDetail{margin-top:12px;border-top:1px solid #1e2a1c;padding-top:11px;font-size:12.5px;min-height:74px}
-#phDetail .ph-h{display:flex;align-items:center;gap:8px;margin-bottom:6px}
-#phDetail .ph-dot{width:12px;height:12px;border-radius:50%;flex:0 0 auto;box-shadow:0 0 0 1px rgba(0,0,0,.5) inset}
-#phDetail .ph-nm{font-family:var(--serif,serif);font-size:17px}
-#phDetail .ph-tag{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;padding:1px 6px;border-radius:6px;border:1px solid #33452c;color:#8fa585}
-#phDetail .ph-tag.dead{color:#a07a72;border-color:#4a332e}
-#phDetail .ph-grid{display:flex;flex-wrap:wrap;gap:3px 20px;color:#93a68c}
-#phDetail .ph-grid b{color:#d6e4cf;font-weight:500}
-#phDetail .ph-sub{color:#7d8f77;margin:8px 0 3px;font-size:11px;letter-spacing:.04em;text-transform:uppercase}
-#phDetail .ph-bar{display:flex;align-items:center;gap:7px;margin:2px 0}
-#phDetail .ph-bar i{display:block;height:6px;border-radius:3px;background:#6f9a4c;flex:0 0 auto}
-#phDetail .ph-mem{display:flex;flex-wrap:wrap;gap:5px;margin-top:3px}
-#phDetail .ph-mem button{font:inherit;font-size:11px;padding:2px 8px;border-radius:7px;cursor:pointer;
-  background:#182218;border:1px solid #2c3d28;color:#b9cbb2}
-#phDetail .ph-mem button:hover{background:#22301f}
-#phDetail .ph-note{color:#8a7f63;font-size:11.5px;line-height:1.45}
-`;
 
 /* ---------- DOM, built from here so index.html need not change ---------- */
 function phEl(tag, attrs, parent){
@@ -704,33 +629,24 @@ function buildPhyloDom(){
   if(rst) rst.onclick = () => { phFit(true); phDirty = true; };
   if(cls) cls.onclick = () => closePhylo();
   if(ov && !ov._phBound){ ov._phBound = true; ov.addEventListener('pointerdown', e => { if(e.target === ov) closePhylo(); }); }
-  // The launcher, next to the other panel buttons. If the owner adds a button
-  // with this id to index.html, the create branch never runs and nothing duplicates.
-  if(!el('btnPhylo')){
-    const anchor = el('btnLegend');
-    const b = phEl('button', { class: 'btn ghost', id: 'btnPhylo', 'data-i18n': 'phyloBtn', text: PHYLO_I18N.it.phyloBtn });
-    if(anchor && anchor.parentNode) anchor.parentNode.appendChild(b);
-    else document.body.appendChild(b);
-  }
+  // The launcher lives in index.html next to the other panel buttons, so it picks
+  // up the standard data-i18n pass. Only the overlay itself is built from here,
+  // and only because a twenty-line card is not worth carrying in the markup.
   const bp = el('btnPhylo'); if(bp) bp.onclick = () => openPhylo();
 }
 function buildPhyloOverlay(){
-  if(!el('phyloStyle')){
-    const st = document.createElement('style'); st.id = 'phyloStyle'; st.textContent = PHYLO_CSS;
-    document.head.appendChild(st);
-  }
   const ov = phEl('div', { class: 'overlay', id: 'phylo' });
   const card = phEl('div', { class: 'card ph-card' }, ov);
-  phEl('p', { class: 'eyebrow', 'data-i18n': 'phyloEyebrow', text: PHYLO_I18N.it.phyloEyebrow }, card);
-  phEl('h3', { 'data-i18n': 'phyloTitle', text: PHYLO_I18N.it.phyloTitle }, card);
+  phEl('p', { class: 'eyebrow', 'data-i18n': 'phyloEyebrow', text: t('phyloEyebrow') }, card);
+  phEl('h3', { 'data-i18n': 'phyloTitle', text: t('phyloTitle') }, card);
   const wrap = phEl('div', { id: 'phWrap' }, card);
   phEl('canvas', { id: 'phCanvas' }, wrap);
   phEl('div', { id: 'phFoot' }, card);
-  phEl('p', { class: 'caption', 'data-i18n': 'phyloHint', text: PHYLO_I18N.it.phyloHint }, card);
+  phEl('p', { class: 'caption', 'data-i18n': 'phyloHint', text: t('phyloHint') }, card);
   phEl('div', { id: 'phDetail' }, card);
   const row = phEl('div', { class: 'row' }, card);
-  phEl('button', { class: 'btn ghost', id: 'phReset', 'data-i18n': 'phyloReset', text: PHYLO_I18N.it.phyloReset }, row);
-  phEl('button', { class: 'btn primary', id: 'phClose', 'data-i18n': 'close', text: 'Chiudi' }, row);
+  phEl('button', { class: 'btn ghost', id: 'phReset', 'data-i18n': 'phyloReset', text: t('phyloReset') }, row);
+  phEl('button', { class: 'btn primary', id: 'phClose', 'data-i18n': 'close', text: t('close') }, row);
   document.body.appendChild(ov);
 }
 

@@ -308,3 +308,26 @@ input[type=range]{width:100%; accent-color:var(--moss); margin-top:5px}
 .pc-shot.primary span{color:rgba(255,255,255,.72)}
 .pc-span{font-size:11.5px; color:var(--muted); text-align:left; margin:2px 2px 0}
 .pc-span b{color:var(--ink); font-variant-numeric:tabular-nums}
+
+/* ---- Phylogenetic tree panel (js/ui.js builds the DOM; these style it) ---- */
+.ph-card{width:min(980px,100%)}
+#phWrap{position:relative;border:1px solid #24331f;border-radius:12px;background:#0d130d;overflow:hidden}
+#phCanvas{display:block;width:100%;height:min(52vh,440px);touch-action:none;cursor:grab}
+#phCanvas.drag{cursor:grabbing}
+#phFoot{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11px;color:#6f8168;margin:7px 2px 0}
+#phDetail{margin-top:12px;border-top:1px solid #1e2a1c;padding-top:11px;font-size:12.5px;min-height:74px}
+#phDetail .ph-h{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+#phDetail .ph-dot{width:12px;height:12px;border-radius:50%;flex:0 0 auto;box-shadow:0 0 0 1px rgba(0,0,0,.5) inset}
+#phDetail .ph-nm{font-family:var(--serif,serif);font-size:17px}
+#phDetail .ph-tag{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;padding:1px 6px;border-radius:6px;border:1px solid #33452c;color:#8fa585}
+#phDetail .ph-tag.dead{color:#a07a72;border-color:#4a332e}
+#phDetail .ph-grid{display:flex;flex-wrap:wrap;gap:3px 20px;color:#93a68c}
+#phDetail .ph-grid b{color:#d6e4cf;font-weight:500}
+#phDetail .ph-sub{color:#7d8f77;margin:8px 0 3px;font-size:11px;letter-spacing:.04em;text-transform:uppercase}
+#phDetail .ph-bar{display:flex;align-items:center;gap:7px;margin:2px 0}
+#phDetail .ph-bar i{display:block;height:6px;border-radius:3px;background:#6f9a4c;flex:0 0 auto}
+#phDetail .ph-mem{display:flex;flex-wrap:wrap;gap:5px;margin-top:3px}
+#phDetail .ph-mem button{font:inherit;font-size:11px;padding:2px 8px;border-radius:7px;cursor:pointer;
+  background:#182218;border:1px solid #2c3d28;color:#b9cbb2}
+#phDetail .ph-mem button:hover{background:#22301f}
+#phDetail .ph-note{color:#8a7f63;font-size:11.5px;line-height:1.45}

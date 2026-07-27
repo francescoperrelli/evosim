@@ -564,7 +564,10 @@ export function cultureIndex(){ return S.culture ? S.culture.idx : 0; }
 //     yardstick: the five functionless level-3 genes (tool/pyro/mark/techApt/terra)
 //     mutate with the same step and are clamped the same way, so the number that
 //     matters is fidelity MINUS that arm's own control-pool mean, not fidelity's
-//     distance from its founding 0.15. 4 seeds x 10000 ticks:
+//     distance from its founding 0.15. (`terra` was later found to be selected past
+//     ~25k ticks. This ran at 10k, below where its signal exists, so the pool is
+//     clean AS RUN -- but do not carry these five forward to a longer study without
+//     dropping terra. See the same caveat in genome.js.) 4 seeds x 10000 ticks:
 //         arm                             fidelity          ctrl pool   excess
 //         real teaching                   0.1883 +- 0.0056    0.2017    -0.013
 //         cost only (cultureGain 0)       0.2218 +- 0.0339    0.1950    +0.027
