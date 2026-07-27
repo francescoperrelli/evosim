@@ -67,9 +67,15 @@ function sections(b){
 }
 // Growing the brain by one hidden neuron.
 //
+// THIS IS THE DESIGN INTENT, WRITTEN BEFORE IT WAS MEASURED. Read it together
+// with THE DUPLICATION AUDIT below, which tests it against its own control and
+// disproves the second half of it. The sentences marked [1]..[4] are the ones
+// the audit contradicts; they are left standing, and marked, because the design
+// they describe is still the design — it just does not do what it claims.
+//
 // Inventing a neuron from scratch (the `else` branch) drops a random function
 // into a working circuit, so it is almost always harmful the moment it appears
-// and selection removes it before it can ever be refined. Real genomes do not
+// and selection removes it before it can ever be refined. [1] Real genomes do not
 // gain parts that way: they gain them by DUPLICATION, and the duplicate is
 // retained precisely because it changes nothing at first.
 //
@@ -79,10 +85,10 @@ function sections(b){
 // feature the lineage has been rewarded for detecting. What it does not inherit
 // is a voice — its outgoing weights start at ~0, so it is silent on arrival and
 // the circuit behaves exactly as it did before. The lineage pays only the
-// metabolic cost of the extra unit, so selection has no reason to remove it, and
+// metabolic cost of the extra unit, so selection has no reason to remove it, [2] and
 // a single later mutation on one outgoing weight recruits a ready-made detector
-// to a new job. That is what makes duplicates a cheaper source of function than
-// invention: the `else` branch has to random-walk a whole 20-dimensional input
+// to a new job. [3] That is what makes duplicates a cheaper source of function than
+// invention: [4] the `else` branch has to random-walk a whole 20-dimensional input
 // filter into something meaningful, which essentially never happens.
 //
 // The template is deliberately left untouched. Sharing the output between the
@@ -90,14 +96,29 @@ function sections(b){
 // model) is also exactly neutral on arrival, but it was measurably WORSE than
 // random invention here — a redundant twin adds no new feature to a hidden layer,
 // and every later deletion of one twin tears the shared function in half.
+//
+// P.dupMode is a research knob, not a game setting, and it exists only so the
+// claims above have a control. Leave it undefined and this function is the shipped
+// path, bit for bit — verified by fingerprinting 3 seeds x 3000 ticks against
+// `git show <base>:js/nn.js` and getting the same hash, population, generation and
+// creature-id counts. The three arms consume an IDENTICAL random stream (one
+// rand() for `j`, then 20 + 7 + 1 gauss() in that order), so they are PRNG-paired
+// at every structural event and differ only in what the drawn numbers are used
+// for. 'dup' inherits filter and bias and arrives silent; 'invent' is the `else`
+// branch's recipe run inside the evolvOn arm (random filter at 0.2, loud voice at
+// 0.2); 'silent' is the decomposition arm — random filter, silent voice — which
+// separates "inherits an evolved feature detector" from "arrives quiet".
 function addNeuron(b){
   const s = sections(b);
   if(P.evolvOn){
+    const mode = P.dupMode === undefined ? 'dup' : P.dupMode;   // research knob; see THE DUPLICATION AUDIT
+    const dup = mode === 'dup', loud = mode === 'invent';
     const j = rand() * b.nh | 0;                 // the template neuron
     const newW1 = new Array(NIN), newW2 = new Array(NOUT);
-    for(let i = 0; i < NIN; i++) newW1[i] = s.W1[j * NIN + i] + gauss() * 0.03;   // inherit the evolved feature detector
-    for(let k = 0; k < NOUT; k++) newW2[k] = gauss() * 0.02;                      // but arrive silent
-    return { nh: b.nh + 1, w: [...s.W1, ...newW1, ...s.B1, s.B1[j] + gauss() * 0.03, ...s.W2, ...newW2, ...s.B2] };
+    for(let i = 0; i < NIN; i++) newW1[i] = dup ? s.W1[j * NIN + i] + gauss() * 0.03 : gauss() * 0.2;
+    for(let k = 0; k < NOUT; k++) newW2[k] = loud ? gauss() * 0.2 : gauss() * 0.02;
+    const nb1 = dup ? s.B1[j] + gauss() * 0.03 : gauss() * 0.2;
+    return { nh: b.nh + 1, w: [...s.W1, ...newW1, ...s.B1, nb1, ...s.W2, ...newW2, ...s.B2] };
   }
   const newW1 = []; for(let i = 0; i < NIN; i++) newW1.push(gauss() * 0.2);
   const newW2 = []; for(let k = 0; k < NOUT; k++) newW2.push(gauss() * 0.2);
@@ -114,6 +135,137 @@ function removeNeuron(b){
   const W2 = s.W2.slice(0, j * NOUT).concat(s.W2.slice((j + 1) * NOUT));
   return { nh: nh - 1, w: [...W1, ...B1, ...W2, ...s.B2] };
 }
+
+// ---------------------------------------------------------------------------
+// THE DUPLICATION AUDIT. Everything above about duplication had been argued and
+// never measured against its own control. It has now been measured, and the
+// headline is a null: DUPLICATION BUYS NO FITNESS HERE. It is not harmful, it is
+// not a bug, and the duplicates it makes are real and long-lived — but on every
+// statistic that means "this lineage is doing better", duplication and random
+// invention are the same world.
+//
+// Harness: headless chromium, one process per (arm, seed), P.dupMode switching
+// the arm. Two batteries. (A) STRUCTURE, 20000 ticks (30000 on seed 11), census
+// every 500 ticks plus a per-neuron provenance census at the end; seeds
+// 11/23/37/53/71/89 for dup and invent, 11/23/37/53 for silent. Every neuron
+// carries a lineage tag through mutation, crossover and structural resize, so a
+// duplicate can be followed across generations and its incoming weights compared
+// against a frozen copy of what it was given at birth. (B) FITNESS, 10000 ticks,
+// 8 seeds (11/23/37/53/71/89/101/113), `income` accumulated from tick 3500 and
+// defined exactly as in culture.js finding 11: mean per-tick POSITIVE energy
+// delta per established body, computed from outside the world. All figures are
+// mean +- sd ACROSS SEEDS; paired figures are per-seed dup-minus-control.
+//
+// 1. NO FITNESS DIFFERENCE. Battery B, 8 seeds:
+//        dup      income 0.4856 +- 0.0217   pop 373 +- 36   nh 8.08 +- 0.58   maxGen 16.0 +- 4.2
+//        invent   income 0.4891 +- 0.0376   pop 319 +- 61   nh 8.02 +- 0.34   maxGen 16.6 +- 2.7
+//        silent   income 0.4724 +- 0.0311   pop 349 +- 60   nh 8.11 +- 0.35   maxGen 15.0 +- 1.9
+//    Paired dup-invent: income -0.0035 +- 0.0460 (sign 6/8), nh +0.055 +- 0.434,
+//    maxGen -0.63 +- 5.93. Income is the statistic this project uses to decide
+//    such questions and it is dead flat — the difference is a tenth of the
+//    between-seed sd and the wrong sign. Duplication does not make bodies richer,
+//    does not make brains bigger, and does not turn generations faster.
+//
+// 2. THE ONE THING THAT DID MOVE, AND WHY IT IS NOT A RESULT. Standing population
+//    is higher under duplication, and consistently so: +53.9 +- 51.6 bodies at
+//    10000 ticks (sign 6/8), and in battery A over ticks 2000..20008, dup 405 +- 43
+//    against invent 353 +- 22, paired +51.7 +- 29.3 with sign 6/6, t(5) = 4.32.
+//    That is a 15% population gap that survives pairing and lengthens with the
+//    run. I spent most of this study trying to make it mean something, and it
+//    does not, for two reasons. First, income is flat, so the extra bodies are
+//    not better bodies — and this file already contains the precedent: the RPE
+//    arm below moved population 11% the OTHER way with income flat, and that was
+//    correctly read as noise rather than harm. A population shift of this size
+//    with no income shift is what this world's between-seed variance looks like.
+//    Second, the decomposition arm kills it. If duplication won because it
+//    inherits an evolved detector, 'silent' — quiet arrival WITHOUT the inherited
+//    filter — should sit with 'invent'. It does not: paired dup-silent is
+//    income +0.0132 +- 0.0410 (sign 5/8) and pop +23.7 +- 57.8 (sign 4/8), i.e.
+//    nothing. On two seeds the population gap reverses outright. At n=2 seeds
+//    this arm looked like a clean confirmation of the design story; at n=8 it is
+//    a coin flip. Short runs and small n lie, in that order.
+//
+// 3. THE OLD FAILURE MODE IS GONE, BUT NOT FOR THE STATED REASON. The comment on
+//    removeNeuron is right that duplicates now survive: of the 314.5 +- 52.4
+//    duplications in a 20000-tick run (against 253.8 +- 42.3 deletions), 14.4% +-
+//    4.1% of the neurons created are still present at the end, the ones that are
+//    lost persisted a mean of 1755 +- 271 ticks (median 1025, so roughly two
+//    generations at ~600 ticks each), and the survivors have a mean age of
+//    4525 +- 3019 ticks. Nothing is being created and immediately pruned.
+//    But this is NOT because arriving silent protects it. The loud arm is
+//    retained at exactly the same rate — invent 14.5% +- 5.5%, silent 15.7% +-
+//    4.1%, against dup's 14.4% — and its lost neurons persist just as long
+//    (1687 +- 245 ticks). Retention is a property of removeNeuron picking
+//    uniformly, not of the duplicate being neutral. Claim [1] and claim [2] both
+//    fail on this: selection does not remove the loud invented neuron either.
+//
+// 4. DUPLICATES DIVERGE, BY PURE DIFFUSION, AND ARE NEVER RECRUITED. Outgoing
+//    (hidden->output) rms of a duplicate, binned by its age in ticks, against a
+//    founding neuron's 0.441 +- 0.039:
+//        0-1k 0.077 | 1-2.5k 0.090 | 2.5-5k 0.110 | 5-10k 0.143 | 10-20k 0.235 | 20k+ 0.234
+//    Now the null model. mutateBrain adds gauss()*P.mut*0.6 to every weight once
+//    per generation, i.e. sd 0.048, and a generation is ~600 ticks, so a neuron
+//    that started at 0.02 and was touched by nothing but mutation would read
+//    sqrt(0.02^2 + g*0.048^2): 0.070 at g=2, 0.118 at g=6, 0.167 at g=12, 0.240
+//    at g=25. The measured curve IS that curve. A duplicate's voice is a free
+//    random walk from silence; it is not being pushed up by selection, and it
+//    never reaches founder scale even after 20000 ticks of being alive. Claim [3]
+//    — "a single later mutation recruits a ready-made detector to a new job" — is
+//    not observed at any age, in any arm, on any seed.
+//
+// 5. THE INHERITED FILTER IS REAL AND IT DOES PERSIST. This is the half of the
+//    design that works. A duplicate's incoming weights stay at founder magnitude
+//    (rms 0.427 +- 0.043 against founders' 0.440 +- 0.045) and stay pointed where
+//    they were pointed: cos with a frozen copy of what it was handed at birth is
+//    0.877 +- 0.043, cos with the template as the template is NOW is 0.826 +-
+//    0.065, and |dW1|/|W1| is 0.455 +- 0.081 — consistent with the same 0.048
+//    per-generation walk on a vector of norm ~2, which erodes the filter but does
+//    not erase it over a duplicate's observed lifetime. The template is still
+//    alive in the same brain 94% of the time. The `else` branch, for contrast,
+//    genuinely cannot hold a filter: incoming rms 0.225 +- 0.017, cos with its own
+//    birth state -0.01 +- 0.09, |dW1|/|W1| 1.151 +- 0.046. Its filter is re-drawn
+//    by drift faster than it is built. Claim [4] is CONFIRMED. So duplication does
+//    hand its offspring a proven detector, and that detector does last — there is
+//    simply nothing in this world that then pays for using it.
+//
+// 6. HOW MUCH OF A BRAIN IS DUPLICATE-DERIVED. At the end of a 20000-tick run,
+//    12.9% +- 6.2% of the hidden neurons in live brains trace to a duplication
+//    event; on the single 30000-tick run it is 23.5%. The other ~87% (~77% at
+//    30k) are still the founding architecture handed out by randomBrain. The
+//    share climbs roughly linearly with run length, so duplication is slowly
+//    turning the layer over — it is just turning it over neutrally.
+//
+// 7. WHY, IN ONE NUMBER. A hidden neuron costs 0.0016 energy per tick
+//    (metabolism() in genome.js). Measured income is 0.486 per body per tick. So
+//    a neuron is 0.33% of a body's income and a whole eight-neuron hidden layer
+//    is 2.6%. genome.js's cost sweep established that a trait in this world is
+//    selectable only when its consequence is tens of percent of the body's energy
+//    budget, and that a few percent is drift no run length repairs. Neuron count
+//    sits an order of magnitude below that line, which is why all three arms
+//    settle at nh ~ 8.1 regardless of what an added neuron does, why a silent
+//    duplicate is never purged, and equally why a loud invented one is never
+//    purged either. The duplication machinery is not failing; it is operating
+//    entirely inside the drift zone, where selection has no grip on anything it
+//    produces. Making it matter would mean making brain size expensive enough to
+//    hurt — and genome.js's sweep says that costs a fifth of the population
+//    before the gene even starts responding.
+//
+// WHAT THIS DOES NOT SHOW. It does not show duplication is harmful; income and
+// generation turnover are flat, not worse. It does not test worlds where a brain
+// is under real pressure (P.mut far from 0.08, a much larger MAX_NH, or a
+// metabolic price on nh in the tens-of-percent range) — the audit's own point is
+// that such a world is where the mechanism would first become visible, and it is
+// not the shipped one. And it does not test beyond 30000 ticks on a single seed;
+// the duplicate-derived share of the layer is still climbing there, so a world
+// run to fixation might yet look different.
+//
+// KEPT AS THE DEFAULT ANYWAY. It costs nothing, it is not worse than its control
+// on any statistic, it is the biologically honest way for a layer to grow, and
+// finding 5 shows the one mechanical claim under it — that a duplicate carries a
+// real, persistent, evolved filter — is true. What is retired is the claim that
+// this buys the lineage anything. P.dupMode stays because it is the control that
+// retires it.
+// ---------------------------------------------------------------------------
 
 // `scale` is the parent's own mutability (genome.js passes mutScale(g)). The brain
 // is part of the phenotype like any other organ, so a mutator lineage must garble
