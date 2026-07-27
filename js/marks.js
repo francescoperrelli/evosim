@@ -76,7 +76,9 @@
 // on how many of your neighbours share it, and offspring are born ~6px from their
 // parent, so your neighbours are mostly kin. That is the assortment lever the
 // economy note points at, and it is the only lever available here. It was not
-// enough — see section 2 below, where the no-reader control comes out the same.
+// enough — see section 2 below, where the no-reader control comes out the same,
+// and section 4, where attaching a real energetic payoff to decoding a mark
+// correctly was built, measured over 20 000 ticks, and removed again.
 //
 // Reading is NOT restricted to kin. It would have been trivial to tag each mark
 // with its writer's lineage and let only relatives read it, and that would have
@@ -175,6 +177,123 @@
 //    within-lineage. Viscosity does deliver strong assortment, and it is still not
 //    enough to make agreement a selectable private good — which is the economy note
 //    turning out to be right in the direction it did not want.
+//
+// 3. WAS THE RUN SIMPLY TOO SHORT? NO. Sections 1 and 2 were measured at 9000
+//    ticks, and elsewhere in this repo a gene that genuinely evolves (dispersal)
+//    needed 24 000 ticks to move. So the whole level-3 set was re-run at 40 000
+//    ticks, 3 seeds (1234/2024/4048), each arm against the control its own module
+//    names, with tools carried along as a positive control. Tools reproduced (see
+//    the paired-window table in tools.js), so the harness is sound. Marks did not.
+//
+//    Two things have to be said about the baseline before any number below means
+//    anything. Mutation on g.mark is a gaussian clamped into [0,1], whose
+//    stationary distribution is NOT concentrated at 0.19 — it is uniform. The
+//    "0.19 is where a functionless gene sits" rule of thumb is a 10 000-tick
+//    TRANSIENT, not a fixed point. Measured on the marks-off control, mean g.mark
+//    per 10k window: 0.17 -> 0.29 -> 0.39 -> 0.47, with the between-seed sd
+//    growing from ~0.02 to ~0.10. Longer runs raise the control and widen its
+//    spread at the same time, so they buy statistical power only for effects that
+//    grow faster than that. Marks' does not: at 20 000 ticks mean g.mark is
+//    0.399 +- 0.060 with the mechanic fully on and 0.374 +- 0.103 with its payoff
+//    removed. Overlapping, and both merely on their way to 0.5.
+//
+//    The second thing is that DECODE ERROR RISES WITH TIME, in every arm, and
+//    that is not a failure — it is the diffusion of section 2 running longer.
+//    Shipped, mean over 3 seeds: 0.141 (5k) -> 0.175 (10k) -> 0.318 (15k) ->
+//    0.261 (20k), while modal-convention share falls 0.74 -> 0.66 -> 0.48 -> 0.46.
+//    The world starts on one convention and ends on two or three. Nothing selects
+//    against that, so it happens.
+//
+// 4. A PAYOFF FOR READING A MARK RIGHT. BUILT, MEASURED, AND REMOVED.
+//    Section 1's honest headline is that signalling here works and does not pay,
+//    which points at one obvious repair: give the CONTENT of a mark a fitness
+//    consequence, so that decoding it correctly is worth something and decoding it
+//    wrong is not. This was implemented in full and it is not in this file, so
+//    here is exactly what it was and exactly why it went.
+//
+//    GLEANING. A forage deposit left R_GAIN edible residue on its site (a new
+//    field `m.r`, capped per site at R_MAX, carried through pack/unpackMarks).
+//    A body of the same species band that decoded that mark's glyph as FORAGE and
+//    was standing inside the read radius took up to GLEAN of it per step, and it
+//    was gone once taken. A body that decoded the same mark as DANGER or GATHER
+//    walked away from a meal it was standing on. That is frequency-dependent by
+//    construction: the residue goes to whichever rotation the local writers use,
+//    which is the majority, which is the only selective force this module can
+//    have. leave()'s situation priority was also reordered to put FORAGE ahead of
+//    DANGER, because instrumenting the glyph mix showed writes splitting
+//    0.3 forage / 3.7 danger / 2.7 gather per tick — danger fired on nearly every
+//    body and crowded the only situation with a payoff out of the map.
+//
+//    SIZING IS THE WEAK POINT, and it is worth recording because it says something
+//    about the world. The channel is self-amplifying in BOTH directions: its
+//    supply is forage deposits, and forage deposits are made by bodies that just
+//    ate well. Energy delivered per tick over the first 10 000 ticks, 3 seeds:
+//
+//      R_GAIN/R_MAX/GLEAN     seed 1234   seed 2024   seed 4048   pop range
+//      120 / 400 / 4.0        35-41       32-45       115-320     490-1042
+//       60 / 200 / 2.5         4-5         4-5          2-4       290-572
+//
+//    Halving the dial did not halve the channel, it collapsed it sevenfold: less
+//    food means a smaller, hungrier population, which writes fewer forage marks,
+//    which leaves less residue. There is no comfortable middle setting. Earlier
+//    sizings failed the other way: GLEAN_R2 = 30^2 with R_GAIN 9 and GLEAN 0.75
+//    delivered 0.6 energy/tick, and widening the radius to READ_R2 with GLEAN 3.0
+//    only reached 0.5-0.9, because the binding constraint was never the radius —
+//    it was that almost nothing was writing FORAGE at all.
+//
+//    THE MEASUREMENT, at the upper sizing (120/400/4.0), 20 000 ticks, 3 seeds,
+//    three arms: shipped-plus-payoff, payoff removed (P._marks.payoff = 0, the
+//    one-thing-changed control), and the section 1 shuffle control with the payoff
+//    left on. Between-seed sd in brackets.
+//
+//      t       decode err              modal share            pop
+//              pay    nopay   shuf     pay    nopay  shuf     pay   nopay  shuf
+//       5000   .141   .113    .568     .736   .795   .801     676   346    405
+//      10000   .175   .193    .544     .661   .698   .676     585   516    610
+//      15000   .318   .249    .605     .478   .568   .472     392   316    385
+//      20000   .261   .260    .569     .459   .535   .447     589   491    723
+//      (sd at 20000: derr .021/.082/.068, pop 122/66/366)
+//
+//    Paired by seed, payoff minus no-payoff decode error, 12 contrasts:
+//      5k   -0.015  -0.020  +0.119
+//      10k  +0.000  -0.052  -0.003
+//      15k  -0.130  +0.146  +0.192
+//      20k  -0.118  +0.057  +0.063
+//    Seven negative, four positive, one zero, mean +0.020. THE PAYOFF DOES NOT
+//    MAKE BODIES DECODE MARKS ANY BETTER. Modal-convention share is if anything
+//    LOWER with the payoff on (0.459 vs 0.535 at 20k), so it does not slow the
+//    diffusion either, and mean g.mark is 0.399 +- 0.060 against 0.374 +- 0.103.
+//
+//    What the payoff did do is feed everyone: population 589 +- 122 against
+//    491 +- 66, and 32.3 generations by 20 000 ticks against 24.7. The channel was
+//    delivering 66-128 energy a tick. It is a real, large energy flow, and it is
+//    invisible to the gene it was built to select.
+//
+//    The shuffle arm is what kills the idea rather than merely failing to save it.
+//    With glyphs permuted every step the content is noise, decode error sits at
+//    0.569, and the arm STILL collects 23-132 energy a tick — because the residue
+//    rides the mark record and a scrambled glyph is still read as FORAGE by
+//    someone one time in three. Its population at 20 000 ticks is 723, the highest
+//    of the three arms. Same calories, zero information, same or better fitness.
+//    That is a food faucet wearing a semantics costume, and shipping it would put
+//    exactly the kind of hand-scripted mechanism this repo tries to keep visible
+//    behind a claim about meaning. The code was reverted in full; only this note
+//    and the P._marks.payoff knob's absence remain. The shipped module is
+//    unchanged, so its cost is still the 0.185 ms/step in the COST section.
+//
+//    WHY IT FAILED, stated so the next attempt starts further along. Mis-decoding
+//    a mark is not punished, it is merely unrewarded: the wrong-rotation body
+//    walks past a meal and eats something else. In a world where food regrows
+//    everywhere on a logistic and the population sits near carrying capacity,
+//    "you found this particular meal fractionally sooner" is worth a fraction of a
+//    percent of a lifetime energy budget, which is precisely the regime the cost
+//    sweep above metabolism() in genome.js says is indistinguishable from drift.
+//    Frequency dependence does not rescue it, because frequency dependence
+//    multiplies a payoff that is already too small to see. A payoff that COULD
+//    work would have to make the wrong reading actively lethal — decoding a
+//    danger mark as forage and walking into a predator — and that requires
+//    world.js to route mark-derived steering into the predator-encounter path,
+//    which is not this module's to change. See the report note on world.js.
 //
 // TUNINGS REJECTED, with the numbers that rejected them. Do not re-try these.
 //   * A stronger PULL. Sweep of the steering weight over 3 seeds, 9000 ticks:

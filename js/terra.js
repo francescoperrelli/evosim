@@ -79,6 +79,65 @@
 // walk, not selection. It is the same signature village.js recorded for `civic`
 // and genome.js for `fidelity`.
 //
+// ***************************************************************************
+// --- 1b. THAT VERDICT IS OVERTURNED AT 40 000 TICKS. THE RUN WAS TOO SHORT. --
+// ***************************************************************************
+// The measurement above is correct as far as it goes and its own last bullet said
+// what was wrong with it: 14000 ticks is ~21 generations, and nothing with a small
+// coefficient is resolvable in 21 generations. Re-run at 40 000 ticks (~41
+// generations, S.maxGen 41 at t=40000) the arms separate cleanly and in every seed.
+//
+// 15 runs, 3 seeds (1234 / 2024 / 4048) x 5 arms x 40 000 ticks, one short-lived
+// headless process per (arm, seed), population-mean `terra` sampled every 1000
+// ticks. The control is TERRA.payoff = 0 as before. The other FOUR arms all leave
+// terra at its shipped settings while knocking out an unrelated mechanic (fire off,
+// tools off, marks shuffled, or nothing at all), so they are four independent
+// replicates of "payoff on" against the same three seeds — 12 paired contrasts.
+//
+//   window     mean(payoff-on  -  payoff-off), paired by seed   n positive
+//   0-5k       -0.005  (sd 0.016)                                5/12
+//   5-10k      +0.004  (sd 0.047)                                7/12
+//   10-15k     +0.036  (sd 0.083)                                8/12
+//   15-20k     +0.063  (sd 0.111)                                8/12
+//   20-25k     +0.142  (sd 0.108)                               11/12
+//   25-30k     +0.155  (sd 0.114)                               12/12
+//   30-35k     +0.171  (sd 0.113)                               12/12
+//   35-40k     +0.232  (sd 0.163)                               11/12
+//
+// Endpoint means over 30-40k: payoff-off 0.265 +- 0.078 (.269/.186/.341) against
+// 0.485 +- 0.147 for the shipped arm and 0.418 / 0.448 / 0.518 for the other three
+// payoff-on arms. THE SIGNAL DOES NOT EXIST BEFORE ~20 000 TICKS AND IS UNAMBIGUOUS
+// AFTER 25 000. That is the whole finding: this gene is under real but weak
+// selection, and 14000 ticks is inside the interval where selection has not yet
+// beaten the mutational random walk. Nothing about the mechanic changed; only the
+// length of the observation did.
+//
+// Two things to keep honest about it:
+//   * The trajectory is monotone. It is NOT "it moved and a population crash reset
+//     it" — the paired difference grows in every window from 10k on and never
+//     retraces, across four independent payoff-on arms.
+//   * The control is not a fixed baseline. A functionless level-3 gene sits near
+//     0.19 at 6-10k ticks (which is what every earlier level-3 write-up quotes) but
+//     it does not stop there: the mutation operator is a gaussian clamped into
+//     [0,1], whose stationary distribution is uniform, so a neutral gene keeps
+//     diffusing toward a population mean of 0.5. Measured: the tools-off control
+//     gene reaches 0.505 +- 0.115 and the fire-off control 0.526 +- 0.097 by
+//     30-40k. Long runs therefore do NOT buy free statistical power — the
+//     between-seed sd of a neutral gene grows with time too (0.02 at 5k, 0.10-0.16
+//     at 40k). Terra separates because its effect grows faster than that spread,
+//     not because the noise went away.
+//
+// The structural objections in the bullets below are all still true — the return is
+// spatial, the modal improved cell is empty, the public channel feeds free riders,
+// and fertilityAt() cannot grow a planet's carrying capacity. The correct reading
+// is that they bound the size of the coefficient, not its sign, and 40 generations
+// is enough time for a coefficient that small to express. ASSORTMENT STILL DOES NOT
+// APPEAR TO BE THE LEVER: at 30-40k the kin arm (shipped, assort = 1) and the three
+// arms that also run assort = 1 are all in the same band, and this batch did not
+// re-run assort = 0, so what is demonstrated is PAYOFF vs NO PAYOFF, not kin vs
+// commons. Re-running the assort = 0 arm at 40 000 ticks is the obvious next
+// measurement and it has not been done.
+//
 // ASSORTMENT DID NOT RESCUE THE GENE. The reason is structural, not a tuning
 // failure, and it is worth writing down precisely:
 //
