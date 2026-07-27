@@ -197,7 +197,11 @@ export function floraTick(){
   // cropped rootstocks put up new leaves with the same chemistry — a grazed toxic
   // plant is a survivor, not a casualty, and that is what defence is for
   if(regrow.length){
-    const cap = P.maxFood * (S.planets.length || 1) * 1.15;
+    // world.js publishes the world's true total capacity, which is the sum of the
+    // per-planet ceilings after each has been scaled by its ground's fertility.
+    // Before that existed this read P.maxFood * planets flat, which quietly told
+    // a fertile world it could hold no more resprouts than a barren one.
+    const cap = (S.foodCap || P.maxFood * (S.planets.length || 1)) * 1.15;
     for(let i = regrow.length - 1; i >= 0; i--){
       const r = regrow[i];
       if(S.tick < r.t) continue;
