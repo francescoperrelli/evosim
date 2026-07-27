@@ -77,6 +77,64 @@
 // It is still not enough to make the gene selectable, and this comment says so
 // rather than quoting the +1.78 and stopping there.
 //
+// ---------------------------------------------------------------------------
+// RE-TESTED AT 40 000 TICKS. THE VERDICT HARDENS: `pyro` IS NOT MERELY NEUTRAL,
+// IT IS SELECTED DOWN.
+// ---------------------------------------------------------------------------
+// The obvious alternative explanation for section 4 was that 8000 ticks (~13
+// generations) is simply too short for weak selection to express — and for terra.js
+// that explanation turned out to be correct, so it had to be tested here too.
+// 3 seeds (1234 / 2024 / 4048) x 40 000 ticks (~41 generations) x 5 arms, one
+// short-lived headless process per (arm, seed), population-mean `pyro` sampled every
+// 1000 ticks. Control is P.fireOn = false; the four other arms all run fire at its
+// shipped settings, so they are four independent replicates against the same seeds.
+//
+//   window     mean(fire-on  -  fire-off) `pyro`, paired by seed   n positive
+//   0-5k       +0.004  (sd 0.012)                                   8/12
+//   5-10k      +0.005  (sd 0.025)                                   7/12
+//   10-15k     -0.045  (sd 0.075)                                   3/12
+//   15-20k     -0.077  (sd 0.092)                                   3/12
+//   20-25k     -0.029  (sd 0.099)                                   4/12
+//   25-30k     -0.096  (sd 0.136)                                   3/12
+//   30-35k     -0.158  (sd 0.196)                                   3/12
+//   35-40k     -0.188  (sd 0.162)                                   1/12
+//
+// Endpoint over 30-40k: fire-off 0.526 +- 0.097, fire-on arms 0.289 to 0.435. Note
+// that the fire-off number is not 0.16 any more — a neutral gene under this
+// mutation operator (gaussian clamped into [0,1], stationary distribution uniform)
+// keeps diffusing toward 0.5, and by 40k it is most of the way there. The 0.158 in
+// section 4 was a transient, not a baseline.
+//
+// So the long run does not rescue fire; it convicts it. Once there is enough time
+// for anything at all to express, what expresses is the COST — LIGHT_E = 7 per
+// ignition plus the hazard of standing in one's own flame — and the aged-scar
+// payoff never arrives on the body that paid. 11 of 12 paired contrasts are
+// negative in the last window. The gene is being pushed below its own drift control
+// at a rate the earlier 8000-tick run had no power to see.
+//
+// WHY, PRECISELY, AND WHY IT IS NOT A TUNING PROBLEM. Note the budget paragraph
+// further down this file: fertilityAt() chooses WHERE a seed lands and never HOW
+// MANY land, so the seed rain is conserved and an ash bloom cannot add plants to
+// the world — it can only pull the existing rain toward itself. Fire's payoff is
+// therefore a POSITIONAL good on top of being a public and a delayed one. terra.js
+// records the identical structural finding for the identical reason. Making SCORCH,
+// RICH, DELAY or IGNITE_P bigger cannot fix that: they change how the same fixed
+// seed rain is redistributed, and genome.js's cost sweep already establishes that
+// redistribution worth a few percent of an energy budget is invisible to selection
+// in this world. The one change that would give this mechanic a real coefficient is
+// in world.js and not in this file: make plant regrowth RATE (not just placement)
+// respond to mean fertility, so that improved ground raises a planet's carrying
+// capacity instead of merely reallocating it. Until that exists, `pyro` is a gene
+// whose costs are private and immediate and whose benefits are public, delayed AND
+// conserved, which is the worst combination this economy offers.
+//
+// NOT ATTEMPTED, and deliberately: bolting a direct energy trickle onto aged scars
+// so that a body standing on ash is fed by this module. It would work — marks.js
+// shows an added private energy channel of the right size does move a level-3 gene
+// — but it would be a second food source wearing fire's name, and it would not be
+// the delayed niche-construction payoff this module exists to test. The honest
+// result is the negative one, and it is recorded here rather than tuned away.
+//
 // ===========================================================================
 // HOW SPREAD IS BOUNDED, AND WHY IT IS NOT A CAP
 // ===========================================================================

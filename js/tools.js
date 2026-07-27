@@ -131,6 +131,42 @@
 // at these constants. Everything is behind P.toolsOn; with the flag off the world
 // is bit-identical to the pre-tools build, verified on 3 seeds x 1500 steps.
 //
+// ---------------------------------------------------------------------------
+// USED AS THE POSITIVE CONTROL IN THE 40 000-TICK LEVEL-3 RE-MEASUREMENT, AND IT
+// REPRODUCES. The other three level-3 mechanics were re-run at 40 000 ticks to test
+// whether their negative verdicts were an artefact of 6-10k-tick runs (for terra.js
+// it turned out they were). Tools was included so that a null result there would
+// convict the harness rather than the world.
+//
+// 3 seeds (1234 / 2024 / 4048) x 40 000 ticks, control P.toolsOn = false, and four
+// independent tools-on arms (shipped, fire off, terra payoff off, marks shuffled)
+// = 12 paired contrasts per window:
+//
+//   window   mean(tools-on - tools-off) `tool`   n positive
+//   0-5k     +0.006 (sd 0.017)                    8/12
+//   5-10k    +0.070 (sd 0.027)                   12/12
+//   10-15k   +0.098 (sd 0.067)                   12/12
+//   15-20k   +0.138 (sd 0.090)                   12/12
+//   20-25k   +0.166 (sd 0.109)                   12/12
+//   25-30k   +0.085 (sd 0.149)                    9/12
+//   30-35k   +0.135 (sd 0.151)                   10/12
+//   35-40k   +0.170 (sd 0.138)                   11/12
+//
+// Same sign as the 10 000-tick measurement above, in the same direction, from
+// 5000 ticks onward. The harness is sound.
+//
+// One thing the long run adds, and it matters for reading every level-3 write-up in
+// this repo: THE 0.19 DRIFT BASELINE IS A TRANSIENT, NOT A FIXED POINT. The mutation
+// operator is a gaussian clamped into [0,1] and its stationary distribution is
+// uniform, so a functionless gene does not stop at 0.19 — it keeps diffusing toward
+// a population mean of 0.5. Measured on this very control: `tool` with toolsOn=false
+// reaches 0.165 (0-10k), 0.327 (10-20k), 0.480 (20-30k), 0.505 +- 0.115 (30-40k).
+// The between-seed sd of the control grows with it, 0.016 -> 0.115. Longer runs
+// therefore do not buy free power; they buy it only for effects that grow faster
+// than that spread. Quote 0.19 as the baseline for a ~10 000-tick run and nothing
+// else.
+// ---------------------------------------------------------------------------
+//
 // Cost: 0.138 ms per step for carry + tryEat + killBonus over 343 bodies plus
 // toolTick over 2324 shells (median of 5, range 0.101-0.158), against a whole
 // step of ~5 ms — differencing whole steps puts it under this box's noise floor.
