@@ -63,6 +63,307 @@
 //     just split cannot split again for COOL ticks. Without those brakes drift
 //     alone shatters the population into singletons every generation, which is
 //     bookkeeping, not speciation.
+//
+// ===========================================================================
+// WHAT ISOLATION ACTUALLY PRODUCES, MEASURED. Read this before tuning anything.
+//
+// The four questions were: does allopatric divergence happen at all; does
+// secondary contact ever occur at the shipped dispersal rate; what happens when
+// it does; and is P.specThresh calling these separations "species" consistently
+// with the genetic distance the world actually generates.
+//
+// METHOD. Headless chromium over the tests/sim.test.mjs harness, seed() then a
+// bare step() loop, sampling every 2500 ticks. The statistic is the distance
+// between two groups' centroids in tv()'s own eight weighted axes — the same
+// space compatible() judges in, so a number here is directly comparable to
+// P.specThresh. Group centroids are noisy, and the noise grows as the groups
+// shrink, so every figure below is SAMPLING-NOISE CORRECTED: for two samples of
+// one cloud with per-axis variance v_k, E|cA-cB|^2 = sum_k v_k (1/na + 1/nb),
+// and the reported value is sqrt(max(0, raw^2 - noise^2)). Bands are measured
+// separately and never pooled; a pair needs 8 bodies a side to be counted.
+//
+// THREE CONTROLS, at the same tick and the same run length, never optional:
+//   * even/odd creature id inside ONE planet — a pure sampling null. It returns
+//     0.016 +- 0.014 (max 0.069) over 64 samples, which is how we know the
+//     correction above works rather than merely sounds plausible.
+//   * left/right SPATIAL halves of one planet — real population structure with
+//     gene flow left switched on. This is the control that actually threatens
+//     the result and it is the one quoted in every table below.
+//   * a 20-gene panel that tv() never reads (altruism, trade, tribal, pyro...),
+//     as an independent set of axes.
+//
+// --- 1. ALLOPATRIC DIVERGENCE IS REAL, AND ITS SIGNATURE IS DRIFT ---
+//
+// P.dispOn = false, 4 planets, 4 seeds (11 / 55 / 321 / 777) x 40 000 ticks,
+// herbivores. Mean +- sd ACROSS SEEDS of the corrected between-planet distance,
+// against the two within-planet controls at the same tick:
+//
+//   tick     between-planet     spatial halves   even/odd
+//     150    0.019 +- 0.009 *   0.015            0.030      * 5 seeds, founding
+//    2500    0.144 +- 0.028     0.177            0.015
+//    5000    0.194 +- 0.010     0.226            0.015
+//   10000    0.326 +- 0.013     0.166            0.032
+//   20000    0.370 +- 0.111     0.120            0.018
+//   30000    0.534 +- 0.104     0.143            0.007
+//   40000    0.575 +- 0.179     0.084            0.018
+//
+// Endpoint per seed 0.490 / 0.572 / 0.825 / 0.413. The between-planet number
+// climbs in all four seeds; the spatial control is FLAT for the whole run
+// (0.143 +- 0.066 over 64 samples, 0.163 in the first half of the run against
+// 0.123 in the second). At 40 000 ticks isolation has produced roughly seven
+// times what within-planet structure produces, and the two curves have opposite
+// shapes. Isolation is doing something that distance alone does not.
+//
+// It is doing DRIFT, not adaptation. A one-parameter fit d = k*sqrt(t) — the
+// neutral random-walk law — gives k = 2.62 / 3.05 / 3.19 / 3.05 e-3 per
+// sqrt(tick) with R^2 = 0.78 / 0.89 / 0.74 / 0.51. The 20-gene panel tv() never
+// reads diverges in lockstep (0.20 at 2500 -> 1.37 at 40 000), which is what
+// drift does to every axis at once and what a diet- or terrain-specific
+// selective response would not.
+//
+// THE OBVIOUS CONFOUND, KILLED. world.js re-seeds a planet with 20 fresh
+// randomGenome() bodies whenever its herbivores hit zero, and that fired 10 / 20
+// / 46 / 11 times in these four runs. A planet re-rolled from the founding
+// distribution could plausibly manufacture between-planet distance out of
+// nothing. Measured at t = 150-300 across 5 seeds, two planets freshly drawn from
+// that distribution sit 0.019 +- 0.009 apart — indistinguishable from the
+// even/odd null. The rescue is therefore a HOMOGENISING force that drags the
+// statistic back toward 0.02, and the runs reach 0.41-0.83 anyway. It cannot be
+// the cause; if anything it makes the measurement conservative. (Seed 321 has the
+// most rescues, 46, and the highest endpoint, 0.825, so the confound does not
+// even correlate in the direction it would need to.)
+//
+// READ THE LIMITS HONESTLY:
+//   * The spatial control rules out cluster composition. It does not rule out
+//     DISTANCE: two planets are farther apart than two halves of one planet, and
+//     this world has no same-planet pair at matched separation with gene flow
+//     blocked, so "barrier" and "far" are not separated by anything here.
+//   * The 20-gene panel is neutral to tv(), not neutral to selection — several of
+//     those genes are read by the level-2/3 modules. It is an independent-axes
+//     check, not a proof of neutrality.
+//   * genome.js's warning that a functionless gene diffuses toward 0.5, which
+//     would pull two isolated populations back together and SHRINK the apparent
+//     divergence at long run lengths, DID NOT BITE inside 40 000 ticks: trait
+//     variance rose in every seed (0.087 -> 0.127, 0.121 -> 0.144, 0.099 ->
+//     0.161, 0.121 -> 0.151) and the between-planet distance ends at its
+//     highest value in all four. Past 40 000 it may. This measurement does not
+//     say what happens at 100 000, and the mechanism that would cause it is real.
+//
+// --- 2. THE SAFETY NET IS A CROSS-PLANET GENE-FLOW CHANNEL ---
+//
+// Herbivores are quoted above because they are the only band with no artificial
+// gene flow. world.js's reinforce() copies a living omni/carn's whole genome AND
+// its lineage onto a starved planet every 25 ticks. With dispersal off and zero
+// crossings, 322/387, 454/484, 410/519 and 361/413 reinforcement births still
+// landed on a planet other than their lineage's founding planet — a hidden
+// cross-planet channel running at roughly 85% of all reinforcements, in a world
+// whose whole premise is that the void cannot be crossed. Same worlds, same
+// ticks, same statistic, at 40 000:
+//
+//   seed        11      55     321     777     mean
+//   herb     0.490   0.572   0.825   0.413    0.575    (geography only)
+//   omni     0.195   0.421   0.547   0.491    0.414    (geography + reinforce())
+//
+// Four seeds out of four, same direction. The confound is that omnivores also
+// differ from herbivores in population size and in being sexual, so this is an
+// upper bound on reinforce()'s effect and not a clean isolation of it — but any
+// measurement of isolation that POOLS THE BANDS understates it by about a third.
+//
+// --- 3. SECONDARY CONTACT: NONE FOR 10 000 TICKS, THEN A FLOOD ---
+//
+// Shipped parameters, seeds 11 and 55 to 40 000 ticks and seed 321 to 30 000. A
+// surviving creature id whose planet index changes between ticks is provably a
+// dispersal: world.js reverts every other step into the void, so nothing else can
+// produce it. Crossings by living bodies, per 4000-tick window:
+//
+//   seed   0-4k   4-8k   8-12k   12-16k   16-20k   20-24k   24-28k   total
+//     11      1      1       2       21       67      117       71    1007
+//     55      0      3      10       29      118      168      172     878
+//    321      0      1      17       33       78      233      238     769
+//
+// (The event log caps at 600 entries, so the windows past 28k are truncated; the
+// totals are complete.) All three seeds do the same thing: essentially nothing
+// for the first eight to ten thousand ticks, and then it does not stop.
+//
+// The gate is drift, not adaptation. tryDisperse() requires g.disperse >=
+// P.dispThresh = 0.5; genome.js already records `disperse` as DRIFT with a 30k
+// midpoint of 0.556; and the count of bodies over the gate goes 1 -> 14 -> 47 ->
+// 150 -> 199 as the population mean walks 0.105 -> 0.343. P.dispThresh sits
+// essentially ON the neutral attractor of the gene that opens it, so the shipped
+// world spends its opening as four sealed planets and the rest of its life as one
+// — and the switch-over is a random walk arriving, not a strategy succeeding.
+// It is not selection for dispersal: at 40 000 the population mean `disperse` is
+// 0.343 with the void crossable against 0.247 / 0.331 with it sealed — same band,
+// no separation. Colonisation of all four planets completes at t = 16000 (seed 11),
+// t = 12500 (seeds 55 and 321).
+//
+// --- 4. WHAT HAPPENS ON CONTACT: DISPLACEMENT, ALMOST NEVER MERGING ---
+//
+// The clean case first. Planet 2's herbivores, seed 11 — two arrivals, opposite
+// outcomes, separated by exactly the thing compatible() measures:
+//
+//   tick   immigrants  residents  frac  d(imm,res)  species called
+//   12000       4 (from pl0)  60   0.06     0.136   SAME  (1 vs 1)
+//   16000       5 (from pl0)  28   0.14     0.322   SAME  (1 vs 1)
+//   20000      29 (from pl3)  27   0.52     0.680   DIFFERENT (24 vs 22)
+//   24000     115 (from pl3)   0   1.00       --    resident gone
+//   28000     134 (from pl3)   0   1.00       --
+//   40000      21 (from pl3)   0   1.00       --
+//
+// The pl0 lineage arrived 0.136 away, inside P.specThresh, and MERGED — it never
+// appears again as a distinct group because it stopped being one. The pl3 lineage
+// arrived 0.680 away, could not exchange a single gene with the residents, and
+// DISPLACED them: 27 residents to 0 in 4000 ticks while the immigrants went
+// 29 -> 115. Coexistence as a distinct cluster existed for exactly one 4000-tick
+// window, at 29 against 27.
+//
+// Displacement is the normal outcome, not the interesting exception. Across the
+// three shipped seeds, 26 of 96 herbivore contact episodes read resident count 0
+// with 10 or more immigrants standing on the planet (13 of 19 in seed 11, 7 of 50
+// in seed 55, 6 of 27 in seed 321). Nothing in any run looks like two populations
+// settling into a stable hybrid zone.
+//
+// THE SEEDS DISAGREE ABOUT THE ENDING, AND THAT MATTERS.
+//   * Seed 11 ends in a GLOBAL SWEEP. From t = 24000 every contact episode reads
+//     residents 0, fraction 1.00; distinct lineages fall 40 -> 3, extant species
+//     16 -> 6, and the herbivore between-planet distance collapses 0.421 (24000)
+//     -> 0.009 (36000) -> 0.000 (40000). One lineage founded on planet 3 holds all
+//     four planets, and forty thousand ticks of allopatry is undone in twelve.
+//   * Seed 321 goes the same way and is not quite finished at 30 000. A single
+//     lineage founded on planet 3 takes planet 2 (residents 0 from t = 20000),
+//     planet 0 (0 by 30000) and is at 21 against 26 on planet 1 when the run ends.
+//     Lineages 81 -> 3, extant 13 -> 7, between-planet distance 0.383 (17500) ->
+//     0.185 (30000) and still falling.
+//   * Seed 55 does NOT. Two clades founded on planets 0 and 1 both spread and
+//     partition the world between them — at 40 000 they sit on planet 3 together
+//     (5 and 14 bodies, species 44 and 42). Its between-planet distance dips to
+//     0.157 at 27500 and RECOVERS to 0.440 by 40 000.
+// So contact reliably destroys the resident and reliably erodes divergence, and
+// two of three seeds end with one lineage owning the sky. It is a strong tendency,
+// not a law: seed 55 shows a stable two-clade world is reachable from the shipped
+// parameters. Three seeds cannot say how often.
+//
+// The erosion is caused by crossing, not by ordinary lineage turnover: the
+// isolated control loses lineages just as fast (96 -> 7, 111 -> 16, 81 -> 15,
+// 57 -> 10 across the four dispersal-off seeds) while its between-planet distance
+// rises the whole way. Turnover alone does not homogenise the planets.
+//
+// THE ANIMALS CAN MERGE. THE TREE CANNOT. This is the one real defect the
+// measurement turned up. Of 49 herbivore contact episodes with a measurable
+// immigrant-resident distance across the three shipped seeds, 25 were CLOSER than
+// P.specThresh — compatible() would have let every one of those pairs breed — and
+// the tree still called 23 of the 25 different species. Twenty of the twenty-five
+// sit in the 0.2436-0.42 band, which is precisely the window ALLO_F opens and
+// P.specThresh does not close: trySplit() mints an allopatric daughter at
+// specThresh * ALLO_F, and NOTHING IN THIS MODULE EVER FUSES TWO LIVE RECORDS
+// BACK TOGETHER. A record leaves S.phylo by going extinct or by being pruned,
+// never by rejoining its sister. Secondary contact between 0.2436 and 0.42 there-
+// fore produces populations that interbreed freely under two different names.
+// The rate is not a fluke of one world: seed 321 alone contributes 10 of 10
+// below-threshold episodes labelled distinct, 8 of them inside the band.
+// The error is one-directional and that is the saving grace: of the 24 episodes
+// FARTHER apart than P.specThresh, the tree called 0 of them the same species. It
+// never claims two things are one when they cannot breed; it only fails to notice
+// when two things have become one again.
+//
+// --- 5. IS P.specThresh 0.42 CALIBRATED? YES, FOR WHAT ISOLATION PRODUCES ---
+//
+// Same seed, same 12 000 ticks, shipped dispersal, only P.specThresh changed:
+//
+//   measurement                                    0.42        0.16
+//   herb between-planet distance (the WORLD)       0.262       0.163
+//   herb within-planet halves (the WORLD)          0.250       0.141
+//   records / MAX_REC 150                          18          150 (pinned from 3000)
+//   roots                                          11          128-150
+//   extant species                                 11          39-56
+//   allopatric : sympatric splits                  5 : 2       4 : 18
+//   cross-planet pairs called different species    5/6         6/6
+//   within-planet halves called different          1/3         3/4
+//
+// 0.42 sits in the gap the world leaves. Complete isolation saturates the
+// between-planet distance at 0.49-0.83 by 40 000, just above the threshold, while
+// the within-planet halves sit at 0.06-0.20, well below it. In the isolated arm at
+// 40 000 the classifier called 3 of 3 cross-planet pairs different species and 0 of
+// 2 within-planet halves — it agrees with the measurement on both sides. At 0.16
+// it starts calling the two halves of a single planet different species 3 times in
+// 4, which is isolation-by-distance being promoted to speciation.
+//
+// Three riders on that verdict:
+//   * The threshold itself is not what makes allopatric speciation happen in a run
+//     of watchable length — 0.42 is not reached until ~22 500 ticks of total
+//     isolation. ALLO_F is. 0.42 * 0.58 = 0.2436 is crossed at about t = 6000, and
+//     the first allopatric split is recorded at t = 5000. ALLO_F is load-bearing,
+//     not a garnish; raise it and allopatry stops happening inside a session.
+//   * ALLO_F is therefore load-bearing in BOTH directions, and the second one is a
+//     cost. Because the two-thirds threshold is only ever crossed downwards by the
+//     animals and never by the record, the module deliberately labels at 0.2436
+//     while it breeds at 0.42, and there is no path back. P.specThresh is well
+//     calibrated to what isolation produces; the SPECIES LABEL over-splits relative
+//     to the breeding rule by design, and section 4 counts what that costs — 23 of
+//     25 freely-interbreeding contact pairs carrying two names. Fixing that is a
+//     re-merge path, not a different threshold.
+//   * "Allopatry does most of the work" (above) is true EARLY and not true at
+//     40 000. Split ledger over the four isolated runs: 10:7, 15:23, 15:9, 18:25 —
+//     58 allopatric against 64 sympatric. At 12 000 ticks it is 5:2. Sympatry
+//     catches up once populations are large and variable enough to bisect.
+//
+// --- 6. TWO CLAIMS IN THIS FILE'S OWN HEADER, CHECKED AGAINST THE RUNS ---
+//
+// (a) prune()'s graft path is DEAD CODE IN PRACTICE, and `absorbed` is always 0.
+//     At shipped settings the question never arises: 42 records after 40 000 ticks
+//     against a cap of 150, so prune() is never entered at all. Forced to run by
+//     dropping P.specThresh to 0.16 (records pin at MAX_REC from t = 3000):
+//
+//       tick    3000   6000   9000  12000
+//       pruned   115    122    128    137
+//       rootLost 115    122    128    137
+//       absorbed   0      0      0      0
+//
+//     pruned == rootLost at every single sample. The reason is structural, not
+//     bad luck: prune() drops the lowest peak*duration records first, which are
+//     exactly the singleton roots adopt() minted, and a root's parent is 0, so
+//     resolve() returns 0 and the whole weight goes to rootLost. `absorbed` is a
+//     field no world has ever set. It is not wrong — it is unreachable, and the
+//     header paragraph promising a node can "say how much vanished history it
+//     stands for" describes a capability that has never once been exercised.
+//
+// (b) The adopt() comment claiming the min-population rule is "what stops the tree
+//     fragmenting into hundreds of singletons" was FALSE, and is corrected below.
+//     MIN_SP constrains trySplit() and nothing else. The founding pass —
+//     phyloTick() calling adopt(c, true) for every creature whenever nothing is
+//     extant — reaches mint(null, [c], v) with a SINGLE creature, and how many
+//     singleton roots it mints is set by P.specThresh alone. From the identical
+//     268-body seed: 11 roots at 0.42, and at 0.16, 265 roots (150 still held plus
+//     115 already pruned, every one of them a root, no split having yet occurred).
+//     Hundreds of singletons is precisely what happens. The only thing preventing
+//     it at shipped settings is that 0.42 is coarse enough to swallow 268 founders
+//     into 11 groups — a threshold, not a population rule.
+//
+//     The header's other structural claim survives, and more strongly than it is
+//     stated: this is a FOREST, and the number of trees in it is fixed at t = 0.
+//     Across all seven long runs the root count never moved once — 11, 11, 11 and
+//     12 depending only on which seed drew the founding population — while records
+//     grew to 28-54. Nothing after the founding pass can mint a root, and nothing
+//     joins two of them, so 11 of the 42 records at the end of the shipped seed-11
+//     run have no parent and never will.
+//
+// --- 7. WHAT WAS NOT SHOWN ---
+//
+//   * The divergence result of section 1 has four seeds; the contact results of
+//     sections 3 and 4 have three, and one of those three ran to 30 000 ticks
+//     rather than 40 000. Two of the three end in a global sweep and the third
+//     does not, which is enough to say the sweep is common and not enough to say
+//     how common. Nobody should quote a probability from n = 3.
+//   * `carn` was never measurable. Fewer than 8 bodies per planet on every planet
+//     at every sample in every run; every carnivore cell in every table is empty.
+//   * "Drift, not adaptation" is an inference from the sqrt(t) shape and the
+//     neutral panel, not a direct test. The direct test — hold every planet's
+//     ecology identical and look for the same curve — was not run.
+//   * No per-lineage population history was added to this module. This measurement
+//     wanted one and took it from an external harness instead, so the save format
+//     and its memory cost are untouched, and the header bullet saying a drawing
+//     cannot draw a population curve through time is still true.
+//   * Nothing here measures whether a player can SEE any of it.
 
 import { P, S, typeOf } from './state.js';
 
@@ -155,10 +456,19 @@ function mint(parent, members, gv){
 
 // Adopt a creature with no valid species. Outside the founding pass it always
 // joins the closest living lineage, however far that is: an oddball is a variant
-// within its species, not a species of one. New species are only ever minted by
-// the split machinery, which insists on a whole population — that single rule is
-// what stops the tree fragmenting into hundreds of singletons.
-// `found` is true only while naming the forms a fresh world was seeded with.
+// within its species, not a species of one. So outside the founding pass this
+// function cannot mint anything at all.
+//
+// `found` is true only while naming the forms a fresh world was seeded with —
+// a fresh seed, or the aftermath of total extinction. In THAT pass mint() is
+// reached with a single creature, and the number of one-body roots it produces is
+// set by P.specThresh and by nothing else. Measured from the same 268-body seed:
+// 11 roots at the shipped 0.42, and 265 at 0.16. MIN_SP does not enter into it —
+// it constrains trySplit() only, and the founding pass never consults it. An
+// earlier version of this comment claimed the min-population rule was "what stops
+// the tree fragmenting into hundreds of singletons"; hundreds of singletons is
+// exactly what a finer threshold produces here, and the numbers are in section 6b
+// of the header block.
 function adopt(c, found){
   const v = tv(c.g, _a);
   let best = null, bd = found ? P.specThresh : Infinity;
